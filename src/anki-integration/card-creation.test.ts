@@ -440,3 +440,45 @@ test('createSentenceCard without alignment keeps the live translation but offers
   assert.equal('Translation' in addedFields[2]!, false);
   assert.equal(reviewRequests[2]?.card?.translation?.lines.length, 1);
 });
+
+test('createSentenceCard translates every combined line even when the media is capped', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const reviewRanges: Array<{ startTime: number; endTime: number }> = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () =>
+        ({
+          ...createAnkiConfig({ fields: { translation: 'Translation' } }),
+          media: { maxMediaDuration: 30 },
+          behavior: { alignSentenceToTranslation: true },
+        }) as AnkiConnectConfig,
+      getSubtitleTracksForTranslation: () => ({
+        primary: [
+          { text: '一', startTime: 0, endTime: 15 },
+          { text: '二', startTime: 15, endTime: 30 },
+          { text: '三', startTime: 30, endTime: 45 },
+        ],
+        secondary: [
+          { text: 'One.', startTime: 0, endTime: 15 },
+          { text: 'Two.', startTime: 15, endTime: 30 },
+          { text: 'Three.', startTime: 30, endTime: 45 },
+        ],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      reviewMediaTiming: async (request) => {
+        reviewRanges.push({ startTime: request.startTime, endTime: request.endTime });
+        return { action: 'use-original' };
+      },
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('一 二 三', 0, 45), true);
+  assert.equal(addedFields[0]?.Sentence, '一 二 三');
+  assert.equal(addedFields[0]?.Translation, 'One. Two. Three.');
+  assert.deepEqual(reviewRanges, [{ startTime: 0, endTime: 30 }]);
+});

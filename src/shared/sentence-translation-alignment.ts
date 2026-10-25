@@ -32,6 +32,11 @@ export interface AlignedSentenceTranslation {
   translation: string;
 }
 
+/** Primary lines the media timing review offers on each side of the clip. */
+export const REVIEW_CONTEXT_LINE_LIMIT = 12;
+/** Tolerance when deciding whether a primary line lies before or after the clip. */
+export const REVIEW_CONTEXT_EPSILON_SECONDS = 0.05;
+
 /** Fraction of a primary line that must fall inside a secondary event to join its sentence. */
 export const DEFAULT_SENTENCE_GROUP_MIN_OVERLAP = 0.6;
 /** Fraction of a primary line that must fall inside the mined range to count as mined. */

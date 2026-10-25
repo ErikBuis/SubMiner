@@ -23,11 +23,13 @@ import {
   type RemoteMediaWindowSource,
 } from '../../core/services/remote-media-window-cache';
 import type { MediaInput, MediaInputOptions } from '../../media-input';
+import {
+  REVIEW_CONTEXT_EPSILON_SECONDS as CONTEXT_LINE_EPSILON_SECONDS,
+  REVIEW_CONTEXT_LINE_LIMIT as CONTEXT_LINE_LIMIT,
+} from '../../shared/sentence-translation-alignment';
 
 const INITIAL_TIMELINE_MARGIN_SECONDS = 2;
 const REVIEW_DECISION_TIMEOUT_MS = 5 * 60_000;
-const CONTEXT_LINE_LIMIT = 12;
-const CONTEXT_LINE_EPSILON_SECONDS = 0.05;
 
 interface ReviewMpvClient {
   connected: boolean;

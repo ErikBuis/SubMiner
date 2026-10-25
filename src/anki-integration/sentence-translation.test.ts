@@ -45,3 +45,32 @@ test('aligned results carry the full-track translation of the lines around the c
     { startTime: 14, endTime: 16, lines: [{ text: 'Next.', startTime: 14, endTime: 16 }] },
   ]);
 });
+
+test('the review gets translations for every primary line it can offer, however far away', () => {
+  const result = resolveCardSentenceTranslation({
+    text: '今',
+    startTime: 100,
+    endTime: 102,
+    tracks: {
+      primary: [
+        { text: '今', startTime: 100, endTime: 102 },
+        { text: 'ずっと後', startTime: 200, endTime: 202 },
+      ],
+      secondary: [
+        { text: 'Now.', startTime: 100, endTime: 102 },
+        { text: 'Much later.', startTime: 200, endTime: 202 },
+      ],
+    },
+    align: true,
+    format: false,
+    maxSentenceSeconds: 0,
+  });
+  assert.deepEqual(
+    result.reviewLines.map((line) => line.text),
+    ['Now.', 'Much later.'],
+  );
+  assert.deepEqual(
+    result.lineTranslations.map((entry) => entry.lines.map((line) => line.text)),
+    [['Now.'], ['Much later.']],
+  );
+});

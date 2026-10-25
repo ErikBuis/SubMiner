@@ -88,6 +88,20 @@ export function buildMediaTimingLineSelection(options: {
   };
 }
 
+function dedupeSortedLines(
+  lines: readonly MediaTimingReviewContextLine[],
+): MediaTimingReviewContextLine[] {
+  const seen = new Set<string>();
+  return lines
+    .filter((line) => {
+      const key = `${line.startTime}|${line.endTime}|${line.text}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
+}
+
 /**
  * The translation for the lines currently on the card. With no added lines it is the
  * translation main resolved for the card; otherwise it follows the secondary lines timed
@@ -116,11 +130,17 @@ export function buildMediaTimingReviewTranslation(options: {
   if (options.translationLines.length === 0) return null;
   const selection = buildMediaTimingLineSelection(options);
   if (!options.align) {
+    // Each part is matched on its own: thresholds against the whole widened range would
+    // drop lines that still belong to the card's original text.
+    const ranges = [
+      ...selection.previous,
+      { startTime: options.originalStartTime, endTime: options.originalEndTime },
+      ...selection.next,
+    ];
     const translation = joinSubtitleLineTexts(
-      collectOverlappingLines(options.translationLines, {
-        startTime: selection.rangeStart,
-        endTime: selection.rangeEnd,
-      }),
+      dedupeSortedLines(
+        ranges.flatMap((range) => collectOverlappingLines(options.translationLines, range)),
+      ),
     );
     return options.format ? formatCardTranslation(translation) : translation;
   }
@@ -137,19 +157,11 @@ export function buildMediaTimingReviewTranslation(options: {
     const best = findBestOverlappingLine(options.translationLines, line);
     return best ? [best] : [];
   };
-  const seen = new Set<string>();
-  const lines = [
+  const lines = dedupeSortedLines([
     ...selection.previous.flatMap(addedTranslation),
     ...options.initialTranslationLines,
     ...selection.next.flatMap(addedTranslation),
-  ]
-    .filter((line) => {
-      const key = `${line.startTime}|${line.endTime}|${line.text}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
+  ]);
   const translation = joinSubtitleLineTexts(lines);
   return options.format ? formatCardTranslation(translation) : translation;
 }

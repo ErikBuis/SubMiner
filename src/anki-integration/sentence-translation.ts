@@ -5,6 +5,8 @@ import {
   findBestOverlappingLine,
   formatCardTranslation,
   joinSubtitleLineTexts,
+  REVIEW_CONTEXT_EPSILON_SECONDS,
+  REVIEW_CONTEXT_LINE_LIMIT,
   sortSubtitleLines,
   type TimedSubtitleText,
 } from '../shared/sentence-translation-alignment';
@@ -34,7 +36,7 @@ export interface CardSentenceTranslation {
   }>;
 }
 
-/** Secondary lines further than this from the clip are never offered to the review. */
+/** Secondary lines this close to the clip always reach the review. */
 const REVIEW_LINE_WINDOW_SECONDS = 90;
 /**
  * Resolves the sentence and translation a mined card gets. With parsed tracks the
@@ -101,13 +103,28 @@ export function resolveCardSentenceTranslation(input: {
     translation = joinSubtitleLineTexts(translationLines);
   }
 
+  // The review can add any primary line it offers, so the window spans those as well.
+  const primary = sortSubtitleLines(input.tracks?.primary ?? []);
+  const offeredBefore = primary
+    .filter((line) => line.endTime <= startTime + REVIEW_CONTEXT_EPSILON_SECONDS)
+    .slice(-REVIEW_CONTEXT_LINE_LIMIT);
+  const offeredAfter = primary
+    .filter((line) => line.startTime >= endTime - REVIEW_CONTEXT_EPSILON_SECONDS)
+    .slice(0, REVIEW_CONTEXT_LINE_LIMIT);
+  const windowStart = Math.min(
+    startTime - REVIEW_LINE_WINDOW_SECONDS,
+    offeredBefore[0]?.startTime ?? Infinity,
+  );
+  const windowEnd = Math.max(
+    endTime + REVIEW_LINE_WINDOW_SECONDS,
+    ...offeredAfter.map((line) => line.endTime),
+  );
   const nearClip = (line: TimedSubtitleText): boolean =>
-    line.endTime >= startTime - REVIEW_LINE_WINDOW_SECONDS &&
-    line.startTime <= endTime + REVIEW_LINE_WINDOW_SECONDS;
+    line.endTime >= windowStart && line.startTime <= windowEnd;
   const reviewLines = secondary.filter(nearClip).map(toPlainLine);
   const lineTranslations =
     input.align && secondary.length > 0
-      ? assignLineTranslations(input.tracks?.primary ?? [], secondary)
+      ? assignLineTranslations(primary, secondary)
           .filter(({ line }) => nearClip(line))
           .map(({ line, translationLines: lines }) => ({
             startTime: line.startTime,

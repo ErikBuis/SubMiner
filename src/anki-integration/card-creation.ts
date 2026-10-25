@@ -607,6 +607,8 @@ export class CardCreationService {
     }
 
     const maxMediaDuration = this.deps.getConfig().media?.maxMediaDuration ?? 30;
+    // The cap limits the media only; the sentence keeps every line, and so does its translation.
+    const subtitleEndTime = endTime;
     const cappedEndTime = clampMediaEndTime(startTime, endTime, maxMediaDuration);
     if (cappedEndTime !== endTime) {
       log.warn(
@@ -623,7 +625,7 @@ export class CardCreationService {
         const cardTranslation = resolveCardSentenceTranslation({
           text: sentence,
           startTime,
-          endTime,
+          endTime: subtitleEndTime,
           tracks: this.deps.getSubtitleTracksForTranslation?.() ?? null,
           align: alignSentence,
           format: formatTranslation,
@@ -635,7 +637,7 @@ export class CardCreationService {
         if (cardTranslation.widened) {
           sentence = cardTranslation.text;
           startTime = cardTranslation.startTime;
-          endTime = cardTranslation.endTime;
+          endTime = clampMediaEndTime(startTime, cardTranslation.endTime, maxMediaDuration);
         }
         secondarySubText = cardTranslation.translation || undefined;
 

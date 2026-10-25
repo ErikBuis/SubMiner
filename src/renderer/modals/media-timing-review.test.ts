@@ -269,3 +269,26 @@ test('an added line takes the translation the full-track grouping assigned it', 
     'Now X',
   );
 });
+
+test('without alignment an added line keeps the translation of the original line', () => {
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      previousLines: [],
+      nextLines: [{ text: '次', startTime: 15, endTime: 16 }],
+      text: '今',
+      originalStartTime: 10,
+      originalEndTime: 11,
+      previousCount: 0,
+      nextCount: 1,
+      initialTranslation: 'Long lead-in',
+      initialTranslationLines: [],
+      translationLines: [
+        { text: 'Long lead-in', startTime: 8, endTime: 11 },
+        { text: 'Next.', startTime: 15, endTime: 16 },
+      ],
+      format: false,
+      align: false,
+    }),
+    'Long lead-in Next.',
+  );
+});
