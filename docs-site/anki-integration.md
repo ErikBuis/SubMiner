@@ -81,14 +81,15 @@ If cards are not getting filled:
 
 `ankiConnect.fields` maps SubMiner's data to fields on your note type.
 
-| Key                | Receives                                                                  |
-| ------------------ | ------------------------------------------------------------------------- |
-| `fields.word`      | The mined word                                                            |
-| `fields.audio`     | Sentence audio cut from the video                                         |
-| `fields.wordAudio` | Read only: Yomitan's word audio, used to time animated images (see below) |
-| `fields.image`     | Screenshot or animated clip                                               |
-| `fields.sentence`  | Subtitle text                                                             |
-| `fields.miscInfo`  | Text from `ankiConnect.metadata.pattern`                                  |
+| Key                          | Receives                                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `fields.word`                | The mined word                                                                                                          |
+| `fields.audio`               | Sentence audio cut from the video                                                                                       |
+| `fields.wordAudio`           | Read only: Yomitan's word audio, used to time animated images (see below)                                               |
+| `fields.image`               | Screenshot or animated clip                                                                                             |
+| `fields.sentence`            | Subtitle text                                                                                                           |
+| `fields.miscInfo`            | Text from `ankiConnect.metadata.pattern`                                                                                |
+| `fields.wordCardTranslation` | Word cards only: the secondary subtitle translating the mined sentence. Empty by default (no translation on word cards) |
 
 ```jsonc
 "ankiConnect": {
@@ -104,6 +105,8 @@ Field names are matched case-insensitively. A mapped field that is missing from 
 Hachidori prepares downloadable word audio before it saves a note through the proxy, so the animated image delay works on the first mine. Set a downloadable pronunciation source in Hachidori's Audio settings. Browser speech cannot be saved to Anki. Without word audio, Hachidori shows a warning and the card gets no word-audio hold.
 
 `fields.audio` gets sentence audio, not word audio. Yomitan writes its own dictionary audio into your note, so point `fields.audio` at a separate field such as `SentenceAudio`. The default, `ExpressionAudio`, is the field many note types use for Yomitan's word audio, so leaving it would overwrite that audio.
+
+`fields.wordCardTranslation` gives word cards the translation of their sentence, picked by timing like on sentence cards. Point it at the note type's translation field, for example `SentenceTranslation` in Kiku, or the field your sentence cards put their translation in. With field grouping, the translations of grouped cards are merged like their sentences.
 
 `ankiConnect.tags` adds tags to every mined or updated card. Set it to `[]` to add none.
 
