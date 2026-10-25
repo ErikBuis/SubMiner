@@ -1,6 +1,56 @@
 # Changelog
 
-## v0.20.1 (2026-10-03)
+## v0.21.0 (2026-10-24)
+
+**Added**
+- **Hachidori Dictionary Backend**:
+  - Hachidori is now bundled as an alternative to Yomitan. Select it with `dictionaryBackend`, then restart SubMiner.
+  - It works with subtitle scanning, popups, frequency highlighting, character dictionaries, Anki mining, and stats dashboard mining.
+  - First-run setup builds Hachidori's Anki template from your SubMiner settings. It can also link an external Hachidori app, browser, or Docker host.
+  - The tray and dictionary-settings shortcut open settings for the active backend. Use `--hachidori` or `--yomitan` to open a specific one.
+- **Jellyfin Subtitle Generation**: You can now generate Japanese subtitles while playing a Jellyfin episode, with both direct play and transcoded playback.
+
+**Fixed**
+- **Jellyfin**:
+  - `subminer jellyfin -p` now lists libraries and shows image previews when SubMiner is already running. Real errors are shown instead of an empty list.
+  - Watch progress from terminal playback is reported to Jellyfin even with cast discovery off.
+  - When `subminer jellyfin -p` starts SubMiner, the app shows its tray icon and quits when mpv closes.
+  - Casting on macOS now finds mpv when SubMiner is opened from Finder, the Dock, or Spotlight.
+- **Halfwidth Katakana**: Halfwidth katakana in subtitles now displays as fullwidth, including in mined cards and older stats lines. Stats sentence search matches katakana in either width.
+- **Media Timing Review**: The review opens on the first attempt instead of after a delay. Playback stays paused while it is open.
+- **Subtitle Annotations**: Lines shown while two cues overlap now get annotations right away. Prefetching no longer restarts during startup.
+- **Keyboard-Only Mode**: `h`, `l`, and the arrow keys now work for typing in modal text fields instead of seeking mpv.
+- **Stats Dashboard Mining**: Cards mined from the stats dashboard keep the selected history line and media.
+- **Hyprland and Sway**: The app no longer freezes when `hyprctl` or `swaymsg` is slow or hangs.
+- **Subtitle Sidebar**: The open sidebar does much less background work during playback.
+- **macOS Launcher Status**: The command-line launcher no longer shows "Not on PATH" when SubMiner is opened from Finder or the Dock.
+- **Security Updates**: Updated Electron, undici, and follow-redirects to address security advisories.
+
+**Docs**
+- **Hachidori Setup**: Documented backend selection, Hachidori dictionary and Anki setup, settings shortcuts, and external host linking.
+- **Jellyfin Casting**: Explained when SubMiner joins the cast menu at startup, and how casting finds mpv on each platform. Added a troubleshooting entry for casts that never start mpv.
+- **Jimaku Key**: Removed environment variables that never had any effect. Set the key with `jimaku.apiKey` or `jimaku.apiKeyCommand`.
+
+<details>
+<summary>Internal changes</summary>
+
+**Internal**
+- **End-to-End Harness**: Added a headless e2e harness (`bun run test:e2e`, `bun run e2e`) with real mpv, a fixture dictionary, and a fake AnkiConnect.
+- **Hachidori Fork**: The bundled Hachidori integration lives in a pinned fork submodule.
+- **Dead Code Removal**:
+  - Removed the unused launcher Jimaku client, the mpv plugin hover-highlight module, and the unused character dictionary config keys.
+  - Removed 16 unused overlay IPC methods. SubMiner no longer forwards every ASS line to the overlay.
+  - Typecheck now runs with `noUnusedLocals`.
+- **Setup Launcher Label**: First-run setup now labels a missing launcher "Not set up" instead of "Not installed".
+
+</details>
+
+## Previous Versions
+
+<details>
+<summary>v0.20.x</summary>
+
+<h2>v0.20.1 (2026-10-03)</h2>
 
 **Added**
 - **YouTube Browser Window**:
@@ -50,7 +100,7 @@
 
 </details>
 
-## v0.20.0 (2026-09-23)
+<h2>v0.20.0 (2026-09-23)</h2>
 
 **Added**
 - **Japanese Subtitle Generation**:
@@ -171,7 +221,7 @@
 
 </details>
 
-## Previous Versions
+</details>
 
 <details>
 <summary>v0.19.x</summary>
