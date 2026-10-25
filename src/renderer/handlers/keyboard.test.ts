@@ -481,6 +481,8 @@ function installKeyboardTestGlobals() {
     setSessionBindings: (value: CompiledSessionBinding[]) => {
       sessionBindings = value;
     },
+    // A plain overlay element over playback, outside any SubMiner UI.
+    createPlaybackTarget: () => new TestElement(),
     createInteractiveTarget: () => {
       const target = new TestElement();
       target.closest = (selector: string) => (selector.includes('.modal') ? target : null);
@@ -1293,6 +1295,42 @@ test('Hachidori attention without an open popup pane still forwards imported mpv
       ['keyup', 'MBTN_LEFT'],
     ]);
   } finally {
+    testGlobals.restore();
+  }
+});
+
+test('an open subtitle sidebar only keeps imported mpv input aimed at the sidebar', async () => {
+  const { ctx, handlers, testGlobals } = createKeyboardHandlerHarness();
+
+  try {
+    testGlobals.setGetMpvInputBindings(async () => ({
+      keys: ['0', 'MBTN_LEFT_DBL'],
+      blockedKeys: [],
+    }));
+    await handlers.setupMpvInputForwarding();
+    await wait(0);
+    ctx.state.subtitleSidebarModalOpen = true;
+    const sidebarTarget = testGlobals.createInteractiveTarget();
+    const playbackTarget = testGlobals.createPlaybackTarget();
+
+    // Sidebar input runs first, while no key or button is held, so a held key cannot
+    // hide a forwarded press. Its release has no matching press to forward.
+    testGlobals.dispatchKeydown({ key: '0', code: 'Digit0', target: sidebarTarget });
+    testGlobals.dispatchMousedown({ button: 0, target: sidebarTarget });
+    testGlobals.dispatchMousedown({ button: 0, type: 'mouseup', target: sidebarTarget });
+    assert.deepEqual(testGlobals.mpvCommands, []);
+
+    testGlobals.dispatchKeydown({ key: '0', code: 'Digit0', target: playbackTarget });
+    testGlobals.dispatchMousedown({ button: 0, target: playbackTarget });
+    testGlobals.dispatchMousedown({ button: 0, type: 'mouseup', target: playbackTarget });
+
+    assert.deepEqual(testGlobals.mpvCommands, [
+      ['keydown', '0'],
+      ['keydown', 'MBTN_LEFT'],
+      ['keyup', 'MBTN_LEFT'],
+    ]);
+  } finally {
+    ctx.state.subtitleSidebarModalOpen = false;
     testGlobals.restore();
   }
 });
