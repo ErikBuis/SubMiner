@@ -309,6 +309,7 @@ export class NoteUpdateWorkflow {
                       translation: {
                         text: cardTranslation.translation,
                         lines: cardTranslation.reviewLines,
+                        currentLines: cardTranslation.translationLines,
                         format: config.behavior?.formatTranslation === true,
                         align: alignSentence,
                       },

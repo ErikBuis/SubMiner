@@ -37,6 +37,8 @@ export interface MediaTimingReviewCardPreview {
     text: string;
     /** Secondary subtitle lines around the clip, used to follow added or removed lines. */
     lines: MediaTimingReviewContextLine[];
+    /** The secondary lines behind `text`; empty when it came from the live subtitle. */
+    currentLines: MediaTimingReviewContextLine[];
     /** Apply the card translation formatting when following added or removed lines. */
     format: boolean;
     /** Follow lines with sentence grouping (alignSentenceToTranslation) or plain overlap. */

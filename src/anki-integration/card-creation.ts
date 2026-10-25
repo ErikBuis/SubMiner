@@ -649,6 +649,7 @@ export class CardCreationService {
                 translation: {
                   text: cardTranslation.translation,
                   lines: cardTranslation.reviewLines,
+                  currentLines: cardTranslation.translationLines,
                   format: formatTranslation,
                   align: alignSentence,
                 },

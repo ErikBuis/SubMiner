@@ -165,6 +165,7 @@ test('review translation follows added lines until the card is back to its own l
     originalStartTime: 10.1,
     originalEndTime: 12,
     initialTranslation: 'Main translation.',
+    initialTranslationLines: [{ text: 'the mined line', startTime: 10, endTime: 12 }],
     translationLines: [
       { text: 'before,', startTime: 7.9, endTime: 10 },
       { text: 'the mined line', startTime: 10, endTime: 12 },
@@ -207,6 +208,7 @@ test('without alignment the review translation collects every overlapping second
       previousCount: 0,
       nextCount: 1,
       initialTranslation: 'First half second half',
+      initialTranslationLines: [],
       translationLines: [
         { text: 'first half', startTime: 10, endTime: 12 },
         { text: 'second half', startTime: 12, endTime: 14 },
@@ -216,5 +218,29 @@ test('without alignment the review translation collects every overlapping second
       align: false,
     }),
     'First half second half and the next line.',
+  );
+});
+
+test('an aligned multi-line sentence keeps its own translations when a line is added', () => {
+  const lineA = { text: 'A', startTime: 10, endTime: 12 };
+  const lineB = { text: 'B', startTime: 12, endTime: 14 };
+  const lineC = { text: 'C', startTime: 14, endTime: 16 };
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      previousLines: [],
+      nextLines: [{ text: '三', startTime: 14, endTime: 16 }],
+      // Main widened the card to the primary lines behind A and B.
+      text: '一 二',
+      originalStartTime: 10,
+      originalEndTime: 14,
+      previousCount: 0,
+      nextCount: 1,
+      initialTranslation: 'A B',
+      initialTranslationLines: [lineA, lineB],
+      translationLines: [lineA, lineB, lineC],
+      format: false,
+      align: true,
+    }),
+    'A B C',
   );
 });

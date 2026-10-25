@@ -23,6 +23,8 @@ export interface CardSentenceTranslation {
   translation: string;
   /** Secondary lines around the clip, so a review can follow added or removed lines. */
   reviewLines: TimedSubtitleText[];
+  /** The parsed secondary lines `translation` was built from; empty for the fallback. */
+  translationLines: TimedSubtitleText[];
 }
 
 /** Secondary lines further than this from the clip are never offered to the review. */
@@ -54,8 +56,9 @@ export function resolveCardSentenceTranslation(input: {
   let widened = false;
   let translation = input.fallbackTranslation?.trim() ?? '';
 
-  const keepFallback =
-    !input.align && input.preferFallbackTranslation === true && translation.length > 0;
+  let translationLines: TimedSubtitleText[] = [];
+  // Even an empty fallback is kept: mining drops a secondary line equal to the primary one.
+  const keepFallback = !input.align && input.preferFallbackTranslation === true;
   if (secondary.length > 0 && !keepFallback) {
     const aligned = input.align
       ? alignSentenceTranslation({
@@ -68,7 +71,7 @@ export function resolveCardSentenceTranslation(input: {
         })
       : null;
     if (aligned) {
-      translation = aligned.translation;
+      translationLines = aligned.translationLines;
       if (aligned.startTime < input.startTime - 0.001 || aligned.endTime > input.endTime + 0.001) {
         text = aligned.text;
         startTime = Math.min(aligned.startTime, input.startTime);
@@ -77,10 +80,11 @@ export function resolveCardSentenceTranslation(input: {
       }
     } else if (input.align) {
       const best = findBestOverlappingLine(secondary, range);
-      translation = best ? joinSubtitleLineTexts([best]) : '';
+      translationLines = best ? [best] : [];
     } else {
-      translation = joinSubtitleLineTexts(collectOverlappingLines(secondary, range));
+      translationLines = collectOverlappingLines(secondary, range);
     }
+    translation = joinSubtitleLineTexts(translationLines);
   }
 
   const reviewLines = secondary
@@ -89,11 +93,7 @@ export function resolveCardSentenceTranslation(input: {
         line.endTime >= startTime - REVIEW_LINE_WINDOW_SECONDS &&
         line.startTime <= endTime + REVIEW_LINE_WINDOW_SECONDS,
     )
-    .map(({ text: lineText, startTime: lineStart, endTime: lineEnd }) => ({
-      text: lineText,
-      startTime: lineStart,
-      endTime: lineEnd,
-    }));
+    .map(toPlainLine);
 
   return {
     text,
@@ -102,7 +102,12 @@ export function resolveCardSentenceTranslation(input: {
     widened,
     translation: input.format ? formatCardTranslation(translation) : translation,
     reviewLines,
+    translationLines: translationLines.map(toPlainLine),
   };
+}
+
+function toPlainLine({ text, startTime, endTime }: TimedSubtitleText): TimedSubtitleText {
+  return { text, startTime, endTime };
 }
 
 /** Plain-text rendering of an Anki field for display: one line per block or list item. */

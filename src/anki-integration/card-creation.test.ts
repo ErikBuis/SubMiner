@@ -433,4 +433,10 @@ test('createSentenceCard without alignment keeps the live translation but offers
   reviewedTranslation = '';
   assert.equal(await service.createSentenceCard('字幕', 1, 2, 'Live line'), true);
   assert.equal('Translation' in addedFields[1]!, false);
+
+  // No live translation (e.g. it equaled the primary line): parsed cues must not fill it in.
+  reviewedTranslation = undefined;
+  assert.equal(await service.createSentenceCard('字幕', 1, 2), true);
+  assert.equal('Translation' in addedFields[2]!, false);
+  assert.equal(reviewRequests[2]?.card?.translation?.lines.length, 1);
 });

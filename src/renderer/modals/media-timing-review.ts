@@ -99,6 +99,8 @@ export function buildMediaTimingReviewTranslation(options: {
   previousCount: number;
   nextCount: number;
   initialTranslation: string;
+  /** The secondary lines behind `initialTranslation`. */
+  initialTranslationLines: MediaTimingReviewContextLine[];
   translationLines: MediaTimingReviewContextLine[];
   format: boolean;
   align: boolean;
@@ -115,22 +117,36 @@ export function buildMediaTimingReviewTranslation(options: {
     );
     return options.format ? formatCardTranslation(translation) : translation;
   }
-  const aligned = alignSentenceTranslation({
-    primaryLines: [
-      ...options.previousLines,
-      {
-        text: options.text,
-        startTime: options.originalStartTime,
-        endTime: options.originalEndTime,
-      },
-      ...options.nextLines,
-    ],
-    secondaryLines: options.translationLines,
-    startTime: selection.rangeStart,
-    endTime: selection.rangeEnd,
-  });
-  if (!aligned) return null;
-  return options.format ? formatCardTranslation(aligned.translation) : aligned.translation;
+  // The card's own lines may be a widened sentence, so they keep the translation main
+  // resolved; only the added lines are grouped against the secondary track.
+  const addedTranslation = (
+    lines: MediaTimingReviewContextLine[],
+    startTime: number,
+    endTime: number,
+  ): MediaTimingReviewContextLine[] =>
+    endTime > startTime
+      ? (alignSentenceTranslation({
+          primaryLines: lines,
+          secondaryLines: options.translationLines,
+          startTime,
+          endTime,
+        })?.translationLines ?? [])
+      : [];
+  const seen = new Set<string>();
+  const lines = [
+    ...addedTranslation(options.previousLines, selection.rangeStart, options.originalStartTime),
+    ...options.initialTranslationLines,
+    ...addedTranslation(options.nextLines, options.originalEndTime, selection.rangeEnd),
+  ]
+    .filter((line) => {
+      const key = `${line.startTime}|${line.endTime}|${line.text}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
+  const translation = joinSubtitleLineTexts(lines);
+  return options.format ? formatCardTranslation(translation) : translation;
 }
 
 export function createMediaTimingPreviewRequestGuard() {
@@ -635,6 +651,7 @@ export function createMediaTimingReviewModal(
       previousCount,
       nextCount,
       initialTranslation: translation.text,
+      initialTranslationLines: translation.currentLines,
       translationLines: translation.lines,
       format: translation.format,
       align: translation.align,

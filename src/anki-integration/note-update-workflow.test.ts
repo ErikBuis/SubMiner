@@ -822,6 +822,9 @@ test('NoteUpdateWorkflow fills the word card translation from the aligned senten
             { text: "there's a lot of vegetables,", startTime: 9, endTime: 12 },
             { text: 'i put lots of vegetables in it,', startTime: 11.1, endTime: 14.1 },
           ],
+          currentLines: [
+            { text: 'i put lots of vegetables in it,', startTime: 11.1, endTime: 14.1 },
+          ],
           format: true,
           align: true,
         },
