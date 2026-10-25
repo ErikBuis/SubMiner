@@ -1,5 +1,6 @@
 import {
   alignSentenceTranslation,
+  collectOverlappingLines,
   findBestOverlappingLine,
   formatCardTranslation,
   joinSubtitleLineTexts,
@@ -26,32 +27,13 @@ export interface CardSentenceTranslation {
 
 /** Secondary lines further than this from the clip are never offered to the review. */
 const REVIEW_LINE_WINDOW_SECONDS = 90;
-/** Without alignment, a secondary line counts when this much of it (or of the range) overlaps. */
-const OVERLAP_SHARE = 0.5;
-
-function overlappingLines(
-  lines: readonly TimedSubtitleText[],
-  range: { startTime: number; endTime: number },
-): TimedSubtitleText[] {
-  const rangeDuration = range.endTime - range.startTime;
-  return lines.filter((line) => {
-    const overlap =
-      Math.min(line.endTime, range.endTime) - Math.max(line.startTime, range.startTime);
-    if (overlap <= 0) return false;
-    const lineDuration = line.endTime - line.startTime;
-    return (
-      overlap >= lineDuration * OVERLAP_SHARE ||
-      (rangeDuration > 0 && overlap >= rangeDuration * OVERLAP_SHARE)
-    );
-  });
-}
-
 /**
  * Resolves the sentence and translation a mined card gets. With parsed tracks the
  * translation comes from the secondary lines timed against the mined range, and with
  * `align` the sentence widens to the primary lines that one secondary line covers while
  * unrelated overlapping secondary lines are dropped. Without a parsed secondary track,
- * `fallbackTranslation` (the live secondary subtitle) is used.
+ * or without alignment when `preferFallbackTranslation` is set, `fallbackTranslation`
+ * (the live secondary subtitle) is used; the parsed track still feeds `reviewLines`.
  */
 export function resolveCardSentenceTranslation(input: {
   text: string;
@@ -62,6 +44,7 @@ export function resolveCardSentenceTranslation(input: {
   format: boolean;
   maxSentenceSeconds: number;
   fallbackTranslation?: string;
+  preferFallbackTranslation?: boolean;
 }): CardSentenceTranslation {
   const range = { startTime: input.startTime, endTime: input.endTime };
   const secondary = sortSubtitleLines(input.tracks?.secondary ?? []);
@@ -71,7 +54,9 @@ export function resolveCardSentenceTranslation(input: {
   let widened = false;
   let translation = input.fallbackTranslation?.trim() ?? '';
 
-  if (secondary.length > 0) {
+  const keepFallback =
+    !input.align && input.preferFallbackTranslation === true && translation.length > 0;
+  if (secondary.length > 0 && !keepFallback) {
     const aligned = input.align
       ? alignSentenceTranslation({
           primaryLines: input.tracks?.primary ?? [],
@@ -94,7 +79,7 @@ export function resolveCardSentenceTranslation(input: {
       const best = findBestOverlappingLine(secondary, range);
       translation = best ? joinSubtitleLineTexts([best]) : '';
     } else {
-      translation = joinSubtitleLineTexts(overlappingLines(secondary, range));
+      translation = joinSubtitleLineTexts(collectOverlappingLines(secondary, range));
     }
   }
 

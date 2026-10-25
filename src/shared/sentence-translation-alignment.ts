@@ -151,6 +151,28 @@ export function findBestOverlappingLine(
   return best;
 }
 
+/** Without alignment, a line counts when this much of it (or of the range) overlaps. */
+const OVERLAP_SHARE = 0.5;
+
+/**
+ * Every line that substantially overlaps the range, in order: what is on screen during
+ * it. Used when sentence alignment is off.
+ */
+export function collectOverlappingLines(
+  lines: readonly TimedSubtitleText[],
+  range: Pick<TimedSubtitleText, 'startTime' | 'endTime'>,
+): TimedSubtitleText[] {
+  const rangeDuration = range.endTime - range.startTime;
+  return sortSubtitleLines(lines).filter((line) => {
+    const overlap = overlapSeconds(line, range);
+    if (overlap <= 0) return false;
+    return (
+      overlap >= (line.endTime - line.startTime) * OVERLAP_SHARE ||
+      (rangeDuration > 0 && overlap >= rangeDuration * OVERLAP_SHARE)
+    );
+  });
+}
+
 export function joinSubtitleLineTexts(lines: readonly TimedSubtitleText[]): string {
   return lines
     .map((line) => line.text.replace(/\s+/g, ' ').trim())

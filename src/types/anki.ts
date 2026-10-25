@@ -39,6 +39,8 @@ export interface MediaTimingReviewCardPreview {
     lines: MediaTimingReviewContextLine[];
     /** Apply the card translation formatting when following added or removed lines. */
     format: boolean;
+    /** Follow lines with sentence grouping (alignSentenceToTranslation) or plain overlap. */
+    align: boolean;
   };
 }
 

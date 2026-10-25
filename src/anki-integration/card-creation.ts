@@ -25,6 +25,7 @@ import { clampMediaEndTime } from './media-duration';
 import { resolveWordCardKind } from './note-field-utils';
 import type { PendingYoutubeMediaUpdate } from './pending-youtube-media';
 import { resolveMpvVolumeScale } from './mpv-volume';
+import { formatCardTranslation } from '../shared/sentence-translation-alignment';
 import {
   resolveCardSentenceTranslation,
   type SubtitleTracksForTranslation,
@@ -623,12 +624,13 @@ export class CardCreationService {
           text: sentence,
           startTime,
           endTime,
-          // Without alignment the translation stays the secondary subtitle shown when mining.
-          tracks: alignSentence ? (this.deps.getSubtitleTracksForTranslation?.() ?? null) : null,
+          tracks: this.deps.getSubtitleTracksForTranslation?.() ?? null,
           align: alignSentence,
           format: formatTranslation,
           maxSentenceSeconds: maxMediaDuration,
           fallbackTranslation: secondarySubText,
+          // Without alignment the translation stays the secondary subtitle shown when mining.
+          preferFallbackTranslation: true,
         });
         if (cardTranslation.widened) {
           sentence = cardTranslation.text;
@@ -648,6 +650,7 @@ export class CardCreationService {
                   text: cardTranslation.translation,
                   lines: cardTranslation.reviewLines,
                   format: formatTranslation,
+                  align: alignSentence,
                 },
               },
             })
@@ -656,9 +659,9 @@ export class CardCreationService {
           this.deps.showStatusNotification('Card creation cancelled.');
           return false;
         }
-        if ('translation' in timingDecision && timingDecision.translation !== undefined) {
-          secondarySubText = timingDecision.translation.trim() || undefined;
-        }
+        // A translation from the review is final, even when cleared: no AI fallback.
+        const reviewedTranslation =
+          'translation' in timingDecision ? timingDecision.translation?.trim() : undefined;
         const skipMedia = timingDecision.action === 'skip-media';
         const exactReviewedRange = timingDecision.action === 'confirm';
         if (timingDecision.action === 'confirm') {
@@ -705,17 +708,24 @@ export class CardCreationService {
             ? ankiAiConfig.enabled === true
             : ankiAiConfig === true;
 
-        const backText = await resolveSentenceBackText(
-          {
-            sentence,
-            secondarySubText,
-            aiEnabled: ankiAiEnabled,
-            aiConfig: this.deps.getAiConfig(),
-          },
-          {
-            logWarning: (message: string) => log.warn(message),
-          },
-        );
+        const automaticBackText =
+          reviewedTranslation !== undefined
+            ? reviewedTranslation
+            : await resolveSentenceBackText(
+                {
+                  sentence,
+                  secondarySubText,
+                  aiEnabled: ankiAiEnabled,
+                  aiConfig: this.deps.getAiConfig(),
+                },
+                {
+                  logWarning: (message: string) => log.warn(message),
+                },
+              );
+        const backText =
+          reviewedTranslation === undefined && formatTranslation
+            ? formatCardTranslation(automaticBackText)
+            : automaticBackText;
         if (backText) {
           fields[translationField] = backText;
         }

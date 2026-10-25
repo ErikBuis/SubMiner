@@ -171,6 +171,7 @@ test('review translation follows added lines until the card is back to its own l
       { text: 'and after,', startTime: 12, endTime: 14 },
     ],
     format: true,
+    align: true,
   };
   assert.equal(
     buildMediaTimingReviewTranslation({ ...base, previousCount: 0, nextCount: 0 }),
@@ -192,5 +193,28 @@ test('review translation follows added lines until the card is back to its own l
       nextCount: 0,
     }),
     null,
+  );
+});
+
+test('without alignment the review translation collects every overlapping secondary line', () => {
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      previousLines: [],
+      nextLines: [{ text: '次の行', startTime: 14, endTime: 16 }],
+      text: '長い行',
+      originalStartTime: 10,
+      originalEndTime: 14,
+      previousCount: 0,
+      nextCount: 1,
+      initialTranslation: 'First half second half',
+      translationLines: [
+        { text: 'first half', startTime: 10, endTime: 12 },
+        { text: 'second half', startTime: 12, endTime: 14 },
+        { text: 'and the next line,', startTime: 14, endTime: 16 },
+      ],
+      format: true,
+      align: false,
+    }),
+    'First half second half and the next line.',
   );
 });

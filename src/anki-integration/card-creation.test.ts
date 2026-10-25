@@ -397,3 +397,40 @@ test('createSentenceCard aligns the sentence and lets the review edit the transl
   assert.equal(await service.createSentenceCard('いい天気ですね', 12.6, 14), true);
   assert.equal(addedFields[1]?.Translation, 'Edited.');
 });
+
+test('createSentenceCard without alignment keeps the live translation but offers parsed lines to the review', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const reviewRequests: Array<{ card?: { translation?: { text: string; lines: unknown[] } } }> = [];
+  let reviewedTranslation: string | undefined;
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () => createAnkiConfig({ fields: { translation: 'Translation' } }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [{ text: '字幕', startTime: 1, endTime: 2 }],
+        secondary: [{ text: 'Parsed line', startTime: 1, endTime: 2 }],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      reviewMediaTiming: async (request) => {
+        reviewRequests.push(request);
+        return reviewedTranslation === undefined
+          ? { action: 'use-original' }
+          : { action: 'use-original', translation: reviewedTranslation };
+      },
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('字幕', 1, 2, 'Live line'), true);
+  assert.equal(addedFields[0]?.Translation, 'Live line');
+  assert.equal(reviewRequests[0]?.card?.translation?.text, 'Live line');
+  assert.equal(reviewRequests[0]?.card?.translation?.lines.length, 1);
+
+  // A translation cleared in the review stays empty instead of falling back.
+  reviewedTranslation = '';
+  assert.equal(await service.createSentenceCard('字幕', 1, 2, 'Live line'), true);
+  assert.equal('Translation' in addedFields[1]!, false);
+});

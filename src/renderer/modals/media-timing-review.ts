@@ -9,7 +9,9 @@ import type { ModalStateReader, RendererContext } from '../context';
 import { createModalFocusGuard } from './modal-focus-guard';
 import {
   alignSentenceTranslation,
+  collectOverlappingLines,
   formatCardTranslation,
+  joinSubtitleLineTexts,
 } from '../../shared/sentence-translation-alignment';
 
 const MINIMUM_CLIP_SECONDS = 0.1;
@@ -84,7 +86,9 @@ export function buildMediaTimingLineSelection(options: {
 /**
  * The translation for the lines currently on the card. With no added lines it is the
  * translation main resolved for the card; otherwise it follows the secondary lines timed
- * against the added lines. Null when there are no secondary lines to follow.
+ * against the added lines, the same way main picked them: by sentence grouping with
+ * `align`, else every secondary line overlapping the lines. Null when there are no
+ * secondary lines to follow.
  */
 export function buildMediaTimingReviewTranslation(options: {
   previousLines: MediaTimingReviewContextLine[];
@@ -97,10 +101,20 @@ export function buildMediaTimingReviewTranslation(options: {
   initialTranslation: string;
   translationLines: MediaTimingReviewContextLine[];
   format: boolean;
+  align: boolean;
 }): string | null {
   if (options.previousCount <= 0 && options.nextCount <= 0) return options.initialTranslation;
   if (options.translationLines.length === 0) return null;
   const selection = buildMediaTimingLineSelection(options);
+  if (!options.align) {
+    const translation = joinSubtitleLineTexts(
+      collectOverlappingLines(options.translationLines, {
+        startTime: selection.rangeStart,
+        endTime: selection.rangeEnd,
+      }),
+    );
+    return options.format ? formatCardTranslation(translation) : translation;
+  }
   const aligned = alignSentenceTranslation({
     primaryLines: [
       ...options.previousLines,
@@ -623,14 +637,22 @@ export function createMediaTimingReviewModal(
       initialTranslation: translation.text,
       translationLines: translation.lines,
       format: translation.format,
+      align: translation.align,
     });
     if (next !== null) setTranslation(next, false);
   }
 
-  /** The reviewed translation, when the card gets one. */
-  function reviewedTranslation(): { translation?: string } {
-    if (!payload?.card?.translation) return {};
-    return { translation: ctx.dom.mediaTimingReviewTranslation.value.replace(/\s+/g, ' ').trim() };
+  /**
+   * The reviewed translation, sent only when it differs from what main would write on its
+   * own: typed by the user, or (`includeFollowed`) following added lines. Cancel paths keep
+   * the original sentence, so they only carry a typed translation.
+   */
+  function reviewedTranslation(includeFollowed: boolean): { translation?: string } {
+    const initial = payload?.card?.translation;
+    if (!initial) return {};
+    const value = ctx.dom.mediaTimingReviewTranslation.value.replace(/\s+/g, ' ').trim();
+    const followedChange = includeFollowed && value !== initial.text.trim();
+    return translationEdited || followedChange ? { translation: value } : {};
   }
 
   /**
@@ -902,7 +924,7 @@ export function createMediaTimingReviewModal(
       endTime: selectionEnd,
       ...(screenshotTime !== undefined ? { screenshotTime } : {}),
       ...(includesAdjacentLines ? { text: currentLineSelection().sentence } : {}),
-      ...reviewedTranslation(),
+      ...reviewedTranslation(true),
     });
   }
 
@@ -1144,11 +1166,11 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewCancelBack.addEventListener('click', showEditor);
     ctx.dom.mediaTimingReviewUseOriginal.addEventListener(
       'click',
-      () => void resolveReview({ action: 'use-original', ...reviewedTranslation() }),
+      () => void resolveReview({ action: 'use-original', ...reviewedTranslation(false) }),
     );
     ctx.dom.mediaTimingReviewSkipMedia.addEventListener(
       'click',
-      () => void resolveReview({ action: 'skip-media', ...reviewedTranslation() }),
+      () => void resolveReview({ action: 'skip-media', ...reviewedTranslation(false) }),
     );
     ctx.dom.mediaTimingReviewDiscard.addEventListener(
       'click',
