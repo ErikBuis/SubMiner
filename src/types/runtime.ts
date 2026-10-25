@@ -85,6 +85,7 @@ export interface Keybinding {
 
 export interface MpvClient {
   currentSubText: string;
+  currentSecondarySubText?: string;
   currentVideoPath: string;
   currentMediaTitle?: string | null;
   currentTimePos: number;

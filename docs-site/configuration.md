@@ -329,15 +329,16 @@ Creates and updates Anki cards with sentence, audio, and screenshot. Needs the [
 
 **Fields**
 
-| Key                            | Default                | What it does                                                                                                                   |
-| ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `ankiConnect.fields.word`      | `"Expression"`         | Word field                                                                                                                     |
-| `ankiConnect.fields.audio`     | `"ExpressionAudio"`    | Field that receives sentence audio. Set a separate field such as `SentenceAudio` so it does not overwrite Yomitan's word audio |
-| `ankiConnect.fields.wordAudio` | `"ExpressionAudio"`    | Existing word-audio field, read only to time animated images                                                                   |
-| `ankiConnect.fields.image`     | `"Picture"`            | Screenshot field                                                                                                               |
-| `ankiConnect.fields.sentence`  | `"Sentence"`           | Sentence field                                                                                                                 |
-| `ankiConnect.fields.miscInfo`  | `"MiscInfo"`           | Metadata field. `null` disables                                                                                                |
-| `ankiConnect.metadata.pattern` | `"[SubMiner] %f (%t)"` | MiscInfo template: `%f` filename, `%F` filename with extension, `%t` time, `%T` time with ms, `<br>` newline                   |
+| Key                             | Default                | What it does                                                                                                                   |
+| ------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `ankiConnect.fields.word`       | `"Expression"`         | Word field                                                                                                                     |
+| `ankiConnect.fields.audio`      | `"ExpressionAudio"`    | Field that receives sentence audio. Set a separate field such as `SentenceAudio` so it does not overwrite Yomitan's word audio |
+| `ankiConnect.fields.wordAudio`  | `"ExpressionAudio"`    | Existing word-audio field, read only to time animated images                                                                   |
+| `ankiConnect.fields.image`      | `"Picture"`            | Screenshot field                                                                                                               |
+| `ankiConnect.fields.sentence`   | `"Sentence"`           | Sentence field                                                                                                                 |
+| `ankiConnect.fields.miscInfo`   | `"MiscInfo"`           | Metadata field. `null` disables                                                                                                |
+| `ankiConnect.fields.definition` | `"MainDefinition"`     | Read only: dictionary meaning shown in the timing review                                                                       |
+| `ankiConnect.metadata.pattern`  | `"[SubMiner] %f (%t)"` | MiscInfo template: `%f` filename, `%F` filename with extension, `%t` time, `%T` time with ms, `<br>` newline                   |
 
 **Media**
 
@@ -364,14 +365,17 @@ Creates and updates Anki cards with sentence, audio, and screenshot. Needs the [
 
 **Behavior**
 
-| Key                                       | Default     | What it does                                                             |
-| ----------------------------------------- | ----------- | ------------------------------------------------------------------------ |
-| `ankiConnect.behavior.autoUpdateNewCards` | `true`      | Fill new cards automatically. When off, use the manual shortcuts         |
-| `ankiConnect.behavior.overwriteAudio`     | `true`      | Replace existing audio. When off, add alongside it                       |
-| `ankiConnect.behavior.overwriteImage`     | `true`      | Replace existing images. When off, add alongside them                    |
-| `ankiConnect.behavior.mediaInsertMode`    | `"append"`  | `append` or `prepend` when not overwriting                               |
-| `ankiConnect.behavior.highlightWord`      | `true`      | Bold the mined word in the sentence field                                |
-| `ankiConnect.behavior.notificationType`   | `"overlay"` | Where mining and status messages go: `overlay`, `system`, `both`, `none` |
+| Key                                               | Default     | What it does                                                             |
+| ------------------------------------------------- | ----------- | ------------------------------------------------------------------------ |
+| `ankiConnect.behavior.autoUpdateNewCards`         | `true`      | Fill new cards automatically. When off, use the manual shortcuts         |
+| `ankiConnect.behavior.overwriteAudio`             | `true`      | Replace existing audio. When off, add alongside it                       |
+| `ankiConnect.behavior.overwriteImage`             | `true`      | Replace existing images. When off, add alongside them                    |
+| `ankiConnect.behavior.mediaInsertMode`            | `"append"`  | `append` or `prepend` when not overwriting                               |
+| `ankiConnect.behavior.highlightWord`              | `true`      | Bold the mined word in the sentence field                                |
+| `ankiConnect.behavior.notificationType`           | `"overlay"` | Where mining and status messages go: `overlay`, `system`, `both`, `none` |
+| `ankiConnect.behavior.translationOnWordCards`     | `false`     | Also fill the translation field on word cards                            |
+| `ankiConnect.behavior.alignSentenceToTranslation` | `false`     | Group subtitle lines into sentences by their translation                 |
+| `ankiConnect.behavior.formatTranslation`          | `false`     | Capitalize card translations and replace a trailing comma with a period  |
 
 **Known words and N+1**
 

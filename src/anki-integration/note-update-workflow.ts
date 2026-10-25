@@ -1,5 +1,8 @@
 import { DEFAULT_ANKI_CONNECT_CONFIG } from '../config';
-import { getPreferredWordValueFromExtractedFields } from '../anki-field-config';
+import {
+  getConfiguredTranslationFieldName,
+  getPreferredWordValueFromExtractedFields,
+} from '../anki-field-config';
 import type { SubtitleMiningContext } from '../types/subtitle';
 import type {
   CardKind,
@@ -9,6 +12,12 @@ import type {
 } from '../types/anki';
 import { resolveWordCardKind } from './note-field-utils';
 import { STATS_MINING_TAG } from '../shared/anki-source';
+import {
+  ankiFieldHtmlToPlainText,
+  resolveCardSentenceTranslation,
+  type CardSentenceTranslation,
+  type SubtitleTracksForTranslation,
+} from './sentence-translation';
 
 export interface NoteUpdateWorkflowNoteInfo {
   noteId: number;
@@ -30,20 +39,30 @@ export interface NoteUpdateWorkflowDeps {
       audio?: string;
       image?: string;
       miscInfo?: string;
+      translation?: string;
+      definition?: string;
     };
     media?: {
       generateAudio?: boolean;
       generateImage?: boolean;
       imageType?: 'static' | 'avif';
       syncAnimatedImageToWordAudio?: boolean;
+      maxMediaDuration?: number;
     };
     behavior?: {
       overwriteAudio?: boolean;
       overwriteImage?: boolean;
+      translationOnWordCards?: boolean;
+      alignSentenceToTranslation?: boolean;
+      formatTranslation?: boolean;
     };
   };
   getCurrentSubtitleText: () => string | undefined;
   getCurrentSubtitleStart: () => number | undefined;
+  /** Parsed subtitle tracks for sentence/translation alignment; null when not parsed. */
+  getSubtitleTracksForTranslation?: () => SubtitleTracksForTranslation | null;
+  /** Live secondary subtitle, only when the on-screen primary line matches `primaryText`. */
+  getLiveSecondarySubtitleFor?: (primaryText: string) => string | undefined;
   getEffectiveSentenceCardConfig: () => {
     sentenceField: string;
     lapisEnabled: boolean;
@@ -232,7 +251,49 @@ export class NoteUpdateWorkflow {
       let reviewedSentenceText: string | undefined;
       const noteLabel = hasExpressionText ? expressionText : noteId;
 
+      const translationFieldName =
+        config.behavior?.translationOnWordCards === true
+          ? this.deps.resolveConfiguredFieldName(
+              noteInfo,
+              getConfiguredTranslationFieldName(config),
+            )
+          : null;
+      const alignSentence = config.behavior?.alignSentenceToTranslation === true;
+      let cardTranslation: CardSentenceTranslation | null = null;
+      let alignedSentenceText: string | undefined;
+      let reviewedTranslation: string | undefined;
+      const minedText = mediaTimingContext?.text ?? this.deps.getCurrentSubtitleText() ?? '';
+      if ((translationFieldName || alignSentence) && minedText) {
+        cardTranslation = resolveCardSentenceTranslation({
+          text: minedText,
+          startTime: mediaTimingContext?.startTime ?? Number.NaN,
+          endTime: mediaTimingContext?.endTime ?? Number.NaN,
+          tracks: mediaTimingContext
+            ? (this.deps.getSubtitleTracksForTranslation?.() ?? null)
+            : null,
+          align: alignSentence,
+          format: config.behavior?.formatTranslation === true,
+          maxSentenceSeconds: config.media?.maxMediaDuration ?? 0,
+          fallbackTranslation: this.deps.getLiveSecondarySubtitleFor?.(minedText),
+        });
+        if (mediaTimingContext && alignSentence && cardTranslation.widened) {
+          alignedSentenceText = cardTranslation.text;
+          mediaTimingContext = {
+            ...mediaTimingContext,
+            text: cardTranslation.text,
+            startTime: cardTranslation.startTime,
+            endTime: cardTranslation.endTime,
+          };
+        }
+      }
+
       if (mediaTimingContext) {
+        const definitionFieldName = config.fields?.definition
+          ? this.deps.resolveConfiguredFieldName(noteInfo, config.fields.definition)
+          : null;
+        const meaning = definitionFieldName
+          ? ankiFieldHtmlToPlainText(noteInfo.fields[definitionFieldName]?.value ?? '')
+          : '';
         const timingDecision = this.deps.reviewMediaTiming
           ? await this.deps.reviewMediaTiming({
               kind: 'word',
@@ -240,8 +301,24 @@ export class NoteUpdateWorkflow {
               startTime: mediaTimingContext.startTime,
               endTime: mediaTimingContext.endTime,
               noteId,
+              card: {
+                ...(hasExpressionText ? { word: expressionText } : {}),
+                ...(meaning ? { meaning } : {}),
+                ...(translationFieldName && cardTranslation
+                  ? {
+                      translation: {
+                        text: cardTranslation.translation,
+                        lines: cardTranslation.reviewLines,
+                        format: config.behavior?.formatTranslation === true,
+                      },
+                    }
+                  : {}),
+              },
             })
           : ({ action: 'use-original' } as const);
+        if ('translation' in timingDecision) {
+          reviewedTranslation = timingDecision.translation;
+        }
         if (timingDecision.action === 'discard') {
           try {
             await this.deps.client.deleteNotes([noteId]);
@@ -275,7 +352,10 @@ export class NoteUpdateWorkflow {
       this.deps.appendKnownWordsFromNoteInfo(noteInfo);
 
       const currentSubtitleText =
-        reviewedSentenceText ?? subtitleMiningContext?.text ?? this.deps.getCurrentSubtitleText();
+        reviewedSentenceText ??
+        alignedSentenceText ??
+        subtitleMiningContext?.text ??
+        this.deps.getCurrentSubtitleText();
       if (sentenceField && currentSubtitleText) {
         const processedSentence = this.deps.processSentence(currentSubtitleText, fields);
         updatedFields[sentenceField] = processedSentence;
@@ -319,6 +399,14 @@ export class NoteUpdateWorkflow {
         );
         if (processedSentenceFurigana !== existingSentenceFurigana) {
           updatedFields[sentenceFuriganaField] = processedSentenceFurigana;
+          updatePerformed = true;
+        }
+      }
+
+      if (translationFieldName) {
+        const translation = reviewedTranslation ?? cardTranslation?.translation ?? '';
+        if (translation || reviewedTranslation !== undefined) {
+          updatedFields[translationFieldName] = translation;
           updatePerformed = true;
         }
       }

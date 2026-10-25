@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildMediaTimingReviewTranslation,
   buildMediaTimingLineSelection,
   buildMediaTimingWaveformPath,
   constrainMediaTimingSelection,
@@ -152,6 +153,44 @@ test('trailing silence trim follows the last speech slice and keeps cut-off or s
   );
   assert.equal(
     trimMediaTimingSelectionEnd({ ...base, peaks: [1], selectionEnd: 8, endPadSeconds: 0 }),
+    null,
+  );
+});
+
+test('review translation follows added lines until the card is back to its own line', () => {
+  const base = {
+    previousLines: [{ text: '前の行', startTime: 8, endTime: 10 }],
+    nextLines: [{ text: '次の行', startTime: 12.1, endTime: 14 }],
+    text: '対象の行',
+    originalStartTime: 10.1,
+    originalEndTime: 12,
+    initialTranslation: 'Main translation.',
+    translationLines: [
+      { text: 'before,', startTime: 7.9, endTime: 10 },
+      { text: 'the mined line', startTime: 10, endTime: 12 },
+      { text: 'and after,', startTime: 12, endTime: 14 },
+    ],
+    format: true,
+  };
+  assert.equal(
+    buildMediaTimingReviewTranslation({ ...base, previousCount: 0, nextCount: 0 }),
+    'Main translation.',
+  );
+  assert.equal(
+    buildMediaTimingReviewTranslation({ ...base, previousCount: 0, nextCount: 1 }),
+    'The mined line and after.',
+  );
+  assert.equal(
+    buildMediaTimingReviewTranslation({ ...base, previousCount: 1, nextCount: 1, format: false }),
+    'before, the mined line and after,',
+  );
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      ...base,
+      translationLines: [],
+      previousCount: 1,
+      nextCount: 0,
+    }),
     null,
   );
 });

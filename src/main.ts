@@ -5409,6 +5409,10 @@ function initializeOverlayRuntime(): void {
   appState.ankiIntegration?.setSubtitleMiningContextConsumer(consumePendingSubtitleMiningContext);
   appState.ankiIntegration?.setMediaTimingReviewCallback(mediaTimingReviewRuntime.requestReview);
   appState.ankiIntegration?.setSentenceFuriganaGenerator(generateMiningSentenceFurigana);
+  appState.ankiIntegration?.setSubtitleTracksForTranslationProvider(() => {
+    const secondary = secondarySubtitleTrackController.getTimelineCues();
+    return secondary ? { primary: appState.activeParsedSubtitleCues, secondary } : null;
+  });
   syncOverlayMpvSubtitleSuppression();
 }
 

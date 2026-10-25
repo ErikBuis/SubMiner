@@ -23,6 +23,23 @@ export interface MediaTimingReviewRequest {
   maxMediaDuration: number;
   /** Still screenshots only; animated images continue to follow the audio range. */
   screenshotEnabled?: boolean;
+  /** What else the card will get, so the review covers the whole export. */
+  card?: MediaTimingReviewCardPreview;
+}
+
+/** Card fields shown alongside the media timing. Only the translation is editable. */
+export interface MediaTimingReviewCardPreview {
+  word?: string;
+  /** Plain text; one line per sense. */
+  meaning?: string;
+  /** Set when the card gets a translation; the review then shows an editable field. */
+  translation?: {
+    text: string;
+    /** Secondary subtitle lines around the clip, used to follow added or removed lines. */
+    lines: MediaTimingReviewContextLine[];
+    /** Apply the card translation formatting when following added or removed lines. */
+    format: boolean;
+  };
 }
 
 /** A subtitle line adjacent to the mined one that the review can pull onto the card. */
@@ -40,9 +57,11 @@ export type MediaTimingReviewDecision =
       endTime: number;
       text?: string;
       screenshotTime?: number;
+      /** The reviewed card translation, when the card gets one. */
+      translation?: string;
     }
-  | { action: 'use-original' }
-  | { action: 'skip-media' }
+  | { action: 'use-original'; translation?: string }
+  | { action: 'skip-media'; translation?: string }
   | { action: 'discard' };
 
 export interface MediaTimingReviewOpenPayload {
@@ -62,6 +81,7 @@ export interface MediaTimingReviewOpenPayload {
   mediaDuration?: number;
   maxMediaDuration: number;
   screenshotEnabled?: boolean;
+  card?: MediaTimingReviewCardPreview;
 }
 
 export interface MediaTimingReviewFrameRequest {
@@ -167,6 +187,7 @@ export interface AnkiConnectConfig {
     sentence?: string;
     miscInfo?: string;
     translation?: string;
+    definition?: string;
   };
   ai?: boolean | AiFeatureConfig;
   media?: {
@@ -210,6 +231,9 @@ export interface AnkiConnectConfig {
     highlightWord?: boolean;
     notificationType?: NotificationType;
     autoUpdateNewCards?: boolean;
+    translationOnWordCards?: boolean;
+    alignSentenceToTranslation?: boolean;
+    formatTranslation?: boolean;
   };
   metadata?: {
     pattern?: string;

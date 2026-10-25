@@ -112,7 +112,15 @@ export function buildIntegrationConfigOptionRegistry(
       path: 'ankiConnect.fields.translation',
       kind: 'string',
       defaultValue: defaultConfig.ankiConnect.fields.translation,
-      description: 'Card field that receives the current selection or translated text.',
+      description:
+        'Card field that receives the sentence translation (secondary subtitle or AI translation). Sentence cards always fill it; word cards only with ankiConnect.behavior.translationOnWordCards.',
+    },
+    {
+      path: 'ankiConnect.fields.definition',
+      kind: 'string',
+      defaultValue: defaultConfig.ankiConnect.fields.definition,
+      description:
+        'Card field holding the dictionary definition. Only read, to show the exported meaning in the media timing review.',
     },
     {
       path: 'ankiConnect.ai.enabled',
@@ -166,6 +174,27 @@ export function buildIntegrationConfigOptionRegistry(
       kind: 'boolean',
       defaultValue: defaultConfig.ankiConnect.behavior.highlightWord,
       description: 'Bold the mined word inside the sentence field on the saved Anki card.',
+    },
+    {
+      path: 'ankiConnect.behavior.translationOnWordCards',
+      kind: 'boolean',
+      defaultValue: defaultConfig.ankiConnect.behavior.translationOnWordCards,
+      description:
+        'Also fill the translation field (ankiConnect.fields.translation) on word cards mined from the dictionary popup, using the secondary subtitle for the mined sentence.',
+    },
+    {
+      path: 'ankiConnect.behavior.alignSentenceToTranslation',
+      kind: 'boolean',
+      defaultValue: defaultConfig.ankiConnect.behavior.alignSentenceToTranslation,
+      description:
+        'Group primary and secondary subtitle lines into sentences: the card sentence and media widen to every primary line its secondary subtitle covers, and the translation uses only that secondary line instead of everything on screen. Needs parsed subtitle tracks.',
+    },
+    {
+      path: 'ankiConnect.behavior.formatTranslation',
+      kind: 'boolean',
+      defaultValue: defaultConfig.ankiConnect.behavior.formatTranslation,
+      description:
+        'Write card translations as one line that starts with a capital letter, turning a trailing comma into a period.',
     },
     {
       path: 'ankiConnect.behavior.notificationType',

@@ -10,6 +10,7 @@ import {
   createFakeMediaGenerator,
 } from './card-creation-test-utils';
 import { toMpvEdlValue } from './mpv-edl-test-utils';
+import type { AnkiConnectConfig } from '../types/anki';
 import type { MediaInput } from '../media-generator';
 
 const YOUTUBE_URL = 'https://www.youtube.com/watch?v=abc123';
@@ -348,3 +349,51 @@ for (const c of DUPLICATE_TRACKING_CASES) {
     assert.deepEqual(trackedDuplicates, c.expected);
   });
 }
+
+test('createSentenceCard aligns the sentence and lets the review edit the translation', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const reviewRequests: unknown[] = [];
+  let reviewedTranslation: string | undefined;
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () =>
+        ({
+          ...createAnkiConfig({ fields: { translation: 'Translation' } }),
+          behavior: { alignSentenceToTranslation: true, formatTranslation: true },
+        }) as AnkiConnectConfig,
+      getSubtitleTracksForTranslation: () => ({
+        primary: [
+          { text: '今日は', startTime: 11.2, endTime: 12.5 },
+          { text: 'いい天気ですね', startTime: 12.6, endTime: 14 },
+        ],
+        secondary: [
+          { text: 'on the TV,', startTime: 13, endTime: 16 },
+          { text: 'nice weather today, huh?', startTime: 11.1, endTime: 14.1 },
+        ],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      reviewMediaTiming: async (request) => {
+        reviewRequests.push(request);
+        return reviewedTranslation === undefined
+          ? { action: 'use-original' }
+          : { action: 'use-original', translation: reviewedTranslation };
+      },
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('いい天気ですね', 12.6, 14, 'on the TV,'), true);
+  assert.deepEqual(addedFields[0], {
+    Sentence: '今日は いい天気ですね',
+    Translation: 'Nice weather today, huh?',
+  });
+  assert.equal((reviewRequests[0] as { startTime: number }).startTime, 11.2);
+
+  reviewedTranslation = 'Edited.';
+  assert.equal(await service.createSentenceCard('いい天気ですね', 12.6, 14), true);
+  assert.equal(addedFields[1]?.Translation, 'Edited.');
+});

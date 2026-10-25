@@ -81,6 +81,7 @@ import type {
   PendingYoutubeMediaQueueReadyOptions,
 } from './anki-integration/pending-youtube-media-queue';
 import { resolveMpvVolumeScale } from './anki-integration/mpv-volume';
+import type { SubtitleTracksForTranslation } from './anki-integration/sentence-translation';
 
 const log = createLogger('anki').child('integration');
 
@@ -248,6 +249,8 @@ export class AnkiIntegration {
   private mediaTimingReviewCallback:
     | ((request: MediaTimingReviewRequest) => Promise<MediaTimingReviewDecision>)
     | null = null;
+  private subtitleTracksForTranslationProvider: (() => SubtitleTracksForTranslation | null) | null =
+    null;
   private noteIdRedirects = new Map<number, number>();
   private trackedDuplicateNoteIds = new Map<number, number[]>();
   private getCachedMediaPath: MediaGenerationInputResolverOptions['getCachedMediaPath'] | null =
@@ -500,6 +503,7 @@ export class AnkiIntegration {
   private createCardCreationService(): CardCreationService {
     return new CardCreationService({
       getConfig: () => this.config,
+      getSubtitleTracksForTranslation: () => this.subtitleTracksForTranslationProvider?.() ?? null,
       getAiConfig: () => this.aiConfig,
       getTimingTracker: () => this.timingTracker,
       getMpvClient: () => this.mpvClient,
@@ -655,6 +659,8 @@ export class AnkiIntegration {
       getConfig: () => this.config,
       getCurrentSubtitleText: () => this.mpvClient.currentSubText,
       getCurrentSubtitleStart: () => this.mpvClient.currentSubStart,
+      getSubtitleTracksForTranslation: () => this.subtitleTracksForTranslationProvider?.() ?? null,
+      getLiveSecondarySubtitleFor: (primaryText) => this.getLiveSecondarySubtitleFor(primaryText),
       getEffectiveSentenceCardConfig: () => this.getEffectiveSentenceCardConfig(),
       appendKnownWordsFromNoteInfo: (noteInfo) => this.appendKnownWordsFromNoteInfo(noteInfo),
       removeKnownWordNote: (noteId) => this.removeKnownWordNote(noteId),
@@ -1790,6 +1796,25 @@ export class AnkiIntegration {
 
   setSentenceFuriganaGenerator(callback: typeof this.generateSentenceFuriganaCallback): void {
     this.generateSentenceFuriganaCallback = callback;
+  }
+
+  setSubtitleTracksForTranslationProvider(
+    provider: (() => SubtitleTracksForTranslation | null) | null,
+  ): void {
+    this.subtitleTracksForTranslationProvider = provider;
+  }
+
+  /** The live secondary subtitle is only trusted while its primary line is still on screen. */
+  private getLiveSecondarySubtitleFor(primaryText: string): string | undefined {
+    const normalize = (text: string) => text.replace(/\s+/g, '').trim();
+    const liveSecondary = this.mpvClient.currentSecondarySubText?.trim();
+    if (
+      !liveSecondary ||
+      normalize(this.mpvClient.currentSubText ?? '') !== normalize(primaryText)
+    ) {
+      return undefined;
+    }
+    return liveSecondary === primaryText.trim() ? undefined : liveSecondary;
   }
 
   setMediaTimingReviewCallback(

@@ -34,6 +34,7 @@ export const INTEGRATIONS_DEFAULT_CONFIG: Pick<
       sentence: 'Sentence',
       miscInfo: 'MiscInfo',
       translation: 'SelectionText',
+      definition: 'MainDefinition',
     },
     ai: {
       enabled: false,
@@ -76,6 +77,9 @@ export const INTEGRATIONS_DEFAULT_CONFIG: Pick<
       highlightWord: true,
       notificationType: 'overlay',
       autoUpdateNewCards: true,
+      translationOnWordCards: false,
+      alignSentenceToTranslation: false,
+      formatTranslation: false,
     },
     nPlusOne: {
       enabled: false,

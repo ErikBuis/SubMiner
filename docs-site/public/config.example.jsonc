@@ -583,7 +583,8 @@
       "image": "Picture", // Card field that receives the captured screenshot or animated image.
       "sentence": "Sentence", // Card field that receives the source sentence text.
       "miscInfo": "MiscInfo", // Card field that receives the miscellaneous info pattern (see ankiConnect.metadata.pattern).
-      "translation": "SelectionText" // Card field that receives the current selection or translated text.
+      "translation": "SelectionText", // Card field that receives the sentence translation (secondary subtitle or AI translation). Sentence cards always fill it; word cards only with ankiConnect.behavior.translationOnWordCards.
+      "definition": "MainDefinition" // Card field holding the dictionary definition. Only read, to show the exported meaning in the media timing review.
     }, // Fields setting.
     "ai": {
       "enabled": false, // Enable AI provider usage for Anki translation/enrichment flows. Values: true | false
@@ -625,7 +626,10 @@
       "mediaInsertMode": "append", // Whether new media is appended after or prepended before existing field contents on update. Values: append | prepend
       "highlightWord": true, // Bold the mined word inside the sentence field on the saved Anki card. Values: true | false
       "notificationType": "overlay", // Notification surface used to announce mining and update outcomes. overlay shows notifications on the overlay, system uses OS notifications, both uses overlay and system. osd and osd-system are legacy config-file-only values. Values: overlay | system | both | none | osd | osd-system
-      "autoUpdateNewCards": true // Automatically update newly added cards. Values: true | false
+      "autoUpdateNewCards": true, // Automatically update newly added cards. Values: true | false
+      "translationOnWordCards": false, // Also fill the translation field (ankiConnect.fields.translation) on word cards mined from the dictionary popup, using the secondary subtitle for the mined sentence. Values: true | false
+      "alignSentenceToTranslation": false, // Group primary and secondary subtitle lines into sentences: the card sentence and media widen to every primary line its secondary subtitle covers, and the translation uses only that secondary line instead of everything on screen. Needs parsed subtitle tracks. Values: true | false
+      "formatTranslation": false // Write card translations as one line that starts with a capital letter, turning a trailing comma into a period. Values: true | false
     }, // Behavior setting.
     "nPlusOne": {
       "enabled": false, // Enable N+1 subtitle highlighting (highlights the one unknown word in a sentence). Requires known-word cache data. Values: true | false

@@ -273,6 +273,7 @@ export function buildMediaTimingReviewPayload(
     ...(request.screenshotEnabled !== undefined
       ? { screenshotEnabled: request.screenshotEnabled }
       : {}),
+    ...(request.card ? { card: request.card } : {}),
   };
 }
 

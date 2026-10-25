@@ -7,6 +7,10 @@ import type {
 } from '../../types/anki';
 import type { ModalStateReader, RendererContext } from '../context';
 import { createModalFocusGuard } from './modal-focus-guard';
+import {
+  alignSentenceTranslation,
+  formatCardTranslation,
+} from '../../shared/sentence-translation-alignment';
 
 const MINIMUM_CLIP_SECONDS = 0.1;
 const FINE_ADJUST_SECONDS = 0.1;
@@ -75,6 +79,44 @@ export function buildMediaTimingLineSelection(options: {
     rangeStart: previous[0]?.startTime ?? options.originalStartTime,
     rangeEnd: next[next.length - 1]?.endTime ?? options.originalEndTime,
   };
+}
+
+/**
+ * The translation for the lines currently on the card. With no added lines it is the
+ * translation main resolved for the card; otherwise it follows the secondary lines timed
+ * against the added lines. Null when there are no secondary lines to follow.
+ */
+export function buildMediaTimingReviewTranslation(options: {
+  previousLines: MediaTimingReviewContextLine[];
+  nextLines: MediaTimingReviewContextLine[];
+  text: string;
+  originalStartTime: number;
+  originalEndTime: number;
+  previousCount: number;
+  nextCount: number;
+  initialTranslation: string;
+  translationLines: MediaTimingReviewContextLine[];
+  format: boolean;
+}): string | null {
+  if (options.previousCount <= 0 && options.nextCount <= 0) return options.initialTranslation;
+  if (options.translationLines.length === 0) return null;
+  const selection = buildMediaTimingLineSelection(options);
+  const aligned = alignSentenceTranslation({
+    primaryLines: [
+      ...options.previousLines,
+      {
+        text: options.text,
+        startTime: options.originalStartTime,
+        endTime: options.originalEndTime,
+      },
+      ...options.nextLines,
+    ],
+    secondaryLines: options.translationLines,
+    startTime: selection.rangeStart,
+    endTime: selection.rangeEnd,
+  });
+  if (!aligned) return null;
+  return options.format ? formatCardTranslation(aligned.translation) : aligned.translation;
 }
 
 export function createMediaTimingPreviewRequestGuard() {
@@ -230,6 +272,8 @@ export function createMediaTimingReviewModal(
   let endPadSeconds = 0;
   /** True until the user moves the clip; the first waveform then trims trailing silence. */
   let trailingTrimPending = false;
+  /** Once the user types in the translation it no longer follows added or removed lines. */
+  let translationEdited = false;
   let resolveInFlight = false;
   let previewPlaying = false;
   let previewTimer: ReturnType<typeof setTimeout> | null = null;
@@ -540,6 +584,55 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewNextRemove.disabled = nextCount <= 0;
   }
 
+  function renderCard(): void {
+    const card = payload?.card;
+    const dom = ctx.dom;
+    const word = card?.word?.trim() ?? '';
+    const meaning = card?.meaning?.trim() ?? '';
+    dom.mediaTimingReviewWord.textContent = word;
+    dom.mediaTimingReviewMeaning.textContent = meaning;
+    dom.mediaTimingReviewWordRow.classList.toggle('hidden', !word);
+    dom.mediaTimingReviewMeaningRow.classList.toggle('hidden', !meaning);
+    dom.mediaTimingReviewCard.classList.toggle('hidden', !word && !meaning);
+    dom.mediaTimingReviewTranslationRow.classList.toggle('hidden', !card?.translation);
+    dom.mediaTimingReviewTitle.textContent = card ? 'Review card' : 'Review media timing';
+  }
+
+  function renderTranslationState(): void {
+    ctx.dom.mediaTimingReviewTranslationState.textContent = translationEdited ? 'edited' : 'auto';
+  }
+
+  function setTranslation(text: string, edited: boolean): void {
+    ctx.dom.mediaTimingReviewTranslation.value = text;
+    translationEdited = edited;
+    renderTranslationState();
+  }
+
+  /** Keeps an untouched translation in step with the lines on the card. */
+  function followTranslation(): void {
+    const translation = payload?.card?.translation;
+    if (!payload || !translation || translationEdited) return;
+    const next = buildMediaTimingReviewTranslation({
+      previousLines: payload.previousLines,
+      nextLines: payload.nextLines,
+      text: payload.text,
+      originalStartTime: payload.originalStartTime,
+      originalEndTime: payload.originalEndTime,
+      previousCount,
+      nextCount,
+      initialTranslation: translation.text,
+      translationLines: translation.lines,
+      format: translation.format,
+    });
+    if (next !== null) setTranslation(next, false);
+  }
+
+  /** The reviewed translation, when the card gets one. */
+  function reviewedTranslation(): { translation?: string } {
+    if (!payload?.card?.translation) return {};
+    return { translation: ctx.dom.mediaTimingReviewTranslation.value.replace(/\s+/g, ' ').trim() };
+  }
+
   /**
    * Adds or removes an adjacent subtitle line from the card sentence, then follows the
    * affected clip edge to the new outermost line while keeping the user's other edge.
@@ -576,6 +669,7 @@ export function createMediaTimingReviewModal(
       capped = selectionEnd < target - 0.001;
     }
     renderSentence();
+    followTranslation();
     if (capped && payload.maxMediaDuration > 0) {
       setStatus(
         `Clip length is capped at ${payload.maxMediaDuration}s, so the audio cannot cover every added line.`,
@@ -770,6 +864,7 @@ export function createMediaTimingReviewModal(
     controls.forEach((button) => {
       button.disabled = true;
     });
+    ctx.dom.mediaTimingReviewTranslation.disabled = true;
     try {
       const result = await window.electronAPI.resolveMediaTimingReview({
         reviewId: payload.reviewId,
@@ -791,6 +886,7 @@ export function createMediaTimingReviewModal(
       controls.forEach((button) => {
         button.disabled = false;
       });
+      ctx.dom.mediaTimingReviewTranslation.disabled = false;
       renderSelection();
       renderSentence();
     }
@@ -806,6 +902,7 @@ export function createMediaTimingReviewModal(
       endTime: selectionEnd,
       ...(screenshotTime !== undefined ? { screenshotTime } : {}),
       ...(includesAdjacentLines ? { text: currentLineSelection().sentence } : {}),
+      ...reviewedTranslation(),
     });
   }
 
@@ -882,6 +979,8 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewKind.dataset.kind = nextPayload.kind;
     ctx.dom.mediaTimingReviewDiscard.textContent =
       nextPayload.noteId !== undefined ? 'Delete card' : "Don't create card";
+    renderCard();
+    setTranslation(nextPayload.card?.translation?.text ?? '', false);
     setStatus('');
     showEditor();
     framePicker.open(
@@ -926,6 +1025,15 @@ export function createMediaTimingReviewModal(
       if (!ctx.dom.mediaTimingReviewCancelStep.classList.contains('hidden')) showEditor();
       else requestCancel();
       return true;
+    }
+    if (event.target === ctx.dom.mediaTimingReviewTranslation) {
+      // Typing goes to the translation; only plain Enter still confirms the card.
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        confirmSelection();
+        return true;
+      }
+      return false;
     }
     if (
       event.code === 'Space' &&
@@ -1019,6 +1127,12 @@ export function createMediaTimingReviewModal(
       nextCount = 0;
       updateSelection(payload.selectionStartTime, payload.selectionEndTime);
       renderSentence();
+      setTranslation(payload.card?.translation?.text ?? '', false);
+    });
+    ctx.dom.mediaTimingReviewTranslation.addEventListener('input', () => {
+      if (translationEdited) return;
+      translationEdited = true;
+      renderTranslationState();
     });
     ctx.dom.mediaTimingReviewPrevAdd.addEventListener('click', () => adjustLines('previous', 1));
     ctx.dom.mediaTimingReviewPrevRemove.addEventListener('click', () =>
@@ -1030,11 +1144,11 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewCancelBack.addEventListener('click', showEditor);
     ctx.dom.mediaTimingReviewUseOriginal.addEventListener(
       'click',
-      () => void resolveReview({ action: 'use-original' }),
+      () => void resolveReview({ action: 'use-original', ...reviewedTranslation() }),
     );
     ctx.dom.mediaTimingReviewSkipMedia.addEventListener(
       'click',
-      () => void resolveReview({ action: 'skip-media' }),
+      () => void resolveReview({ action: 'skip-media', ...reviewedTranslation() }),
     );
     ctx.dom.mediaTimingReviewDiscard.addEventListener(
       'click',

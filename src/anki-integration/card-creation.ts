@@ -25,6 +25,10 @@ import { clampMediaEndTime } from './media-duration';
 import { resolveWordCardKind } from './note-field-utils';
 import type { PendingYoutubeMediaUpdate } from './pending-youtube-media';
 import { resolveMpvVolumeScale } from './mpv-volume';
+import {
+  resolveCardSentenceTranslation,
+  type SubtitleTracksForTranslation,
+} from './sentence-translation';
 
 const log = createLogger('anki').child('integration.card-creation');
 
@@ -102,6 +106,8 @@ interface CardCreationMediaGenerator {
 
 interface CardCreationDeps {
   getConfig: () => AnkiConnectConfig;
+  /** Parsed subtitle tracks for sentence/translation alignment; null when not parsed. */
+  getSubtitleTracksForTranslation?: () => SubtitleTracksForTranslation | null;
   getAiConfig: () => AiConfig;
   getTimingTracker: () => SubtitleTimingTracker;
   getMpvClient: () => MpvClient;
@@ -610,17 +616,48 @@ export class CardCreationService {
 
     try {
       return await this.deps.withUpdateProgress('Creating sentence card', async () => {
+        const behavior = this.deps.getConfig().behavior;
+        const alignSentence = behavior?.alignSentenceToTranslation === true;
+        const formatTranslation = behavior?.formatTranslation === true;
+        const cardTranslation = resolveCardSentenceTranslation({
+          text: sentence,
+          startTime,
+          endTime,
+          // Without alignment the translation stays the secondary subtitle shown when mining.
+          tracks: alignSentence ? (this.deps.getSubtitleTracksForTranslation?.() ?? null) : null,
+          align: alignSentence,
+          format: formatTranslation,
+          maxSentenceSeconds: maxMediaDuration,
+          fallbackTranslation: secondarySubText,
+        });
+        if (cardTranslation.widened) {
+          sentence = cardTranslation.text;
+          startTime = cardTranslation.startTime;
+          endTime = cardTranslation.endTime;
+        }
+        secondarySubText = cardTranslation.translation || undefined;
+
         const timingDecision = this.deps.reviewMediaTiming
           ? await this.deps.reviewMediaTiming({
               kind: 'sentence',
               text: sentence,
               startTime,
               endTime,
+              card: {
+                translation: {
+                  text: cardTranslation.translation,
+                  lines: cardTranslation.reviewLines,
+                  format: formatTranslation,
+                },
+              },
             })
           : ({ action: 'use-original' } as const);
         if (timingDecision.action === 'discard') {
           this.deps.showStatusNotification('Card creation cancelled.');
           return false;
+        }
+        if ('translation' in timingDecision && timingDecision.translation !== undefined) {
+          secondarySubText = timingDecision.translation.trim() || undefined;
         }
         const skipMedia = timingDecision.action === 'skip-media';
         const exactReviewedRange = timingDecision.action === 'confirm';

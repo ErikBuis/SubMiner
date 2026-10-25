@@ -239,6 +239,7 @@ export interface ResolvedConfig {
       sentence: string;
       miscInfo: string;
       translation: string;
+      definition: string;
     };
     ai: AiFeatureConfig & {
       enabled: boolean;
@@ -283,6 +284,9 @@ export interface ResolvedConfig {
       highlightWord: boolean;
       notificationType: NotificationType;
       autoUpdateNewCards: boolean;
+      translationOnWordCards: boolean;
+      alignSentenceToTranslation: boolean;
+      formatTranslation: boolean;
     };
     metadata: {
       pattern: string;

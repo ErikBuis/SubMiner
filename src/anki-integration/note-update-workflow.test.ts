@@ -738,3 +738,142 @@ test('NoteUpdateWorkflow preserves native furigana formatting when sentence cont
   await harness.workflow.execute(42);
   assert.equal(harness.updates[0]?.fields.SentenceFurigana, undefined);
 });
+
+function createTranslationHarness() {
+  const harness = createWorkflowHarness();
+  const reviewRequests: unknown[] = [];
+  const audioContexts: Array<SubtitleMiningContext | undefined> = [];
+  harness.deps.client.notesInfo = async () => [
+    {
+      noteId: 42,
+      fields: {
+        Expression: { value: '野菜' },
+        Sentence: { value: '' },
+        Translation: { value: '' },
+        Glossary: { value: '<ol><li>vegetable</li><li>greens</li></ol>' },
+      },
+    },
+  ];
+  harness.deps.captureSubtitleMediaContext = () => ({
+    source: 'overlay',
+    text: 'いっぱい入ってるよ',
+    startTime: 12.6,
+    endTime: 14,
+  });
+  harness.deps.getSubtitleTracksForTranslation = () => ({
+    primary: [
+      { text: '野菜も', startTime: 11.2, endTime: 12.5 },
+      { text: 'いっぱい入ってるよ', startTime: 12.6, endTime: 14 },
+    ],
+    secondary: [
+      { text: "there's a lot of vegetables,", startTime: 9, endTime: 12 },
+      { text: 'i put lots of vegetables in it,', startTime: 11.1, endTime: 14.1 },
+    ],
+  });
+  harness.deps.reviewMediaTiming = async (request) => {
+    reviewRequests.push(request);
+    return { action: 'use-original' };
+  };
+  harness.deps.generateAudio = async (context) => {
+    audioContexts.push(context);
+    return null;
+  };
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Sentence', translation: 'Translation', definition: 'Glossary' },
+    media: { generateAudio: true, generateImage: false, maxMediaDuration: 30 },
+    behavior: {
+      translationOnWordCards: true,
+      alignSentenceToTranslation: true,
+      formatTranslation: true,
+    },
+  });
+  return { ...harness, reviewRequests, audioContexts };
+}
+
+test('NoteUpdateWorkflow fills the word card translation from the aligned sentence', async () => {
+  const harness = createTranslationHarness();
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(harness.updates, [
+    {
+      noteId: 42,
+      fields: {
+        Sentence: '野菜も いっぱい入ってるよ',
+        Translation: 'I put lots of vegetables in it.',
+      },
+    },
+  ]);
+  assert.equal(harness.audioContexts[0]?.startTime, 11.2);
+  assert.equal(harness.audioContexts[0]?.endTime, 14);
+  assert.deepEqual(harness.reviewRequests, [
+    {
+      kind: 'word',
+      text: '野菜も いっぱい入ってるよ',
+      startTime: 11.2,
+      endTime: 14,
+      noteId: 42,
+      card: {
+        word: '野菜',
+        meaning: 'vegetable\ngreens',
+        translation: {
+          text: 'I put lots of vegetables in it.',
+          lines: [
+            { text: "there's a lot of vegetables,", startTime: 9, endTime: 12 },
+            { text: 'i put lots of vegetables in it,', startTime: 11.1, endTime: 14.1 },
+          ],
+          format: true,
+        },
+      },
+    },
+  ]);
+});
+
+test('NoteUpdateWorkflow writes the translation edited in the review', async () => {
+  const harness = createTranslationHarness();
+  harness.deps.reviewMediaTiming = async () => ({
+    action: 'confirm',
+    startTime: 11,
+    endTime: 14.2,
+    translation: 'My own translation.',
+  });
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.Translation, 'My own translation.');
+});
+
+test('NoteUpdateWorkflow leaves the word card translation alone unless enabled', async () => {
+  const harness = createTranslationHarness();
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Sentence', translation: 'Translation' },
+    media: { generateAudio: false, generateImage: false },
+    behavior: {},
+  });
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(harness.updates, [{ noteId: 42, fields: { Sentence: 'subtitle-text' } }]);
+  assert.equal(
+    (harness.reviewRequests[0] as { card?: { translation?: unknown } }).card?.translation,
+    undefined,
+  );
+});
+
+test('NoteUpdateWorkflow without alignment translates only the mined line', async () => {
+  const harness = createTranslationHarness();
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Sentence', translation: 'Translation' },
+    media: { generateAudio: false, generateImage: false },
+    behavior: { translationOnWordCards: true },
+  });
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(harness.updates, [
+    {
+      noteId: 42,
+      fields: { Sentence: 'subtitle-text', Translation: 'i put lots of vegetables in it,' },
+    },
+  ]);
+});

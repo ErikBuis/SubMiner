@@ -342,6 +342,16 @@ export function createSecondarySubtitleTrackController(deps: {
   return {
     refresh,
     scheduleRefresh,
+    /** Parsed cues of the selected secondary track, shifted onto the playback timeline. */
+    getTimelineCues(): SubtitleCue[] | null {
+      if (!parsedCues) return null;
+      if (secondaryDelaySeconds === 0) return parsedCues;
+      return parsedCues.map((cue) => ({
+        ...cue,
+        startTime: cue.startTime + secondaryDelaySeconds,
+        endTime: cue.endTime + secondaryDelaySeconds,
+      }));
+    },
     handleLiveText(text: string): void {
       lastLiveText = removeLiveGlyphFragmentLines(
         activeSourceUsesAssSyntax ? removeAssControlDebrisLines(text) : text,
