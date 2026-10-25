@@ -56,7 +56,7 @@ export class FieldGroupingMergeCollaborator {
     const sentenceAudioField = sentenceCardConfig.audioField;
     if (!fields.includes(sentenceAudioField)) fields.push(sentenceAudioField);
     if (config.fields?.miscInfo) fields.push(config.fields?.miscInfo);
-    fields.push(config.fields?.sentenceFurigana || 'SentenceFurigana');
+    fields.push(this.getSentenceFuriganaFieldName());
     return fields;
   }
 
@@ -161,7 +161,7 @@ export class FieldGroupingMergeCollaborator {
       const isStrictField = this.shouldUseStrictSpanGrouping(keepFieldName);
       if (!existingValue.trim() && !newValue.trim()) continue;
 
-      if (keepFieldNormalized === 'sentencefurigana') {
+      if (keepFieldNormalized === this.getSentenceFuriganaFieldName().toLowerCase()) {
         const hasBothValues = existingValue.trim().length > 0 && newValue.trim().length > 0;
         const usesSenrenGrouping =
           this.deps.getEffectiveSentenceCardConfig().fieldGroupingProvider === 'senren';
@@ -338,7 +338,12 @@ export class FieldGroupingMergeCollaborator {
     const config = this.deps.getConfig();
     if (config.fields?.image) strictFields.add(config.fields.image.toLowerCase());
     if (config.fields?.miscInfo) strictFields.add(config.fields.miscInfo.toLowerCase());
+    strictFields.add(this.getSentenceFuriganaFieldName().toLowerCase());
     return strictFields;
+  }
+
+  private getSentenceFuriganaFieldName(): string {
+    return this.deps.getConfig().fields?.sentenceFurigana || 'SentenceFurigana';
   }
 
   private shouldUseStrictSpanGrouping(fieldName: string): boolean {
