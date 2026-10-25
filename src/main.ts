@@ -568,7 +568,10 @@ import {
   createRefreshSubtitlePrefetchFromActiveTrackHandler,
   createResolveActiveSubtitleSidebarSourceHandler,
 } from './main/runtime/subtitle-prefetch-runtime';
-import { createSecondarySubtitleTrackController } from './main/runtime/secondary-subtitle-track';
+import {
+  createSecondarySubtitleTrackController,
+  selectAlignableSubtitleCues,
+} from './main/runtime/secondary-subtitle-track';
 import {
   createCreateAnilistSetupWindowHandler,
   createCreateConfigSettingsWindowHandler,
@@ -5420,12 +5423,9 @@ function initializeOverlayRuntime(): void {
       Number.isFinite(primaryDelay) ? primaryDelay : 0,
     );
     if (!secondary) return null;
-    // Fragment grids are never shown as subtitle text, so they must not pair up either.
-    const publishable = (cues: readonly SubtitleCue[]) =>
-      cues.filter((cue) => cue.assLayout?.kind !== 'fragment-grid');
     return {
-      primary: publishable(appState.activeParsedSubtitleCues),
-      secondary: publishable(secondary),
+      primary: selectAlignableSubtitleCues(appState.activeParsedSubtitleCues),
+      secondary: selectAlignableSubtitleCues(secondary),
     };
   });
   syncOverlayMpvSubtitleSuppression();

@@ -112,6 +112,40 @@ test('getGroupableFieldNames groups the translation once word cards carry one', 
   assert.equal(collaborator.getGroupableFieldNames().includes('Translation'), true);
 });
 
+test('computeFieldGroupingMergedFields keeps each word card translation with its sentence group', async () => {
+  const { collaborator } = createCollaborator({
+    config: {
+      fields: { translation: 'Translation' },
+      behavior: { translationOnWordCards: true },
+    },
+  });
+
+  const first = await collaborator.computeFieldGroupingMergedFields(
+    200,
+    100,
+    makeNote(200, { Sentence: 'second', Translation: 'Second.' }),
+    makeNote(100, { Sentence: 'first', Translation: 'First.' }),
+    false,
+  );
+  const second = await collaborator.computeFieldGroupingMergedFields(
+    300,
+    200,
+    makeNote(300, { Sentence: 'third', Translation: 'Third.' }),
+    makeNote(200, { Sentence: first.Sentence!, Translation: first.Translation! }),
+    false,
+  );
+
+  assert.equal(
+    second.Translation,
+    second
+      .Sentence!.replace('third', 'Third.')
+      .replace('second', 'Second.')
+      .replace('first', 'First.'),
+  );
+  assert.match(second.Translation!, /data-group-id="200">Second\.</);
+  assert.match(second.Translation!, /data-group-id="100">First\.</);
+});
+
 test('computeFieldGroupingMergedFields groups both notes and sorts by descending group id when keeping original', async () => {
   const { collaborator } = createCollaborator();
 

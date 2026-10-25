@@ -4,6 +4,7 @@ import { parseSubtitleCues } from '../../core/services/subtitle-cue-parser';
 import {
   createSecondarySubtitleTrackController,
   findActiveSubtitleText,
+  selectAlignableSubtitleCues,
 } from './secondary-subtitle-track';
 
 test('findActiveSubtitleText combines unique simultaneous parsed cues', () => {
@@ -307,6 +308,25 @@ test('findActiveSubtitleText keeps a complete reconstructed line over entrance f
 
   assert.equal(findActiveSubtitleText([current, nextEntrance], 3.9), current.text);
   assert.equal(findActiveSubtitleText([current, nextEntrance, nextLine], 4.1), nextLine.text);
+});
+
+test('selectAlignableSubtitleCues drops entrance fragments a longer same-style cue completes', () => {
+  const cue = (text: string, startTime: number, endTime: number, assStyle = 'op_english') => ({
+    text,
+    startTime,
+    endTime,
+    source: 'reconstructed-ass' as const,
+    assStyle,
+  });
+  const entrance = cue('Ne', 3.8, 4.2);
+  const nextLine = cue('Next complete line', 4, 7);
+  const otherStyle = cue('Ne', 3.8, 4.2, 'sign');
+  const later = cue('Ne', 10, 11);
+  assert.deepEqual(selectAlignableSubtitleCues([entrance, nextLine, otherStyle, later]), [
+    nextLine,
+    otherStyle,
+    later,
+  ]);
 });
 
 test('secondary track controller parses the selected ASS file before publishing', async () => {

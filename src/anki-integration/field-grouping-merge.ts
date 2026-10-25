@@ -56,10 +56,8 @@ export class FieldGroupingMergeCollaborator {
     const sentenceAudioField = sentenceCardConfig.audioField;
     if (!fields.includes(sentenceAudioField)) fields.push(sentenceAudioField);
     if (config.fields?.miscInfo) fields.push(config.fields?.miscInfo);
-    // Word cards then carry the translation of their sentence, so it groups with it.
-    if (config.behavior?.translationOnWordCards && config.fields?.translation) {
-      if (!fields.includes(config.fields.translation)) fields.push(config.fields.translation);
-    }
+    const translationField = this.getWordCardTranslationField();
+    if (translationField && !fields.includes(translationField)) fields.push(translationField);
     fields.push('SentenceFurigana');
     return fields;
   }
@@ -342,7 +340,15 @@ export class FieldGroupingMergeCollaborator {
     const config = this.deps.getConfig();
     if (config.fields?.image) strictFields.add(config.fields.image.toLowerCase());
     if (config.fields?.miscInfo) strictFields.add(config.fields.miscInfo.toLowerCase());
+    const translationField = this.getWordCardTranslationField();
+    if (translationField) strictFields.add(translationField.toLowerCase());
     return strictFields;
+  }
+
+  /** Word cards carry the translation of their sentence, so it groups like the sentence. */
+  private getWordCardTranslationField(): string | null {
+    const config = this.deps.getConfig();
+    return (config.behavior?.translationOnWordCards && config.fields?.translation) || null;
   }
 
   private shouldUseStrictSpanGrouping(fieldName: string): boolean {
