@@ -1,7 +1,9 @@
 node_modules
 dist
-release
 coverage
 vendor
 *.log
 src/core/services/tokenizer/__fixtures__/golden/*.json
+# Reviewed release text and vendored license texts; never reformat
+packaging/release-notes
+packaging/bun/licenses
