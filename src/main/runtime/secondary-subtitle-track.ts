@@ -196,6 +196,33 @@ export function findActiveSubtitleText(cues: readonly SubtitleCue[], timeSeconds
   return activeText.join('\n');
 }
 
+/**
+ * Cues worth pairing with the other track: no fragment grids, and no reconstructed
+ * entrance fragments ("Ne") whose text a longer overlapping cue of the same style
+ * completes. `findActiveSubtitleText` hides those behind the complete line as soon as
+ * both are active, so they only flash during the entrance animation.
+ */
+export function selectAlignableSubtitleCues(cues: readonly SubtitleCue[]): SubtitleCue[] {
+  const compact = (text: string) => text.normalize('NFKC').replace(/\s+/gu, '');
+  const reconstructed = cues.filter(
+    (cue) => cue.source === 'reconstructed-ass' && cue.assLayout?.kind !== 'fragment-grid',
+  );
+  return cues.filter((cue) => {
+    if (cue.assLayout?.kind === 'fragment-grid') return false;
+    if (cue.source !== 'reconstructed-ass') return true;
+    const text = compact(cue.text);
+    return !reconstructed.some(
+      (other) =>
+        other !== cue &&
+        (other.assStyle ?? '') === (cue.assStyle ?? '') &&
+        other.startTime < cue.endTime &&
+        other.endTime > cue.startTime &&
+        compact(other.text).length > text.length &&
+        compact(other.text).includes(text),
+    );
+  });
+}
+
 export function createSecondarySubtitleTrackController(deps: {
   getMpvClient: () => SecondarySubtitleMpvClient | null;
   getCurrentTimePos: () => number;
@@ -342,6 +369,27 @@ export function createSecondarySubtitleTrackController(deps: {
   return {
     refresh,
     scheduleRefresh,
+    /**
+     * Parsed cues of the selected secondary track, shifted onto the timeline of a track
+     * delayed by `relativeToDelaySeconds` (0: the playback timeline).
+     */
+    getTimelineCues(relativeToDelaySeconds = 0): SubtitleCue[] | null {
+      if (!parsedCues) return null;
+      const shift = secondaryDelaySeconds - relativeToDelaySeconds;
+      if (shift === 0) return parsedCues;
+      return parsedCues.map((cue) => {
+        const shifted: SubtitleCue = {
+          ...cue,
+          startTime: cue.startTime + shift,
+          endTime: cue.endTime + shift,
+        };
+        // The parser stores the layout as a non-enumerable property, which a spread drops.
+        if (cue.assLayout) {
+          Object.defineProperty(shifted, 'assLayout', { value: cue.assLayout, enumerable: false });
+        }
+        return shifted;
+      });
+    },
     handleLiveText(text: string): void {
       lastLiveText = removeLiveGlyphFragmentLines(
         activeSourceUsesAssSyntax ? removeAssControlDebrisLines(text) : text,

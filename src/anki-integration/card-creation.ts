@@ -25,6 +25,10 @@ import { clampMediaEndTime } from './media-duration';
 import { resolveWordCardKind } from './note-field-utils';
 import type { PendingYoutubeMediaUpdate } from './pending-youtube-media';
 import { resolveMpvVolumeScale } from './mpv-volume';
+import {
+  resolveTimedSentenceTranslation,
+  type SubtitleTracksForTranslation,
+} from './sentence-translation';
 
 const log = createLogger('anki').child('integration.card-creation');
 
@@ -102,6 +106,11 @@ interface CardCreationMediaGenerator {
 
 interface CardCreationDeps {
   getConfig: () => AnkiConnectConfig;
+  /** Parsed subtitle tracks for picking the translation by timing; null when not parsed. */
+  getSubtitleTracksForTranslation?: () =>
+    | Promise<SubtitleTracksForTranslation | null>
+    | SubtitleTracksForTranslation
+    | null;
   getAiConfig: () => AiConfig;
   getTimingTracker: () => SubtitleTimingTracker;
   getMpvClient: () => MpvClient;
@@ -600,6 +609,9 @@ export class CardCreationService {
     }
 
     const maxMediaDuration = this.deps.getConfig().media?.maxMediaDuration ?? 30;
+    // The cap limits the media only; the translation still covers every line of the sentence.
+    const subtitleStartTime = startTime;
+    const subtitleEndTime = endTime;
     const cappedEndTime = clampMediaEndTime(startTime, endTime, maxMediaDuration);
     if (cappedEndTime !== endTime) {
       log.warn(
@@ -629,6 +641,15 @@ export class CardCreationService {
           endTime = timingDecision.endTime;
           sentence = timingDecision.text?.trim() || sentence;
         }
+        // After the review, so lines it added to the sentence get their translation too.
+        // Trimming the clip leaves the sentence alone, so the original lines stay covered.
+        const timedTranslation = resolveTimedSentenceTranslation({
+          text: sentence,
+          startTime: Math.min(startTime, subtitleStartTime),
+          endTime: Math.max(endTime, subtitleEndTime),
+          tracks: (await this.deps.getSubtitleTracksForTranslation?.()) ?? null,
+        });
+        if (timedTranslation) secondarySubText = timedTranslation.translation;
 
         const config = this.deps.getConfig();
         const generateAudio = !skipMedia && shouldGenerateAudio(config);
