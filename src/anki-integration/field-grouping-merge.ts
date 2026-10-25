@@ -56,7 +56,7 @@ export class FieldGroupingMergeCollaborator {
     const sentenceAudioField = sentenceCardConfig.audioField;
     if (!fields.includes(sentenceAudioField)) fields.push(sentenceAudioField);
     if (config.fields?.miscInfo) fields.push(config.fields?.miscInfo);
-    fields.push('SentenceFurigana');
+    fields.push(config.fields?.sentenceFurigana || 'SentenceFurigana');
     return fields;
   }
 

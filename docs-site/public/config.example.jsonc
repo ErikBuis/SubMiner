@@ -558,7 +558,7 @@
   // ==========================================
   // AnkiConnect Integration
   // Automatic Anki updates and media generation options.
-  // Hot-reload: ankiConnect.ai.enabled, media.normalizeAudio/mirrorMpvVolume/reviewTiming, knownWords, nPlusOne, fields.word/audio/wordAudio/image/sentence/miscInfo, behavior.autoUpdateNewCards, isLapis.sentenceCardModel, isKiku.fieldGrouping, isSenren.fieldGrouping, and lapisKiku.wordCardKind update live while SubMiner is running.
+  // Hot-reload: ankiConnect.ai.enabled, media.normalizeAudio/mirrorMpvVolume/reviewTiming, knownWords, nPlusOne, fields.word/audio/wordAudio/image/sentence/sentenceFurigana/miscInfo, behavior.autoUpdateNewCards, isLapis.sentenceCardModel, isKiku.fieldGrouping, isSenren.fieldGrouping, and lapisKiku.wordCardKind update live while SubMiner is running.
   // Shared AI provider transport settings are read from top-level ai and typically require restart.
   // Most other AnkiConnect settings still require restart.
   // ==========================================
@@ -582,6 +582,7 @@
       "wordAudio": "ExpressionAudio", // Existing word-audio field read to time the frozen first frame of animated images. This mapping is only used for synchronization.
       "image": "Picture", // Card field that receives the captured screenshot or animated image.
       "sentence": "Sentence", // Card field that receives the source sentence text.
+      "sentenceFurigana": "SentenceFurigana", // Card field that receives the sentence with furigana, regenerated when SubMiner changes the sentence.
       "miscInfo": "MiscInfo", // Card field that receives the miscellaneous info pattern (see ankiConnect.metadata.pattern).
       "translation": "SelectionText" // Card field that receives the current selection or translated text.
     }, // Fields setting.

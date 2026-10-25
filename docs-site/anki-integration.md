@@ -81,14 +81,15 @@ If cards are not getting filled:
 
 `ankiConnect.fields` maps SubMiner's data to fields on your note type.
 
-| Key                | Receives                                                                  |
-| ------------------ | ------------------------------------------------------------------------- |
-| `fields.word`      | The mined word                                                            |
-| `fields.audio`     | Sentence audio cut from the video                                         |
-| `fields.wordAudio` | Read only: Yomitan's word audio, used to time animated images (see below) |
-| `fields.image`     | Screenshot or animated clip                                               |
-| `fields.sentence`  | Subtitle text                                                             |
-| `fields.miscInfo`  | Text from `ankiConnect.metadata.pattern`                                  |
+| Key                       | Receives                                                                  |
+| ------------------------- | ------------------------------------------------------------------------- |
+| `fields.word`             | The mined word                                                            |
+| `fields.audio`            | Sentence audio cut from the video                                         |
+| `fields.wordAudio`        | Read only: Yomitan's word audio, used to time animated images (see below) |
+| `fields.image`            | Screenshot or animated clip                                               |
+| `fields.sentence`         | Subtitle text                                                             |
+| `fields.sentenceFurigana` | Sentence with furigana, regenerated when SubMiner changes the sentence    |
+| `fields.miscInfo`         | Text from `ankiConnect.metadata.pattern`                                  |
 
 ```jsonc
 "ankiConnect": {
