@@ -37,6 +37,8 @@ export interface MediaTimingReviewCardPreview {
     text: string;
     /** Secondary subtitle lines around the clip, used to follow added or removed lines. */
     lines: MediaTimingReviewContextLine[];
+    /** The card sentence's own range; wider than the clip when the media was capped. */
+    sentenceRange?: { startTime: number; endTime: number };
     /** The secondary lines behind `text`; empty when it came from the live subtitle. */
     currentLines: MediaTimingReviewContextLine[];
     /**

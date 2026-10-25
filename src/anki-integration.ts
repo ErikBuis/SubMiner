@@ -249,8 +249,9 @@ export class AnkiIntegration {
   private mediaTimingReviewCallback:
     | ((request: MediaTimingReviewRequest) => Promise<MediaTimingReviewDecision>)
     | null = null;
-  private subtitleTracksForTranslationProvider: (() => SubtitleTracksForTranslation | null) | null =
-    null;
+  private subtitleTracksForTranslationProvider:
+    | (() => Promise<SubtitleTracksForTranslation | null> | SubtitleTracksForTranslation | null)
+    | null = null;
   private noteIdRedirects = new Map<number, number>();
   private trackedDuplicateNoteIds = new Map<number, number[]>();
   private getCachedMediaPath: MediaGenerationInputResolverOptions['getCachedMediaPath'] | null =
@@ -1799,7 +1800,9 @@ export class AnkiIntegration {
   }
 
   setSubtitleTracksForTranslationProvider(
-    provider: (() => SubtitleTracksForTranslation | null) | null,
+    provider:
+      | (() => Promise<SubtitleTracksForTranslation | null> | SubtitleTracksForTranslation | null)
+      | null,
   ): void {
     this.subtitleTracksForTranslationProvider = provider;
   }

@@ -118,6 +118,8 @@ export function buildMediaTimingReviewTranslation(options: {
   previousCount: number;
   nextCount: number;
   initialTranslation: string;
+  /** The range `text` covers when it is wider than the clip (capped media). */
+  sentenceRange?: { startTime: number; endTime: number };
   /** The secondary lines behind `initialTranslation`. */
   initialTranslationLines: MediaTimingReviewContextLine[];
   translationLines: MediaTimingReviewContextLine[];
@@ -134,7 +136,10 @@ export function buildMediaTimingReviewTranslation(options: {
     // drop lines that still belong to the card's original text.
     const ranges = [
       ...selection.previous,
-      { startTime: options.originalStartTime, endTime: options.originalEndTime },
+      options.sentenceRange ?? {
+        startTime: options.originalStartTime,
+        endTime: options.originalEndTime,
+      },
       ...selection.next,
     ];
     const translation = joinSubtitleLineTexts(
@@ -668,6 +673,7 @@ export function createMediaTimingReviewModal(
       previousCount,
       nextCount,
       initialTranslation: translation.text,
+      sentenceRange: translation.sentenceRange,
       initialTranslationLines: translation.currentLines,
       translationLines: translation.lines,
       lineTranslations: translation.lineTranslations,

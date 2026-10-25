@@ -385,6 +385,10 @@ test('secondary track controller follows parsed cue timing and subtitle delay', 
       [2.5, 3.5],
     ],
   );
+  assert.deepEqual(
+    controller.getTimelineCues(0.5)?.map((cue) => cue.startTime),
+    [1, 2],
+  );
   controller.handleDelayChange(0);
   assert.deepEqual(
     controller.getTimelineCues()?.map((cue) => cue.startTime),

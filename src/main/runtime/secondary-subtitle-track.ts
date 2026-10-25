@@ -342,15 +342,26 @@ export function createSecondarySubtitleTrackController(deps: {
   return {
     refresh,
     scheduleRefresh,
-    /** Parsed cues of the selected secondary track, shifted onto the playback timeline. */
-    getTimelineCues(): SubtitleCue[] | null {
+    /**
+     * Parsed cues of the selected secondary track, shifted onto the timeline of a track
+     * delayed by `relativeToDelaySeconds` (0: the playback timeline).
+     */
+    getTimelineCues(relativeToDelaySeconds = 0): SubtitleCue[] | null {
       if (!parsedCues) return null;
-      if (secondaryDelaySeconds === 0) return parsedCues;
-      return parsedCues.map((cue) => ({
-        ...cue,
-        startTime: cue.startTime + secondaryDelaySeconds,
-        endTime: cue.endTime + secondaryDelaySeconds,
-      }));
+      const shift = secondaryDelaySeconds - relativeToDelaySeconds;
+      if (shift === 0) return parsedCues;
+      return parsedCues.map((cue) => {
+        const shifted: SubtitleCue = {
+          ...cue,
+          startTime: cue.startTime + shift,
+          endTime: cue.endTime + shift,
+        };
+        // The parser stores the layout as a non-enumerable property, which a spread drops.
+        if (cue.assLayout) {
+          Object.defineProperty(shifted, 'assLayout', { value: cue.assLayout, enumerable: false });
+        }
+        return shifted;
+      });
     },
     handleLiveText(text: string): void {
       lastLiveText = removeLiveGlyphFragmentLines(

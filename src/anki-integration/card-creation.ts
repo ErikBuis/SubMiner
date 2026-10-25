@@ -108,7 +108,10 @@ interface CardCreationMediaGenerator {
 interface CardCreationDeps {
   getConfig: () => AnkiConnectConfig;
   /** Parsed subtitle tracks for sentence/translation alignment; null when not parsed. */
-  getSubtitleTracksForTranslation?: () => SubtitleTracksForTranslation | null;
+  getSubtitleTracksForTranslation?: () =>
+    | Promise<SubtitleTracksForTranslation | null>
+    | SubtitleTracksForTranslation
+    | null;
   getAiConfig: () => AiConfig;
   getTimingTracker: () => SubtitleTimingTracker;
   getMpvClient: () => MpvClient;
@@ -626,7 +629,7 @@ export class CardCreationService {
           text: sentence,
           startTime,
           endTime: subtitleEndTime,
-          tracks: this.deps.getSubtitleTracksForTranslation?.() ?? null,
+          tracks: (await this.deps.getSubtitleTracksForTranslation?.()) ?? null,
           align: alignSentence,
           format: formatTranslation,
           maxSentenceSeconds: maxMediaDuration,
@@ -652,6 +655,10 @@ export class CardCreationService {
                   text: cardTranslation.translation,
                   lines: cardTranslation.reviewLines,
                   currentLines: cardTranslation.translationLines,
+                  sentenceRange: {
+                    startTime: cardTranslation.startTime,
+                    endTime: cardTranslation.endTime,
+                  },
                   lineTranslations: cardTranslation.lineTranslations,
                   format: formatTranslation,
                   align: alignSentence,

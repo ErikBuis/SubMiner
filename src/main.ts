@@ -5409,8 +5409,16 @@ function initializeOverlayRuntime(): void {
   appState.ankiIntegration?.setSubtitleMiningContextConsumer(consumePendingSubtitleMiningContext);
   appState.ankiIntegration?.setMediaTimingReviewCallback(mediaTimingReviewRuntime.requestReview);
   appState.ankiIntegration?.setSentenceFuriganaGenerator(generateMiningSentenceFurigana);
-  appState.ankiIntegration?.setSubtitleTracksForTranslationProvider(() => {
-    const secondary = secondarySubtitleTrackController.getTimelineCues();
+  appState.ankiIntegration?.setSubtitleTracksForTranslationProvider(async () => {
+    // Primary cues keep their file timestamps, like the rest of the mining code, so the
+    // secondary track is moved onto the primary track's timeline rather than playback's.
+    const client = appState.mpvClient;
+    const primaryDelay = client?.connected
+      ? Number(await client.requestProperty('sub-delay').catch(() => 0))
+      : 0;
+    const secondary = secondarySubtitleTrackController.getTimelineCues(
+      Number.isFinite(primaryDelay) ? primaryDelay : 0,
+    );
     if (!secondary) return null;
     // Fragment grids are never shown as subtitle text, so they must not pair up either.
     const publishable = (cues: readonly SubtitleCue[]) =>

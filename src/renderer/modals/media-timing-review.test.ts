@@ -292,3 +292,30 @@ test('without alignment an added line keeps the translation of the original line
     'Long lead-in Next.',
   );
 });
+
+test('without alignment a capped clip still follows the whole sentence it holds', () => {
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      previousLines: [{ text: '前', startTime: -15, endTime: 0 }],
+      nextLines: [],
+      text: '一 二 三',
+      // The clip was capped at 30 s; the sentence runs to 45 s.
+      originalStartTime: 0,
+      originalEndTime: 30,
+      sentenceRange: { startTime: 0, endTime: 45 },
+      previousCount: 1,
+      nextCount: 0,
+      initialTranslation: 'One. Two. Three.',
+      initialTranslationLines: [],
+      translationLines: [
+        { text: 'Before.', startTime: -15, endTime: 0 },
+        { text: 'One.', startTime: 0, endTime: 15 },
+        { text: 'Two.', startTime: 15, endTime: 30 },
+        { text: 'Three.', startTime: 30, endTime: 45 },
+      ],
+      format: false,
+      align: false,
+    }),
+    'Before. One. Two. Three.',
+  );
+});

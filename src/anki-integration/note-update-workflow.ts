@@ -60,7 +60,10 @@ export interface NoteUpdateWorkflowDeps {
   getCurrentSubtitleText: () => string | undefined;
   getCurrentSubtitleStart: () => number | undefined;
   /** Parsed subtitle tracks for sentence/translation alignment; null when not parsed. */
-  getSubtitleTracksForTranslation?: () => SubtitleTracksForTranslation | null;
+  getSubtitleTracksForTranslation?: () =>
+    | Promise<SubtitleTracksForTranslation | null>
+    | SubtitleTracksForTranslation
+    | null;
   /** Live secondary subtitle, only when the on-screen primary line matches `primaryText`. */
   getLiveSecondarySubtitleFor?: (primaryText: string) => string | undefined;
   getEffectiveSentenceCardConfig: () => {
@@ -269,7 +272,7 @@ export class NoteUpdateWorkflow {
           startTime: mediaTimingContext?.startTime ?? Number.NaN,
           endTime: mediaTimingContext?.endTime ?? Number.NaN,
           tracks: mediaTimingContext
-            ? (this.deps.getSubtitleTracksForTranslation?.() ?? null)
+            ? ((await this.deps.getSubtitleTracksForTranslation?.()) ?? null)
             : null,
           align: alignSentence,
           format: config.behavior?.formatTranslation === true,
@@ -310,6 +313,10 @@ export class NoteUpdateWorkflow {
                         text: cardTranslation.translation,
                         lines: cardTranslation.reviewLines,
                         currentLines: cardTranslation.translationLines,
+                        sentenceRange: {
+                          startTime: cardTranslation.startTime,
+                          endTime: cardTranslation.endTime,
+                        },
                         lineTranslations: cardTranslation.lineTranslations,
                         format: config.behavior?.formatTranslation === true,
                         align: alignSentence,
