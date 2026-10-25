@@ -100,6 +100,18 @@ test('getGroupableFieldNames includes Kiku context fields and omits word audio f
   ]);
 });
 
+test('getGroupableFieldNames groups the translation once word cards carry one', () => {
+  const config = { fields: { translation: 'Translation' } };
+  assert.equal(
+    createCollaborator({ config }).collaborator.getGroupableFieldNames().includes('Translation'),
+    false,
+  );
+  const { collaborator } = createCollaborator({
+    config: { ...config, behavior: { translationOnWordCards: true } },
+  });
+  assert.equal(collaborator.getGroupableFieldNames().includes('Translation'), true);
+});
+
 test('computeFieldGroupingMergedFields groups both notes and sorts by descending group id when keeping original', async () => {
   const { collaborator } = createCollaborator();
 

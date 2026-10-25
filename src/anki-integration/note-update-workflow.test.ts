@@ -890,7 +890,8 @@ test('NoteUpdateWorkflow without alignment translates only the mined line', asyn
   assert.deepEqual(harness.updates, [
     {
       noteId: 42,
-      fields: { Sentence: 'subtitle-text', Translation: 'i put lots of vegetables in it,' },
+      // The captured line, not the live subtitle the player has moved on to.
+      fields: { Sentence: 'いっぱい入ってるよ', Translation: 'i put lots of vegetables in it,' },
     },
   ]);
 });

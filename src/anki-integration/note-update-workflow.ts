@@ -365,6 +365,8 @@ export class NoteUpdateWorkflow {
         reviewedSentenceText ??
         alignedSentenceText ??
         subtitleMiningContext?.text ??
+        // The translation was resolved for this captured line, so the sentence must match it.
+        cardTranslation?.text ??
         this.deps.getCurrentSubtitleText();
       if (sentenceField && currentSubtitleText) {
         const processedSentence = this.deps.processSentence(currentSubtitleText, fields);

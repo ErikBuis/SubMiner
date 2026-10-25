@@ -4,6 +4,7 @@ import {
   alignSentenceTranslation,
   buildSentenceTranslationGroups,
   formatCardTranslation,
+  joinSubtitleLineTexts,
   type TimedSubtitleText,
 } from './sentence-translation-alignment';
 
@@ -134,4 +135,15 @@ test('a sentence ends at its latest cue, not at the cue that starts last', () =>
   });
   assert.equal(aligned?.text, '長い台詞 短い');
   assert.equal(aligned?.endTime, 10);
+});
+
+test('a line repeated by a simultaneous cue is joined once, a later repeat stays', () => {
+  assert.equal(
+    joinSubtitleLineTexts([
+      line('First line\nSecond line', 0, 2),
+      line('First line', 0, 2),
+      line('First line', 5, 6),
+    ]),
+    'First line Second line First line',
+  );
 });

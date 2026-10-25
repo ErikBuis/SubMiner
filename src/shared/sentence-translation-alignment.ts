@@ -183,11 +183,22 @@ export function collectOverlappingLines(
   });
 }
 
+/**
+ * Joins cue texts into one line. Simultaneous cues often repeat a line (the subtitle
+ * renderer shows it once), so a line already taken from a cue overlapping in time is
+ * skipped; the same line at another time is kept.
+ */
 export function joinSubtitleLineTexts(lines: readonly TimedSubtitleText[]): string {
-  return lines
-    .map((line) => line.text.replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
-    .join(' ');
+  const taken: TimedSubtitleText[] = [];
+  for (const cue of lines) {
+    for (const rawLine of cue.text.split(/\r?\n|\\N/)) {
+      const text = rawLine.replace(/\s+/g, ' ').trim();
+      if (!text) continue;
+      if (taken.some((line) => line.text === text && overlapSeconds(line, cue) > 0)) continue;
+      taken.push({ text, startTime: cue.startTime, endTime: cue.endTime });
+    }
+  }
+  return taken.map((line) => line.text).join(' ');
 }
 
 /**

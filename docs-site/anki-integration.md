@@ -189,6 +189,8 @@ Sentence cards always write the secondary subtitle into the translation field, `
 
 Translators often give one secondary line to a sentence the Japanese track splits over several lines, and secondary tracks overlap dialogue with unrelated lines such as signs or a TV in the background. With `alignSentenceToTranslation`, the card sentence and its media widen to every primary line that one secondary line covers (up to `media.maxMediaDuration`), and only that secondary line becomes the translation. It needs both tracks to be readable subtitle files or embedded text tracks; otherwise the translation falls back to the secondary subtitle on screen.
 
+With `translationOnWordCards`, field grouping of duplicate word cards also merges the translation field, so each grouped sentence keeps its translation.
+
 ## Sentence cards (Lapis) {#sentence-cards-lapis}
 
 `Ctrl/Cmd+S` creates a standalone sentence card from the current line, and `Ctrl/Cmd+Shift+S` then a digit combines several lines. The card uses the note type named in `ankiConnect.isLapis.sentenceCardModel`, which must exist in Anki. If it is empty, no card is created.

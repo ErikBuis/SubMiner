@@ -1083,6 +1083,8 @@ export function createMediaTimingReviewModal(
 
   function handleMediaTimingReviewKeydown(event: KeyboardEvent): boolean {
     if (!ctx.state.mediaTimingReviewModalOpen) return false;
+    // Keys that belong to an IME composition in the translation (Escape cancels it).
+    if (event.target === ctx.dom.mediaTimingReviewTranslation && event.isComposing) return false;
     if (event.key === 'Escape') {
       event.preventDefault();
       if (!ctx.dom.mediaTimingReviewCancelStep.classList.contains('hidden')) showEditor();
@@ -1091,7 +1093,7 @@ export function createMediaTimingReviewModal(
     }
     if (event.target === ctx.dom.mediaTimingReviewTranslation) {
       // Typing goes to the translation; only plain Enter still confirms the card.
-      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         confirmSelection();
         return true;

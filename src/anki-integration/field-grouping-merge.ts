@@ -56,6 +56,10 @@ export class FieldGroupingMergeCollaborator {
     const sentenceAudioField = sentenceCardConfig.audioField;
     if (!fields.includes(sentenceAudioField)) fields.push(sentenceAudioField);
     if (config.fields?.miscInfo) fields.push(config.fields?.miscInfo);
+    // Word cards then carry the translation of their sentence, so it groups with it.
+    if (config.behavior?.translationOnWordCards && config.fields?.translation) {
+      if (!fields.includes(config.fields.translation)) fields.push(config.fields.translation);
+    }
     fields.push('SentenceFurigana');
     return fields;
   }
