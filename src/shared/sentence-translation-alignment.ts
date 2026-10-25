@@ -315,8 +315,10 @@ function compactText(text: string): string {
 }
 
 /**
- * Resolves the primary lines of a mined subtitle range and the secondary line(s) that
- * translate them. Returns null when the mined range matches no primary line.
+ * Resolves the sentence around a mined subtitle range and the secondary line(s) that
+ * translate it. With `widenSentence` the sentence grows to every primary line the matching
+ * secondary event covers; without it only the mined lines are kept and only their
+ * translation is returned. Returns null when the mined range matches no primary line.
  */
 export function alignSentenceTranslation(options: {
   primaryLines: readonly TimedSubtitleText[];
@@ -328,6 +330,9 @@ export function alignSentenceTranslation(options: {
    * a line skipped by a seek) are left out, unless that would leave none.
    */
   sentenceText?: string;
+  widenSentence?: boolean;
+  /** Widening stops at this many seconds; 0 or less disables the cap. */
+  maxSentenceSeconds?: number;
   minOverlapRatio?: number;
 }): AlignedSentenceTranslation | null {
   const primary = sortSubtitleLines(options.primaryLines);
@@ -357,8 +362,25 @@ export function alignSentenceTranslation(options: {
   );
   // Only the mined lines: a long sign between two dialogue lines starts in between but
   // is not part of the sentence.
-  const lines = minedIndexes.map((index) => primary[index]!);
-  const translationLines = collectGroupTranslationLines(primary, secondary, groups, minedIndexes);
+  let indexes = minedIndexes;
+  if (options.widenSentence) {
+    const widened = new Set(minedIndexes);
+    for (const group of [
+      groups[minedIndexes[0]!],
+      groups[minedIndexes[minedIndexes.length - 1]!],
+    ]) {
+      if (!group?.secondary) continue;
+      for (let index = group.from; index <= group.to; index += 1) widened.add(index);
+    }
+    const candidate = [...widened].sort((a, b) => a - b);
+    const candidateLines = candidate.map((index) => primary[index]!);
+    const span = latestEnd(candidateLines) - candidateLines[0]!.startTime;
+    const maxSeconds = options.maxSentenceSeconds ?? 0;
+    if (maxSeconds <= 0 || span <= maxSeconds) indexes = candidate;
+  }
+
+  const lines = indexes.map((index) => primary[index]!);
+  const translationLines = collectGroupTranslationLines(primary, secondary, groups, indexes);
   return {
     lines,
     text: joinSubtitleLineTexts(lines),
@@ -367,4 +389,53 @@ export function alignSentenceTranslation(options: {
     translationLines,
     translation: joinSubtitleLineTexts(translationLines),
   };
+}
+
+const TRAILING_CLOSERS = ['"', "'", ')', ']', '”', '’', '）', '」', '』'];
+const TRAILING_COMMAS: Array<[string, string]> = [
+  [',', '.'],
+  ['、', '。'],
+  ['，', '。'],
+];
+
+/** Subtitle lines often start lowercase because they continue the previous line. */
+function capitalizeFirstLetter(text: string): string {
+  return text.replace(/^(\s*)(\p{Ll})/u, (_match, space: string, letter: string) => {
+    return space + letter.toUpperCase();
+  });
+}
+
+/**
+ * A line cut off mid-sentence ends in a comma ("Lost in that thought,"). On a card it
+ * stands alone, so the trailing comma becomes a full stop. Closing quotes, brackets and
+ * HTML tags after the comma stay where they are.
+ */
+function closeSentence(text: string): string {
+  let body = text;
+  let tail = '';
+  for (;;) {
+    const piece =
+      body.match(/\s+$/)?.[0] ??
+      body.match(/<\/?[A-Za-z][^<>]*>$/)?.[0] ??
+      TRAILING_CLOSERS.find((closer) => body.endsWith(closer));
+    if (!piece) break;
+    tail = piece + tail;
+    body = body.slice(0, body.length - piece.length);
+  }
+  for (const [comma, stop] of TRAILING_COMMAS) {
+    if (body.endsWith(comma)) {
+      return body.slice(0, body.length - comma.length) + stop + tail;
+    }
+  }
+  return text;
+}
+
+/**
+ * How a translation reads on a card: one line, starting with a capital letter and not
+ * ending in a comma. Only the card's copy changes, never the subtitle track.
+ */
+export function formatCardTranslation(text: string): string {
+  const singleLine = text.replace(/\s+/g, ' ').trim();
+  if (!singleLine) return '';
+  return closeSentence(capitalizeFirstLetter(singleLine));
 }

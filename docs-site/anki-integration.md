@@ -193,6 +193,17 @@ Sentence cards and audio cards (`Ctrl/Cmd+Shift+A`) always write to the `Sentenc
 
 The card's translation is the secondary subtitle line that translates the mined line(s), picked by timing from the parsed subtitle tracks. A secondary line that only overlaps the dialogue, such as a sign or a TV in the background, is left out, and a mined line the parsed track has no translation for gets none. Without a readable secondary subtitle file or embedded text track, the secondary subtitle on screen is used.
 
+### Sentence translations
+
+Two behavior options change how the sentence and its translation come out, on sentence cards and on word cards with `fields.wordCardTranslation`:
+
+| Key                                   | What it does                                                                                                                                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `behavior.widenSentenceToTranslation` | Translators often give one secondary line to a sentence the Japanese track splits over several lines. The card sentence and its media then widen to all of those lines, up to `media.maxMediaDuration` |
+| `behavior.formatTranslation`          | Start the translation with a capital letter and turn a trailing comma into a period, since a line cut off mid-sentence stands alone on the card                                                        |
+
+Widening needs both tracks to be readable subtitle files or embedded text tracks.
+
 ## Word card type (Kiku/Lapis)
 
 When `isKiku` or `isLapis` is enabled, SubMiner sets a card-type flag on word cards it fills. Choose the flag with `ankiConnect.lapisKiku.wordCardKind`:

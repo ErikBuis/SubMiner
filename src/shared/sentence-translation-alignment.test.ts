@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   alignSentenceTranslation,
   buildSentenceTranslationGroups,
+  formatCardTranslation,
   joinSubtitleLineTexts,
   type TimedSubtitleText,
 } from './sentence-translation-alignment';
@@ -275,4 +276,44 @@ test('a two-speaker cue whose first speaker wraps keeps both translations', () =
     endTime: 3,
   });
   assert.equal(aligned?.translation, '- Nice weather today. - Yeah.');
+});
+
+test('mining one line of a split sentence widens to the whole sentence', () => {
+  const primary = [line('今日は', 11.2, 12.5), line('いい天気ですね', 12.6, 14)];
+  const secondary = [line('Nice weather today, huh?', 11.1, 14.1)];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 12.6,
+    endTime: 14,
+    widenSentence: true,
+  });
+  assert.equal(aligned?.text, '今日は いい天気ですね');
+  assert.equal(aligned?.startTime, 11.2);
+  assert.equal(aligned?.endTime, 14);
+  assert.equal(aligned?.translation, 'Nice weather today, huh?');
+});
+
+test('widening respects the maximum sentence length', () => {
+  const primary = [line('一', 0, 10), line('二', 10, 20), line('三', 20, 30)];
+  const secondary = [line('One two three.', 0, 30)];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 10,
+    endTime: 20,
+    widenSentence: true,
+    maxSentenceSeconds: 25,
+  });
+  assert.equal(aligned?.text, '二');
+  assert.equal(aligned?.translation, 'One two three.');
+});
+
+test('formatCardTranslation capitalizes and closes a comma-ended line', () => {
+  assert.equal(formatCardTranslation('lost in that thought,'), 'Lost in that thought.');
+  assert.equal(formatCardTranslation('"so what,"'), '"so what."');
+  assert.equal(formatCardTranslation('<i>wait,</i>'), '<i>wait.</i>');
+  assert.equal(formatCardTranslation('two\nlines'), 'Two lines');
+  assert.equal(formatCardTranslation('Already fine!'), 'Already fine!');
+  assert.equal(formatCardTranslation('   '), '');
 });

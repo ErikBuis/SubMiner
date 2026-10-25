@@ -11,8 +11,10 @@ import { resolveWordCardKind } from './note-field-utils';
 import { STATS_MINING_TAG } from '../shared/anki-source';
 import {
   resolveTimedSentenceTranslation,
+  widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
 } from './sentence-translation';
+import { formatCardTranslation } from '../shared/sentence-translation-alignment';
 
 export interface NoteUpdateWorkflowNoteInfo {
   noteId: number;
@@ -41,10 +43,13 @@ export interface NoteUpdateWorkflowDeps {
       generateImage?: boolean;
       imageType?: 'static' | 'avif';
       syncAnimatedImageToWordAudio?: boolean;
+      maxMediaDuration?: number;
     };
     behavior?: {
       overwriteAudio?: boolean;
       overwriteImage?: boolean;
+      widenSentenceToTranslation?: boolean;
+      formatTranslation?: boolean;
     };
   };
   getCurrentSubtitleText: () => string | undefined;
@@ -243,6 +248,24 @@ export class NoteUpdateWorkflow {
       let skipMedia = false;
       let reviewedSentenceText: string | undefined;
       const noteLabel = hasExpressionText ? expressionText : noteId;
+      let tracks: Promise<SubtitleTracksForTranslation | null> | undefined;
+      const getTracks = () =>
+        (tracks ??= Promise.resolve(this.deps.getSubtitleTracksForTranslation?.() ?? null));
+
+      let widenedSentenceText: string | undefined;
+      if (mediaTimingContext && config.behavior?.widenSentenceToTranslation) {
+        const widened = widenSentenceToTranslation({
+          startTime: mediaTimingContext.startTime,
+          endTime: mediaTimingContext.endTime,
+          tracks: await getTracks(),
+          maxSentenceSeconds: config.media?.maxMediaDuration ?? 0,
+        });
+        if (widened) {
+          widenedSentenceText = widened.text;
+          mediaTimingContext = { ...mediaTimingContext, ...widened };
+        }
+      }
+
       // The subtitle lines behind the sentence. The reviewed clip is padded or trimmed
       // audio, so only lines the review adds widen this.
       let sentenceRange = mediaTimingContext
@@ -308,24 +331,30 @@ export class NoteUpdateWorkflow {
       let translation: string | undefined;
       const minedText = mediaTimingContext?.text ?? this.deps.getCurrentSubtitleText();
       if (translationFieldName && minedText) {
-        const tracks = sentenceRange
-          ? ((await this.deps.getSubtitleTracksForTranslation?.()) ?? null)
-          : null;
+        const parsedTracks = sentenceRange ? await getTracks() : null;
         const timedTranslation = sentenceRange
-          ? resolveTimedSentenceTranslation({ text: minedText, ...sentenceRange, tracks })
+          ? resolveTimedSentenceTranslation({
+              text: minedText,
+              ...sentenceRange,
+              tracks: parsedTracks,
+            })
           : null;
         // A parsed secondary track without a match means no translation; the line on
         // screen only stands in when the tracks are unavailable.
         translation =
           timedTranslation?.translation ??
-          (tracks && tracks.secondary.length > 0
+          (parsedTracks && parsedTracks.secondary.length > 0
             ? undefined
             : this.deps.getLiveSecondarySubtitleFor?.(minedText));
+        if (translation && config.behavior?.formatTranslation) {
+          translation = formatCardTranslation(translation);
+        }
         if (translation) translatedText = minedText;
       }
 
       const currentSubtitleText =
         reviewedSentenceText ??
+        widenedSentenceText ??
         subtitleMiningContext?.text ??
         // The translation belongs to the captured line, so the sentence must be that line too.
         translatedText ??

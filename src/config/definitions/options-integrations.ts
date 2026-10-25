@@ -175,6 +175,20 @@ export function buildIntegrationConfigOptionRegistry(
       description: 'Bold the mined word inside the sentence field on the saved Anki card.',
     },
     {
+      path: 'ankiConnect.behavior.widenSentenceToTranslation',
+      kind: 'boolean',
+      defaultValue: defaultConfig.ankiConnect.behavior.widenSentenceToTranslation,
+      description:
+        'When one secondary subtitle line translates several primary lines, widen the card sentence and its media to all of them (up to media.maxMediaDuration). Needs parsed subtitle tracks.',
+    },
+    {
+      path: 'ankiConnect.behavior.formatTranslation',
+      kind: 'boolean',
+      defaultValue: defaultConfig.ankiConnect.behavior.formatTranslation,
+      description:
+        'Write card translations as one line that starts with a capital letter, turning a trailing comma into a period.',
+    },
+    {
       path: 'ankiConnect.behavior.notificationType',
       kind: 'enum',
       enumValues: NOTIFICATION_TYPE_VALUES,
