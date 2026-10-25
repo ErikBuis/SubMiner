@@ -309,7 +309,19 @@ export function createTokenizerDepsRuntime(
     enrichTokensWithMecab: async (tokens, mecabTokens) =>
       enrichTokensWithMecabAsync(tokens, mecabTokens),
     onTokenizationReady: options.onTokenizationReady,
-  };
+    rawMecabEdges: async (text: string) => {
+      const raw = await options.getMecabTokenizer()?.tokenize(text);
+      const edges: number[] = [];
+      let cursor = 0;
+      for (const token of raw ?? []) {
+        const at = text.indexOf(token.word, cursor);
+        if (at < 0) continue;
+        edges.push(at, at + token.word.length);
+        cursor = at + token.word.length;
+      }
+      return edges;
+    },
+  } as TokenizerServiceDeps;
 }
 
 function logSelectedYomitanGroups(text: string, tokens: MergedToken[]): void {
@@ -729,7 +741,19 @@ async function parseWithYomitanInternalParser(
   stageTimings?: TokenizationStageTimings,
 ): Promise<MergedToken[] | null> {
   const scanStartedAtMs = Date.now();
+  let mecabHints = null;
+  if (process.env.SUBMINER_MECAB_GUIDE === '1') {
+    const guideTokens = await deps.tokenizeWithMecab(text).catch(() => null);
+    if (guideTokens && guideTokens.length > 0) {
+      mecabHints = {
+        spans: guideTokens.map((t) => ({ start: t.startPos, end: t.endPos, pos1: t.pos1 ?? '', pos2: t.pos2 ?? '', headword: t.headword, reading: t.reading })),
+        tildeFix: true,
+        morphemeEdges: (await (deps as unknown as { rawMecabEdges?: (t: string) => Promise<number[]> }).rawMecabEdges?.(text)) ?? [],
+      };
+    }
+  }
   const selectedTokens = await requestYomitanScanTokens(text, deps, logger, {
+    mecabHints,
     includeNameMatchMetadata: options.nameMatchEnabled,
     currentCharacterDictionaryMediaId: deps.getCurrentCharacterDictionaryMediaId?.() ?? null,
     nameCandidates: deps.getCharacterNameCandidates?.() ?? null,

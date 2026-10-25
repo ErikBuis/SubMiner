@@ -1033,6 +1033,7 @@ export async function requestYomitanScanTokens(
     includeNameMatchMetadata?: boolean;
     currentCharacterDictionaryMediaId?: number | null;
     nameCandidates?: { key: string; forms: string[] } | null;
+    mecabHints?: import('./yomitan-scan-runtime-script').YomitanScanRequestParams['mecabHints'];
   },
 ): Promise<YomitanScanToken[] | null> {
   const yomitanExt = deps.getYomitanExt();
@@ -1078,6 +1079,7 @@ export async function requestYomitanScanTokens(
     dictionaryFrequencyModeByName: metadata?.dictionaryFrequencyModeByName ?? {},
     cacheEpoch: getYomitanScanCacheEpoch(parserWindow),
     nameCandidateKey: nameCandidates?.key ?? null,
+    mecabHints: options?.mecabHints ?? null,
   });
 
   try {

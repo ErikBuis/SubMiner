@@ -12,7 +12,7 @@ export type YomitanFrequencyMode = 'occurrence-based' | 'rank-based';
 
 // Bump whenever the install script below changes so already-loaded parser
 // windows re-install the new scan runtime instead of running the stale one.
-export const YOMITAN_SCAN_RUNTIME_VERSION = 13;
+export const YOMITAN_SCAN_RUNTIME_VERSION = 14;
 export const YOMITAN_SCAN_RUNTIME_MISSING_SENTINEL = '__subminer-yomitan-scan-runtime-missing__';
 
 export interface YomitanScanRequestParams {
@@ -30,6 +30,8 @@ export interface YomitanScanRequestParams {
    * or null to scan every Japanese position (see the pre-pass prefilter).
    */
   nameCandidateKey: string | null;
+  /** Prototype: MeCab word spans used to veto matches that end inside a word. */
+  mecabHints?: { spans: Array<{ start: number; end: number; pos1: string; pos2: string; headword?: string; reading?: string }>; tildeFix: boolean; morphemeEdges?: number[] } | null;
 }
 
 // Installed once per parser window (and re-installed after in-page reloads):
@@ -131,7 +133,8 @@ export const YOMITAN_SCAN_RUNTIME_INSTALL_SCRIPT = String.raw`
         dictionaryPriorityByName,
         dictionaryFrequencyModeByName,
         cacheEpoch,
-        nameCandidateKey
+        nameCandidateKey,
+        mecabHints
       } = scanParams;
       if (cacheEpoch !== termsFindCacheEpoch) {
         termsFindCache.clear();
@@ -461,6 +464,115 @@ ${YOMITAN_SCANNING_HELPERS}
         }
         return null;
       }
+
+      const mecabSpans = mecabHints && Array.isArray(mecabHints.spans) ? mecabHints.spans : null;
+      const mecabBoundaries = new Set();
+      if (mecabSpans) {
+        for (const span of mecabSpans) { mecabBoundaries.add(span.start); mecabBoundaries.add(span.end); }
+        // Raw morpheme edges count too: MeCab's merged words can swallow an
+        // auxiliary (入れてくれ) that a Yomitan idiom legitimately stops before.
+        for (const edge of (mecabHints.morphemeEdges || [])) { mecabBoundaries.add(edge); }
+      }
+      function largestBoundaryInside(start, end) {
+        let best = -1;
+        for (const b of mecabBoundaries) { if (b > start && b < end && b > best) { best = b; } }
+        return best;
+      }
+      function spansCovering(start, end) {
+        return mecabSpans.filter((span) => span.start < end && span.end > start);
+      }
+      function hasClass(wordClasses, prefixes) {
+        return Array.isArray(wordClasses) && wordClasses.some((c) => typeof c === "string" && prefixes.some((p) => c.startsWith(p)));
+      }
+      async function lookupHeadwordClasses(position, length) {
+        const result = await termsFindAt(position, length);
+        const entries = Array.isArray(result?.dictionaryEntries) ? result.dictionaryEntries : [];
+        const source = text.substring(position, position + length);
+        const preferred = getPreferredHeadword(entries, source, dictionaryPriorityByName, dictionaryFrequencyModeByName);
+        return preferred ? normalizeWordClasses(preferred) : [];
+      }
+      // Prototype: MeCab-guided veto. A greedy longest match that ends inside a
+      // MeCab word (のメッセ inside メッセージ, ヤツデ inside でした), or that glues
+      // a verb/adjective onto a following word while Yomitan reads it as a noun
+      // (いい+ん read as 医院), is retried with the window capped at the last
+      // MeCab boundary inside it. Without MeCab hints nothing changes.
+      async function applyMecabGuide(position, attempt) {
+        if (!mecabSpans || !attempt.token || attempt.token.isNameMatch) { return attempt; }
+        let current = attempt;
+        for (let guard = 0; guard < 4 && current.token; guard += 1) {
+          const end = position + current.matchedLength;
+          let cap = -1;
+          // A MeCab grammar word starting here that the match only partly covers
+          // (でした read as 弟子+た) wins over the match.
+          const host = mecabSpans.find((span) => span.start === position);
+          if (host && end < host.end && (host.pos1 === "助動詞" || host.pos1 === "助詞")) {
+            return {
+              token: {
+                surface: text.substring(host.start, host.end),
+                reading: host.reading || "",
+                headword: host.headword || text.substring(host.start, host.end),
+                startPos: host.start,
+                endPos: host.end,
+                isNameMatch: false,
+              },
+              matchedLength: host.end - host.start,
+            };
+          }
+          if (!mecabBoundaries.has(end)) {
+            cap = largestBoundaryInside(position, end);
+          } else {
+            const covering = spansCovering(position, end);
+            const first = covering[0];
+            const second = covering[1];
+            if (covering.length >= 2 && first && first.start === position && (first.pos1 === "動詞" || first.pos1 === "形容詞") && second.pos1 === "名詞" && second.pos2 === "非自立") {
+              const classes = Array.isArray(current.token.wordClasses) ? current.token.wordClasses : [];
+              const wantsVerb = first.pos1 === "動詞";
+              const compatible = wantsVerb ? hasClass(classes, ["v"]) : hasClass(classes, ["adj"]);
+              if (!compatible) { cap = first.end; }
+            }
+          }
+          if (cap <= position) { break; }
+          const retry = await resolveTokenAt(position, cap - position);
+          if (!retry.token) { break; }
+          current = retry;
+        }
+        return current;
+      }
+      // Prototype: a wave dash between kana is an elongation (か～くれんぼ).
+      // Look the word up with the dashes removed and map the length back.
+      const TILDES = new Set(["～", "〜"]);
+      async function tryTildeElongation(position, attempt) {
+        if (!(mecabHints && mecabHints.tildeFix)) { return attempt; }
+        const window = text.substring(position, position + scanLength + 4);
+        const chars = Array.from(window);
+        let squeezed = "";
+        const originalIndexAfter = [];
+        let originalLength = 0;
+        let removed = 0;
+        for (let k = 0; k < chars.length; k += 1) {
+          const ch = chars[k];
+          originalLength += ch.length;
+          if (TILDES.has(ch) && k > 0 && k + 1 < chars.length && isCodePointKana(chars[k - 1].codePointAt(0)) && isCodePointKana(chars[k + 1].codePointAt(0))) {
+            removed += 1;
+            continue;
+          }
+          squeezed += ch;
+          originalIndexAfter[squeezed.length] = originalLength;
+        }
+        if (removed === 0) { return attempt; }
+        const result = await invoke("termsFind", { text: squeezed, details, optionsContext: { index: profileIndex } });
+        const entries = Array.isArray(result?.dictionaryEntries) ? result.dictionaryEntries : [];
+        const len = typeof result?.originalTextLength === "number" ? result.originalTextLength : 0;
+        const originalLen = len > 0 ? originalIndexAfter[len] : 0;
+        if (!originalLen || originalLen <= (attempt.token ? attempt.matchedLength : 0)) { return attempt; }
+        const sourceSqueezed = squeezed.substring(0, len);
+        const preferred = getPreferredHeadword(entries, sourceSqueezed, dictionaryPriorityByName, dictionaryFrequencyModeByName);
+        if (!preferred || typeof preferred.term !== "string") { return attempt; }
+        const token = buildScanToken(position, sourceSqueezed, preferred);
+        token.surface = text.substring(position, position + originalLen);
+        token.endPos = position + originalLen;
+        return { token, matchedLength: originalLen };
+      }
       let i = 0;
       let nameIndex = 0;
       let unparsedRunStart = null;
@@ -497,6 +609,8 @@ ${YOMITAN_SCANNING_HELPERS}
             attempt = await resolveTokenAt(i, splitNameToken.startPos - i);
           }
         }
+        attempt = await tryTildeElongation(i, attempt);
+        attempt = await applyMecabGuide(i, attempt);
         if (attempt.token) {
           flushUnparsedRun(unparsedRunStart, i);
           unparsedRunStart = null;
