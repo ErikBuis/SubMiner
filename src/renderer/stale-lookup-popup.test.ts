@@ -28,7 +28,8 @@ function setup(
 test('a new line while paused closes the lookup popup without resuming playback', async () => {
   const { calls, closer } = setup();
 
-  await closer.handleSubtitleText('放課後');
+  await closer.handleSubtitleText('  放課後\r\n');
+  // The annotated upgrade of the same cue arrives with normalized whitespace.
   await closer.handleSubtitleText('放課後');
   assert.deepEqual(calls, []);
 

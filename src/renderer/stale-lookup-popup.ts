@@ -13,7 +13,7 @@ export function createStaleLookupPopupCloser(deps: {
   releasePopupPause: () => void;
   closeLookupPopup: () => void;
 }) {
-  let lastText: string | null = null;
+  let lastLine: string | null = null;
   let generation = 0;
 
   async function closeIfPaused(): Promise<void> {
@@ -33,9 +33,12 @@ export function createStaleLookupPopupCloser(deps: {
 
   return {
     handleSubtitleText(text: string): Promise<void> {
-      const previous = lastText;
-      lastText = text;
-      if (previous === null || previous === text) return Promise.resolve();
+      // The tokenized upgrade of a cue trims and normalizes whitespace in the provisional
+      // text, so whitespace alone never marks a new line.
+      const line = text.replace(/\s+/g, '');
+      const previous = lastLine;
+      lastLine = line;
+      if (previous === null || previous === line) return Promise.resolve();
       generation += 1;
       if (deps.isKeyboardDrivenModeEnabled() || !deps.isLookupPopupOpen()) {
         return Promise.resolve();
