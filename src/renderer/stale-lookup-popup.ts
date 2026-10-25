@@ -14,14 +14,18 @@ export function createStaleLookupPopupCloser(deps: {
   closeLookupPopup: () => void;
 }) {
   let lastText: string | null = null;
+  let generation = 0;
 
   async function closeIfPaused(): Promise<void> {
+    const requestGeneration = generation;
     let paused: boolean | null = null;
     try {
       paused = await deps.getPlaybackPaused();
     } catch {
       return;
     }
+    // A newer line or a switch to keyboard-driven mode owns the popup now.
+    if (requestGeneration !== generation || deps.isKeyboardDrivenModeEnabled()) return;
     if (paused !== true || !deps.isLookupPopupOpen()) return;
     deps.releasePopupPause();
     deps.closeLookupPopup();
@@ -32,6 +36,7 @@ export function createStaleLookupPopupCloser(deps: {
       const previous = lastText;
       lastText = text;
       if (previous === null || previous === text) return Promise.resolve();
+      generation += 1;
       if (deps.isKeyboardDrivenModeEnabled() || !deps.isLookupPopupOpen()) {
         return Promise.resolve();
       }

@@ -554,6 +554,9 @@ function createKeyboardHandlerHarness(options: { playlistBrowserHandlesKeys?: bo
         classList: subtitleContainerClassList,
         contains: () => false,
       },
+      secondarySubContainer: {
+        contains: (_target: unknown) => false,
+      },
       overlay: testGlobals.overlay,
     },
     platform: {
@@ -1288,14 +1291,18 @@ test('configured left-click binding only acts on playback, not on SubMiner UI', 
     const buttonTarget = testGlobals.createPlaybackTarget();
     buttonTarget.closest = (selector: string) =>
       selector.includes('button') ? buttonTarget : null;
+    const secondarySubtitleTarget = testGlobals.createPlaybackTarget();
+    ctx.dom.secondarySubContainer.contains = (target) => target === secondarySubtitleTarget;
 
-    // Presses inside a modal, the dictionary popup, or an overlay button stay with that UI.
+    // Presses inside a modal, the dictionary popup, an overlay button, or secondary
+    // subtitle text stay with that UI.
     testGlobals.dispatchMousedown({ button: 0, target: testGlobals.createInteractiveTarget() });
     testGlobals.dispatchMousedown({
       button: 0,
       target: testGlobals.createDictionaryPopupHostTarget(),
     });
     testGlobals.dispatchMousedown({ button: 0, target: buttonTarget });
+    testGlobals.dispatchMousedown({ button: 0, target: secondarySubtitleTarget });
     // While the playlist browser or a lookup popup is open, the press dismisses or
     // drives that UI instead of toggling playback.
     ctx.state.playlistBrowserModalOpen = true;

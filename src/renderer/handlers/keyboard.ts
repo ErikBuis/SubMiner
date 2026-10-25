@@ -82,6 +82,7 @@ export function createKeyboardHandlers(
     if (!(target instanceof Element)) return false;
     if (target.closest('.modal')) return true;
     if (ctx.dom.subtitleContainer.contains(target)) return true;
+    if (ctx.dom.secondarySubContainer.contains(target)) return true;
     if (isYomitanPopupIframe(target)) return true;
     // Hachidori's popup lives in a shadow root, so its events arrive retargeted to the host.
     if (target.closest(`${YOMITAN_POPUP_HOST_SELECTOR}, ${HACHIDORI_HOST_SELECTOR}`)) return true;
