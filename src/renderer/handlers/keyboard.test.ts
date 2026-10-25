@@ -525,7 +525,7 @@ function installKeyboardTestGlobals() {
   };
 }
 
-function createKeyboardHandlerHarness() {
+function createKeyboardHandlerHarness(options: { playlistBrowserHandlesKeys?: boolean } = {}) {
   const testGlobals = installKeyboardTestGlobals();
   const subtitleRootClassList = createClassList();
   const subtitleContainerClassList = createClassList();
@@ -588,7 +588,7 @@ function createKeyboardHandlerHarness() {
     handleYoutubePickerKeydown: () => false,
     handlePlaylistBrowserKeydown: () => {
       playlistBrowserKeydownCount += 1;
-      return true;
+      return options.playlistBrowserHandlesKeys ?? true;
     },
     handleSessionHelpKeydown: () => false,
     handleChangelogKeydown: () => {
@@ -1266,6 +1266,80 @@ test('imported mpv mouse buttons forward only after SubMiner mouse handling', as
       ['cycle', 'pause'],
     ]);
   } finally {
+    testGlobals.restore();
+  }
+});
+
+test('configured left-click binding only acts on playback, not on SubMiner UI', async () => {
+  const { ctx, handlers, testGlobals } = createKeyboardHandlerHarness();
+
+  try {
+    testGlobals.setSessionBindings([
+      {
+        sourcePath: 'keybindings[0].key',
+        originalKey: 'MBTN_LEFT',
+        key: { code: 'MBTN_LEFT', modifiers: [] },
+        actionType: 'mpv-command',
+        command: ['cycle', 'pause'],
+      },
+    ]);
+    await handlers.setupMpvInputForwarding();
+    await wait(0);
+    const buttonTarget = testGlobals.createPlaybackTarget();
+    buttonTarget.closest = (selector: string) =>
+      selector.includes('button') ? buttonTarget : null;
+
+    // Presses inside a modal, the dictionary popup, or an overlay button stay with that UI.
+    testGlobals.dispatchMousedown({ button: 0, target: testGlobals.createInteractiveTarget() });
+    testGlobals.dispatchMousedown({
+      button: 0,
+      target: testGlobals.createDictionaryPopupHostTarget(),
+    });
+    testGlobals.dispatchMousedown({ button: 0, target: buttonTarget });
+    // While the playlist browser or a lookup popup is open, the press dismisses or
+    // drives that UI instead of toggling playback.
+    ctx.state.playlistBrowserModalOpen = true;
+    testGlobals.dispatchMousedown({ button: 0, target: testGlobals.createPlaybackTarget() });
+    ctx.state.playlistBrowserModalOpen = false;
+    ctx.state.yomitanPopupVisible = true;
+    testGlobals.setPopupVisible(true);
+    testGlobals.dispatchMousedown({ button: 0, target: testGlobals.createPlaybackTarget() });
+    ctx.state.yomitanPopupVisible = false;
+    testGlobals.setPopupVisible(false);
+    assert.deepEqual(testGlobals.mpvCommands, []);
+
+    testGlobals.dispatchMousedown({ button: 0, target: testGlobals.createPlaybackTarget() });
+    assert.deepEqual(testGlobals.mpvCommands, [['cycle', 'pause']]);
+  } finally {
+    testGlobals.restore();
+  }
+});
+
+test('playlist browser: unhandled keys do not reach playback keybindings', async () => {
+  // The browser ignores keys it has no binding for, such as K.
+  const { ctx, handlers, testGlobals, playlistBrowserKeydownCount } = createKeyboardHandlerHarness({
+    playlistBrowserHandlesKeys: false,
+  });
+
+  try {
+    await handlers.setupMpvInputForwarding();
+    handlers.updateSessionBindings([
+      {
+        sourcePath: 'keybindings[0].key',
+        originalKey: 'KeyK',
+        key: { code: 'KeyK', modifiers: [] },
+        actionType: 'mpv-command',
+        command: ['cycle', 'pause'],
+      },
+    ] as never);
+    ctx.state.playlistBrowserModalOpen = true;
+
+    testGlobals.dispatchKeydown({ key: 'k', code: 'KeyK' });
+
+    assert.equal(playlistBrowserKeydownCount(), 1);
+    assert.deepEqual(testGlobals.mpvCommands, []);
+  } finally {
+    ctx.state.playlistBrowserModalOpen = false;
     testGlobals.restore();
   }
 });

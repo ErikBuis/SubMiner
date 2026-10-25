@@ -126,13 +126,22 @@ export function createKeyboardHandlers(
   // The subtitle sidebar is a side panel over playback, so only input inside it (a
   // `.modal` target) stays with SubMiner.
   function canForwardToMpv(target: EventTarget | null): boolean {
+    return keyboardConfigLoaded && isPlaybackInputTarget(target);
+  }
+
+  function isPlaybackInputTarget(target: EventTarget | null): boolean {
     return (
-      keyboardConfigLoaded &&
       !ctx.state.playlistBrowserModalOpen &&
       !ctx.state.youtubePickerModalOpen &&
       !isLookupPopupOpen(ctx.state, document) &&
       !isInteractiveTarget(target)
     );
+  }
+
+  // Configured mouse bindings (for example MBTN_LEFT -> cycle pause) act on playback,
+  // so a press on SubMiner UI (a modal, the dictionary popup, a button) stays with that UI.
+  function isPlaybackMouseTarget(target: EventTarget | null): boolean {
+    return isPlaybackInputTarget(target) && !isOverlayControlTarget(target);
   }
 
   // Scrolling over subtitles still reaches mpv; only scrollable overlay UI keeps the wheel.
@@ -1161,10 +1170,11 @@ export function createKeyboardHandlers(
         return;
       }
 
+      // Keys the playlist browser leaves unhandled still belong to the browser; they must
+      // not fall through to playback bindings.
       if (ctx.state.playlistBrowserModalOpen) {
-        if (options.handlePlaylistBrowserKeydown(e)) {
-          return;
-        }
+        options.handlePlaylistBrowserKeydown(e);
+        return;
       }
 
       if (ctx.state.changelogModalOpen) {
@@ -1339,12 +1349,13 @@ export function createKeyboardHandlers(
       const mouseString = mouseEventToString(e);
       const binding = mouseString ? ctx.state.sessionBindingMap.get(mouseString) : undefined;
       if (binding) {
+        if (!isPlaybackMouseTarget(e.target)) return;
         e.preventDefault();
         dispatchSessionBinding(binding);
         return;
       }
 
-      if (e.button === 2 && !isInteractiveTarget(e.target)) {
+      if (e.button === 2 && !isInteractiveTarget(e.target) && !isOverlayControlTarget(e.target)) {
         e.preventDefault();
         void window.electronAPI
           .activatePlaybackWindowForOverlayInteraction()
@@ -1355,7 +1366,7 @@ export function createKeyboardHandlers(
         return;
       }
 
-      if (canForwardToMpv(e.target) && !isOverlayControlTarget(e.target)) {
+      if (keyboardConfigLoaded && isPlaybackMouseTarget(e.target)) {
         importedMpvBindings.mousedown(e);
       }
     });

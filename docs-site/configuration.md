@@ -270,6 +270,8 @@ Adds a modal for choosing mpv's primary and secondary subtitle tracks. Open it w
 - `command` is any mpv JSON IPC command array. Set it to `null` to disable a default.
 - Commands starting with `__` run inside SubMiner: `__playlist-browser-open`, `__youtube-picker-open`, `__replay-subtitle`, `__play-next-subtitle`, `__runtime-options-open`, and `__runtime-option-cycle:<id>[:next|prev]`.
 - Unused single-key, mouse button, and scroll wheel bindings from your mpv config also work in the overlay. Your SubMiner bindings win on conflicts.
+- Mouse button bindings only act on playback. A press inside SubMiner UI (a modal, the dictionary popup, the subtitle sidebar, a notification) or on subtitle text stays with that UI, and so does any press while the playlist browser or a dictionary popup is open.
+- Seeking to another subtitle line while playback is paused closes an open dictionary popup and keeps playback paused.
 
 ### Shortcuts configuration
 

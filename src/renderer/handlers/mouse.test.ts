@@ -357,6 +357,18 @@ test('popup open pauses and popup close resumes when yomitan popup auto-pause is
   assert.deepEqual(h.mpvCommands, [PAUSE, RESUME]);
 });
 
+test('a released popup pause stays paused when the popup closes', async (t) => {
+  const h = createMouseHarness(t, { popupPause: true });
+  h.handlers.setupYomitanObserver();
+
+  h.fire('window', YOMITAN_POPUP_SHOWN_EVENT);
+  await waitForNextTick();
+  h.handlers.releasePopupPause();
+  h.fire('window', YOMITAN_POPUP_HIDDEN_EVENT);
+
+  assert.deepEqual(h.mpvCommands, [PAUSE]);
+});
+
 for (const c of [
   {
     name: 'nested popup close reasserts interactive state and focus when another popup remains visible on Windows',
