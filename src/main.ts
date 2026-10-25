@@ -5411,7 +5411,14 @@ function initializeOverlayRuntime(): void {
   appState.ankiIntegration?.setSentenceFuriganaGenerator(generateMiningSentenceFurigana);
   appState.ankiIntegration?.setSubtitleTracksForTranslationProvider(() => {
     const secondary = secondarySubtitleTrackController.getTimelineCues();
-    return secondary ? { primary: appState.activeParsedSubtitleCues, secondary } : null;
+    if (!secondary) return null;
+    // Fragment grids are never shown as subtitle text, so they must not pair up either.
+    const publishable = (cues: readonly SubtitleCue[]) =>
+      cues.filter((cue) => cue.assLayout?.kind !== 'fragment-grid');
+    return {
+      primary: publishable(appState.activeParsedSubtitleCues),
+      secondary: publishable(secondary),
+    };
   });
   syncOverlayMpvSubtitleSuppression();
 }

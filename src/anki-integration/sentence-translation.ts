@@ -1,5 +1,6 @@
 import {
   alignSentenceTranslation,
+  assignLineTranslations,
   collectOverlappingLines,
   findBestOverlappingLine,
   formatCardTranslation,
@@ -25,6 +26,12 @@ export interface CardSentenceTranslation {
   reviewLines: TimedSubtitleText[];
   /** The parsed secondary lines `translation` was built from; empty for the fallback. */
   translationLines: TimedSubtitleText[];
+  /** With `align`: each primary line around the clip and its full-track translation. */
+  lineTranslations: Array<{
+    startTime: number;
+    endTime: number;
+    lines: TimedSubtitleText[];
+  }>;
 }
 
 /** Secondary lines further than this from the clip are never offered to the review. */
@@ -72,10 +79,17 @@ export function resolveCardSentenceTranslation(input: {
       : null;
     if (aligned) {
       translationLines = aligned.translationLines;
-      if (aligned.startTime < input.startTime - 0.001 || aligned.endTime > input.endTime + 0.001) {
+      const unionStart = Math.min(aligned.startTime, input.startTime);
+      const unionEnd = Math.max(aligned.endTime, input.endTime);
+      const withinCap =
+        input.maxSentenceSeconds <= 0 || unionEnd - unionStart <= input.maxSentenceSeconds + 0.001;
+      if (
+        withinCap &&
+        (aligned.startTime < input.startTime - 0.001 || aligned.endTime > input.endTime + 0.001)
+      ) {
         text = aligned.text;
-        startTime = Math.min(aligned.startTime, input.startTime);
-        endTime = Math.max(aligned.endTime, input.endTime);
+        startTime = unionStart;
+        endTime = unionEnd;
         widened = true;
       }
     } else if (input.align) {
@@ -87,13 +101,20 @@ export function resolveCardSentenceTranslation(input: {
     translation = joinSubtitleLineTexts(translationLines);
   }
 
-  const reviewLines = secondary
-    .filter(
-      (line) =>
-        line.endTime >= startTime - REVIEW_LINE_WINDOW_SECONDS &&
-        line.startTime <= endTime + REVIEW_LINE_WINDOW_SECONDS,
-    )
-    .map(toPlainLine);
+  const nearClip = (line: TimedSubtitleText): boolean =>
+    line.endTime >= startTime - REVIEW_LINE_WINDOW_SECONDS &&
+    line.startTime <= endTime + REVIEW_LINE_WINDOW_SECONDS;
+  const reviewLines = secondary.filter(nearClip).map(toPlainLine);
+  const lineTranslations =
+    input.align && secondary.length > 0
+      ? assignLineTranslations(input.tracks?.primary ?? [], secondary)
+          .filter(({ line }) => nearClip(line))
+          .map(({ line, translationLines: lines }) => ({
+            startTime: line.startTime,
+            endTime: line.endTime,
+            lines: lines.map(toPlainLine),
+          }))
+      : [];
 
   return {
     text,
@@ -103,6 +124,7 @@ export function resolveCardSentenceTranslation(input: {
     translation: input.format ? formatCardTranslation(translation) : translation,
     reviewLines,
     translationLines: translationLines.map(toPlainLine),
+    lineTranslations,
   };
 }
 

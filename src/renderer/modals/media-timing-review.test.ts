@@ -244,3 +244,28 @@ test('an aligned multi-line sentence keeps its own translations when a line is a
     'A B C',
   );
 });
+
+test('an added line takes the translation the full-track grouping assigned it', () => {
+  // Grouped against the whole track, 次 belongs to the long X; regrouping it alone
+  // would pick the tightly timed Y instead.
+  const lineX = { text: 'X', startTime: 14, endTime: 18 };
+  const lineY = { text: 'Y', startTime: 16, endTime: 17 };
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      previousLines: [],
+      nextLines: [{ text: '次', startTime: 16, endTime: 17 }],
+      text: '今',
+      originalStartTime: 10,
+      originalEndTime: 14,
+      previousCount: 0,
+      nextCount: 1,
+      initialTranslation: 'Now',
+      initialTranslationLines: [{ text: 'Now', startTime: 10, endTime: 14 }],
+      translationLines: [{ text: 'Now', startTime: 10, endTime: 14 }, lineX, lineY],
+      lineTranslations: [{ startTime: 16, endTime: 17, lines: [lineX] }],
+      format: false,
+      align: true,
+    }),
+    'Now X',
+  );
+});

@@ -2,14 +2,15 @@ import { createMediaTimingFramePicker } from './media-timing-frame-picker';
 import type {
   MediaTimingReviewContextLine,
   MediaTimingReviewDecision,
+  MediaTimingReviewLineTranslation,
   MediaTimingReviewOpenPayload,
   MediaTimingReviewPreviewPosition,
 } from '../../types/anki';
 import type { ModalStateReader, RendererContext } from '../context';
 import { createModalFocusGuard } from './modal-focus-guard';
 import {
-  alignSentenceTranslation,
   collectOverlappingLines,
+  findBestOverlappingLine,
   formatCardTranslation,
   joinSubtitleLineTexts,
 } from '../../shared/sentence-translation-alignment';
@@ -60,6 +61,8 @@ export function buildMediaTimingLineSelection(options: {
   previousCount: number;
   nextCount: number;
 }): {
+  previous: MediaTimingReviewContextLine[];
+  next: MediaTimingReviewContextLine[];
   lineTexts: string[];
   currentLineIndex: number;
   sentence: string;
@@ -75,6 +78,8 @@ export function buildMediaTimingLineSelection(options: {
     ...next.map((line) => line.text),
   ];
   return {
+    previous,
+    next,
     lineTexts,
     currentLineIndex: previous.length,
     sentence: lineTexts.join(' '),
@@ -102,6 +107,8 @@ export function buildMediaTimingReviewTranslation(options: {
   /** The secondary lines behind `initialTranslation`. */
   initialTranslationLines: MediaTimingReviewContextLine[];
   translationLines: MediaTimingReviewContextLine[];
+  /** Full-track translation per primary line (align only). */
+  lineTranslations?: MediaTimingReviewLineTranslation[];
   format: boolean;
   align: boolean;
 }): string | null {
@@ -118,25 +125,23 @@ export function buildMediaTimingReviewTranslation(options: {
     return options.format ? formatCardTranslation(translation) : translation;
   }
   // The card's own lines may be a widened sentence, so they keep the translation main
-  // resolved; only the added lines are grouped against the secondary track.
-  const addedTranslation = (
-    lines: MediaTimingReviewContextLine[],
-    startTime: number,
-    endTime: number,
-  ): MediaTimingReviewContextLine[] =>
-    endTime > startTime
-      ? (alignSentenceTranslation({
-          primaryLines: lines,
-          secondaryLines: options.translationLines,
-          startTime,
-          endTime,
-        })?.translationLines ?? [])
-      : [];
+  // resolved. Added lines take the translation main's full-track grouping assigned them;
+  // a line main did not cover falls back to the secondary line it overlaps most.
+  const addedTranslation = (line: MediaTimingReviewContextLine): MediaTimingReviewContextLine[] => {
+    const assigned = options.lineTranslations?.find(
+      (entry) =>
+        Math.abs(entry.startTime - line.startTime) < 0.001 &&
+        Math.abs(entry.endTime - line.endTime) < 0.001,
+    );
+    if (assigned) return assigned.lines;
+    const best = findBestOverlappingLine(options.translationLines, line);
+    return best ? [best] : [];
+  };
   const seen = new Set<string>();
   const lines = [
-    ...addedTranslation(options.previousLines, selection.rangeStart, options.originalStartTime),
+    ...selection.previous.flatMap(addedTranslation),
     ...options.initialTranslationLines,
-    ...addedTranslation(options.nextLines, options.originalEndTime, selection.rangeEnd),
+    ...selection.next.flatMap(addedTranslation),
   ]
     .filter((line) => {
       const key = `${line.startTime}|${line.endTime}|${line.text}`;
@@ -653,6 +658,7 @@ export function createMediaTimingReviewModal(
       initialTranslation: translation.text,
       initialTranslationLines: translation.currentLines,
       translationLines: translation.lines,
+      lineTranslations: translation.lineTranslations,
       format: translation.format,
       align: translation.align,
     });

@@ -39,6 +39,11 @@ export interface MediaTimingReviewCardPreview {
     lines: MediaTimingReviewContextLine[];
     /** The secondary lines behind `text`; empty when it came from the live subtitle. */
     currentLines: MediaTimingReviewContextLine[];
+    /**
+     * With `align`: primary lines around the clip and the secondary lines the full-track
+     * grouping assigns them, so added lines follow the same translations.
+     */
+    lineTranslations?: MediaTimingReviewLineTranslation[];
     /** Apply the card translation formatting when following added or removed lines. */
     format: boolean;
     /** Follow lines with sentence grouping (alignSentenceToTranslation) or plain overlap. */
@@ -51,6 +56,12 @@ export interface MediaTimingReviewContextLine {
   text: string;
   startTime: number;
   endTime: number;
+}
+
+export interface MediaTimingReviewLineTranslation {
+  startTime: number;
+  endTime: number;
+  lines: MediaTimingReviewContextLine[];
 }
 
 export type MediaTimingReviewDecision =

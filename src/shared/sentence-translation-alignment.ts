@@ -65,6 +65,11 @@ function duration(line: Pick<TimedSubtitleText, 'startTime' | 'endTime'>): numbe
   return Math.max(MIN_DURATION_SECONDS, line.endTime - line.startTime);
 }
 
+/** Lines are sorted by start time, so the last one need not end latest. */
+function latestEnd(lines: readonly TimedSubtitleText[]): number {
+  return Math.max(...lines.map((line) => line.endTime));
+}
+
 /**
  * Partitions the sorted primary lines into sentences. Matching each primary line to its
  * best-overlapping secondary event on its own is unstable when secondary events overlap,
@@ -101,7 +106,7 @@ export function buildSentenceTranslationGroups(
     if (members.length === 0) continue;
 
     const spanStart = primary[members[0]!]!.startTime;
-    const spanEnd = primary[members[members.length - 1]!]!.endTime;
+    const spanEnd = latestEnd(members.map((member) => primary[member]!));
     const score =
       overlapSeconds({ startTime: spanStart, endTime: spanEnd }, event) /
       Math.max(duration(event), spanEnd - spanStart, MIN_DURATION_SECONDS);
@@ -204,6 +209,24 @@ export function collectGroupTranslationLines(
 }
 
 /**
+ * The secondary lines each primary line translates to when the whole track is grouped,
+ * so a review that adds neighbouring lines picks the same translations main would.
+ */
+export function assignLineTranslations(
+  primaryLines: readonly TimedSubtitleText[],
+  secondaryLines: readonly TimedSubtitleText[],
+  minOverlapRatio = DEFAULT_SENTENCE_GROUP_MIN_OVERLAP,
+): Array<{ line: TimedSubtitleText; translationLines: TimedSubtitleText[] }> {
+  const primary = sortSubtitleLines(primaryLines);
+  const secondary = sortSubtitleLines(secondaryLines);
+  const groups = buildSentenceTranslationGroups(primary, secondary, minOverlapRatio);
+  return primary.map((line, index) => ({
+    line,
+    translationLines: collectGroupTranslationLines(primary, secondary, groups, index, index),
+  }));
+}
+
+/**
  * Resolves the sentence around a mined subtitle range and the secondary line(s) that
  * translate it. With `widenSentence` the sentence grows to every primary line the matching
  * secondary event covers; without it only the mined lines are kept and only their
@@ -242,7 +265,8 @@ export function alignSentenceTranslation(options: {
   if (options.widenSentence) {
     const widenedFrom = Math.min(from, groups[from]?.from ?? from);
     const widenedTo = Math.max(to, groups[to]?.to ?? to);
-    const span = primary[widenedTo]!.endTime - primary[widenedFrom]!.startTime;
+    const span =
+      latestEnd(primary.slice(widenedFrom, widenedTo + 1)) - primary[widenedFrom]!.startTime;
     const maxSeconds = options.maxSentenceSeconds ?? 0;
     if (maxSeconds <= 0 || span <= maxSeconds) {
       from = widenedFrom;
@@ -256,7 +280,7 @@ export function alignSentenceTranslation(options: {
     lines,
     text: joinSubtitleLineTexts(lines),
     startTime: lines[0]!.startTime,
-    endTime: lines[lines.length - 1]!.endTime,
+    endTime: latestEnd(lines),
     translationLines,
     translation: joinSubtitleLineTexts(translationLines),
   };

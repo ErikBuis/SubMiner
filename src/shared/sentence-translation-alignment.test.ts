@@ -121,3 +121,17 @@ test('formatCardTranslation capitalizes and closes a comma-ended line', () => {
   assert.equal(formatCardTranslation('Already fine!'), 'Already fine!');
   assert.equal(formatCardTranslation('   '), '');
 });
+
+test('a sentence ends at its latest cue, not at the cue that starts last', () => {
+  const primary = [line('長い台詞', 0, 10), line('短い', 2, 3)];
+  const secondary = [line('The whole thing.', 0, 10)];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 2,
+    endTime: 3,
+    widenSentence: true,
+  });
+  assert.equal(aligned?.text, '長い台詞 短い');
+  assert.equal(aligned?.endTime, 10);
+});
