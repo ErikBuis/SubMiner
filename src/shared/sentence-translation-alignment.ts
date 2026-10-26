@@ -93,7 +93,7 @@ export function buildSentenceTranslationGroups(
       first += 1;
     }
 
-    const members: number[] = [];
+    const candidates: number[] = [];
     for (
       let index = first;
       index < primary.length && primary[index]!.startTime < event.endTime;
@@ -101,9 +101,29 @@ export function buildSentenceTranslationGroups(
     ) {
       const line = primary[index]!;
       if (overlapSeconds(line, event) / duration(line) >= minOverlapRatio) {
-        members.push(index);
+        candidates.push(index);
       }
     }
+    // Lines of a split sentence follow each other. Of lines nested in one another (a
+    // dialogue line under a long sign) the event only claims the one it is timed to.
+    const lineFit = (index: number) => {
+      const line = primary[index]!;
+      return (
+        overlapSeconds(line, event) /
+        Math.max(duration(event), duration(line), MIN_DURATION_SECONDS)
+      );
+    };
+    const nested = (a: number, b: number) =>
+      overlapSeconds(primary[a]!, primary[b]!) >= 0.5 * duration(primary[a]!);
+    const members = candidates.filter(
+      (member) =>
+        !candidates.some(
+          (other) =>
+            other !== member &&
+            (nested(member, other) || nested(other, member)) &&
+            lineFit(other) > lineFit(member),
+        ),
+    );
     if (members.length === 0) continue;
 
     const spanStart = primary[members[0]!]!.startTime;

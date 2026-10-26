@@ -196,6 +196,8 @@ export function findActiveSubtitleText(cues: readonly SubtitleCue[], timeSeconds
   return activeText.join('\n');
 }
 
+const ENTRANCE_FRAGMENT_MAX_SECONDS = 1;
+
 /**
  * Cues worth pairing with the other track: no fragment grids, and no reconstructed
  * entrance fragments ("Ne") whose text a longer overlapping cue of the same style
@@ -217,6 +219,11 @@ export function selectAlignableSubtitleCues(cues: readonly SubtitleCue[]): Subti
         (other.assStyle ?? '') === (cue.assStyle ?? '') &&
         other.startTime < cue.endTime &&
         other.endTime > cue.startTime &&
+        // Entrance fragments flash for a moment or sit under the complete line; a full
+        // lyric that only touches the next, longer one is no fragment.
+        (cue.endTime - cue.startTime <= ENTRANCE_FRAGMENT_MAX_SECONDS ||
+          Math.min(other.endTime, cue.endTime) - Math.max(other.startTime, cue.startTime) >=
+            0.5 * (cue.endTime - cue.startTime)) &&
         compact(other.text).length > text.length &&
         compact(other.text).includes(text),
     );

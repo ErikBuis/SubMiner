@@ -42,9 +42,11 @@ export function resolveTimedSentenceTranslation(input: {
   const best = aligned ? null : findBestOverlappingLine(secondary, input);
   const translationLines = aligned?.translationLines ?? (best ? [best] : []);
   const translation = joinSubtitleLineTexts(translationLines);
-  // A secondary track in the same language as the primary one is no translation.
-  const compact = (text: string) => text.replace(/\s+/g, '');
-  if (!translation || compact(translation) === compact(input.text)) return null;
+  // A secondary track in the same language as the primary one is no translation, also
+  // when it splits the lines differently and its cue holds the whole mined line.
+  const compact = (text: string) => text.normalize('NFKC').replace(/\s+/gu, '');
+  const mined = compact(input.text);
+  if (!translation || (mined && compact(translation).includes(mined))) return null;
   return {
     translation,
     translationLines: translationLines.map(({ text, startTime, endTime }) => ({

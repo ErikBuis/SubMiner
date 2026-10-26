@@ -434,6 +434,21 @@ test('createSentenceCard ignores a parsed secondary track in the primary languag
   assert.equal(addedFields[0]?.Translation, undefined);
 });
 
+test('createSentenceCard ignores a same-language track that splits lines differently', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [
+        { text: '今日は', startTime: 1, endTime: 2 },
+        { text: 'いい天気ですね', startTime: 2, endTime: 4 },
+      ],
+      secondary: [{ text: '今日は いい天気ですね', startTime: 1, endTime: 4 }],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('いい天気ですね', 2, 4), true);
+  assert.equal(addedFields[0]?.Translation, undefined);
+});
+
 test('createSentenceCard translates every combined line even when the media is capped', async () => {
   const { service, addedFields } = createTimedTranslationService({
     maxMediaDuration: 30,

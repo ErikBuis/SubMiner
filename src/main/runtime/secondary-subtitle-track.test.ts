@@ -329,6 +329,19 @@ test('selectAlignableSubtitleCues drops entrance fragments a longer same-style c
   ]);
 });
 
+test('selectAlignableSubtitleCues keeps a full lyric the next, longer one only touches', () => {
+  const cue = (text: string, startTime: number, endTime: number) => ({
+    text,
+    startTime,
+    endTime,
+    source: 'reconstructed-ass' as const,
+    assStyle: 'op_english',
+  });
+  const lyric = cue('Never give up', 1, 4);
+  const next = cue('Never give up on me', 3.8, 7);
+  assert.deepEqual(selectAlignableSubtitleCues([lyric, next]), [lyric, next]);
+});
+
 test('secondary track controller parses the selected ASS file before publishing', async () => {
   const broadcasts: string[] = [];
   let currentText = '';

@@ -150,3 +150,13 @@ test('mined lines missing from the card sentence are left out', () => {
   });
   assert.equal(unmatched?.translation, 'A long line. SIGN');
 });
+
+test('a slightly offset dialogue translation beats a sign covering the line', () => {
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('看板', 0, 10), line('一', 1, 2)],
+    secondaryLines: [line('SIGN', 0, 10), line('One.', 0.9, 2.1)],
+    startTime: 1,
+    endTime: 2,
+  });
+  assert.equal(aligned?.translation, 'One.');
+});
