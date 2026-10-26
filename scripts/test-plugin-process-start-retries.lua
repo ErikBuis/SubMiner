@@ -206,4 +206,98 @@ do
 	)
 end
 
+-- Windows: a background start spawns a detached app that would inherit mpv's capture
+-- pipes and keep mpv's subprocess call (and shutdown) pending until the app exits.
+do
+	local function run_start_capture_case(is_windows, app_running)
+		local calls = {}
+		local capture_mp = {}
+
+		function capture_mp.command_native_async(command, callback)
+			calls[#calls + 1] = command
+			if callback then
+				callback(true, { status = 0, stdout = "", stderr = "" }, nil)
+			end
+		end
+
+		function capture_mp.add_timeout(_seconds, callback)
+			if callback then
+				callback()
+			end
+		end
+
+		local capture_process = process_module.create({
+			mp = capture_mp,
+			opts = {
+				backend = "x11",
+				socket_path = "/tmp/subminer.sock",
+				log_level = "info",
+				texthooker_enabled = false,
+				texthooker_port = 5174,
+				auto_start_visible_overlay = false,
+			},
+			state = {
+				binary_path = "/tmp/subminer",
+				overlay_running = false,
+				texthooker_running = false,
+			},
+			binary = {
+				ensure_binary_available = function()
+					return true
+				end,
+			},
+			environment = {
+				detect_backend = function()
+					return "x11"
+				end,
+				is_linux = function()
+					return false
+				end,
+				is_windows = function()
+					return is_windows
+				end,
+				is_subminer_app_running_async = function(callback)
+					callback(app_running)
+				end,
+			},
+			options_helper = {
+				coerce_bool = function(_value, default_value)
+					return default_value
+				end,
+			},
+			log = {
+				subminer_log = function(_level, _scope, _line) end,
+				show_osd = function(_) end,
+				normalize_log_level = function(value)
+					return value or "info"
+				end,
+			},
+		})
+
+		capture_process.start_overlay()
+
+		for _, command in ipairs(calls) do
+			if has_flag(command, "--start") then
+				return command
+			end
+		end
+		error("expected a start command")
+	end
+
+	local windows_background = run_start_capture_case(true, false)
+	assert_true(has_flag(windows_background, "--background"), "expected background start when app is not running")
+	assert_true(windows_background.capture_stdout == false, "Windows background start must not capture stdout")
+	assert_true(windows_background.capture_stderr == false, "Windows background start must not capture stderr")
+
+	local windows_attached = run_start_capture_case(true, true)
+	assert_true(not has_flag(windows_attached, "--background"), "expected foreground start when app is running")
+	assert_true(windows_attached.capture_stdout == true, "attaching to a running app should still capture stdout")
+	assert_true(windows_attached.capture_stderr == true, "attaching to a running app should still capture stderr")
+
+	local posix_background = run_start_capture_case(false, false)
+	assert_true(has_flag(posix_background, "--background"), "expected background start on non-Windows")
+	assert_true(posix_background.capture_stdout == true, "non-Windows background start should keep capturing stdout")
+	assert_true(posix_background.capture_stderr == true, "non-Windows background start should keep capturing stderr")
+end
+
 print("plugin process retry regression tests: OK")
