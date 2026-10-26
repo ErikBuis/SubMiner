@@ -36,6 +36,9 @@ export function createEnsureOverlayMpvSubtitlesHiddenHandler(deps: {
   getRevision: () => number;
   setRevision: (revision: number) => void;
   setMpvSubVisibility: (visible: boolean) => void;
+  // While the overlay window is still loading it can't draw subtitles yet, so mpv keeps
+  // showing its own until the overlay takes over.
+  isOverlayContentReady?: () => boolean;
   logWarn: (message: string, error: unknown) => void;
 }) {
   return async (): Promise<void> => {
@@ -53,7 +56,7 @@ export function createEnsureOverlayMpvSubtitlesHiddenHandler(deps: {
       : null;
 
     // Hide immediately on overlay toggle; capture/restore logic is handled separately.
-    deps.setMpvSubVisibility(false);
+    deps.setMpvSubVisibility(deps.isOverlayContentReady?.() === false);
 
     if (shouldCaptureSavedVisibility && savedVisibilityPromise) {
       try {
@@ -84,13 +87,14 @@ export function createRestoreOverlayMpvSubtitlesHandler(deps: {
   isMpvConnected: () => boolean;
   shouldKeepSuppressedFromVisibleOverlayBinding: () => boolean;
   setMpvSubVisibility: (visible: boolean) => void;
+  isOverlayContentReady?: () => boolean;
 }) {
   return (options: RestoreOverlayMpvSubtitlesOptions = {}): void => {
     deps.setRevision(deps.getRevision() + 1);
 
     const savedVisibility = deps.getSavedSubVisibility();
     if (!options.force && deps.shouldKeepSuppressedFromVisibleOverlayBinding()) {
-      deps.setMpvSubVisibility(false);
+      deps.setMpvSubVisibility(deps.isOverlayContentReady?.() === false);
       return;
     }
 
