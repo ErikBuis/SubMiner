@@ -412,6 +412,18 @@ test('createSentenceCard keeps the on-screen translation without parsed tracks',
   assert.equal(addedFields[0]?.Translation, 'Today');
 });
 
+test('createSentenceCard drops the on-screen line when the parsed track has no match', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [{ text: '♪～', startTime: 1, endTime: 2 }],
+      secondary: [{ text: 'Next line.', startTime: 2.5, endTime: 4 }],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('♪～', 1, 2, 'Next line.'), true);
+  assert.equal(addedFields[0]?.Translation, undefined);
+});
+
 test('createSentenceCard ignores a parsed secondary track in the primary language', async () => {
   const line = { text: '今日は', startTime: 1, endTime: 2 };
   const { service, addedFields } = createTimedTranslationService({
@@ -469,6 +481,8 @@ test('createSentenceCard translates the lines the timing review added', async ()
         startTime: 0,
         endTime: 3.8,
         text: '一 二',
+        sentenceStartTime: 0,
+        sentenceEndTime: 4,
       }),
     }),
   );
@@ -476,4 +490,35 @@ test('createSentenceCard translates the lines the timing review added', async ()
   assert.equal(await service.createSentenceCard('一', 0, 2), true);
   assert.equal(addedFields[0]?.Sentence, '一 二');
   assert.equal(addedFields[0]?.Translation, 'One. Two.');
+});
+
+test('createSentenceCard leaves a line inside the clip padding untranslated', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () => createAnkiConfig({ fields: { translation: 'Translation' } }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [
+          { text: '一', startTime: 0, endTime: 2 },
+          { text: 'え？', startTime: 2, endTime: 2.4 },
+        ],
+        secondary: [
+          { text: 'One.', startTime: 0, endTime: 2 },
+          { text: 'Huh?', startTime: 2, endTime: 2.4 },
+        ],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      // The confirmed clip keeps its padding past the end of the mined line.
+      reviewMediaTiming: async () => ({ action: 'confirm', startTime: 0, endTime: 2.5 }),
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('一', 0, 2), true);
+  assert.equal(addedFields[0]?.Sentence, '一');
+  assert.equal(addedFields[0]?.Translation, 'One.');
 });

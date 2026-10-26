@@ -175,18 +175,17 @@ export function joinSubtitleLineTexts(lines: readonly TimedSubtitleText[]): stri
 }
 
 /**
- * Secondary lines translating the primary lines `from..to` of an already grouped track.
+ * Secondary lines translating the primary lines at `indexes` of an already grouped track.
  * A line no secondary event claimed still takes the secondary event it overlaps most.
  */
 export function collectGroupTranslationLines(
   primary: readonly TimedSubtitleText[],
   secondary: readonly TimedSubtitleText[],
   groups: readonly SentenceTranslationGroup[],
-  from: number,
-  to: number,
+  indexes: readonly number[],
 ): TimedSubtitleText[] {
   const result: TimedSubtitleText[] = [];
-  for (let index = from; index <= to; index += 1) {
+  for (const index of indexes) {
     const line = primary[index];
     if (!line) continue;
     const translation = groups[index]?.secondary ?? findBestOverlappingLine(secondary, line);
@@ -226,11 +225,10 @@ export function alignSentenceTranslation(options: {
     secondary,
     options.minOverlapRatio ?? DEFAULT_SENTENCE_GROUP_MIN_OVERLAP,
   );
-  const from = minedIndexes[0]!;
-  const to = minedIndexes[minedIndexes.length - 1]!;
-
-  const lines = primary.slice(from, to + 1);
-  const translationLines = collectGroupTranslationLines(primary, secondary, groups, from, to);
+  // Only the mined lines: a long sign between two dialogue lines starts in between but
+  // is not part of the sentence.
+  const lines = minedIndexes.map((index) => primary[index]!);
+  const translationLines = collectGroupTranslationLines(primary, secondary, groups, minedIndexes);
   return {
     lines,
     text: joinSubtitleLineTexts(lines),

@@ -636,20 +636,33 @@ export class CardCreationService {
         }
         const skipMedia = timingDecision.action === 'skip-media';
         const exactReviewedRange = timingDecision.action === 'confirm';
+        let sentenceStartTime = subtitleStartTime;
+        let sentenceEndTime = subtitleEndTime;
         if (timingDecision.action === 'confirm') {
           startTime = timingDecision.startTime;
           endTime = timingDecision.endTime;
           sentence = timingDecision.text?.trim() || sentence;
+          // Lines the review added widen the sentence; the clip bounds are padded or
+          // trimmed audio and say nothing about which lines the card covers.
+          if (
+            timingDecision.sentenceStartTime !== undefined &&
+            timingDecision.sentenceEndTime !== undefined
+          ) {
+            sentenceStartTime = Math.min(sentenceStartTime, timingDecision.sentenceStartTime);
+            sentenceEndTime = Math.max(sentenceEndTime, timingDecision.sentenceEndTime);
+          }
         }
-        // After the review, so lines it added to the sentence get their translation too.
-        // Trimming the clip leaves the sentence alone, so the original lines stay covered.
+        const tracks = (await this.deps.getSubtitleTracksForTranslation?.()) ?? null;
         const timedTranslation = resolveTimedSentenceTranslation({
           text: sentence,
-          startTime: Math.min(startTime, subtitleStartTime),
-          endTime: Math.max(endTime, subtitleEndTime),
-          tracks: (await this.deps.getSubtitleTracksForTranslation?.()) ?? null,
+          startTime: sentenceStartTime,
+          endTime: sentenceEndTime,
+          tracks,
         });
+        // With a parsed secondary track, no match means no translation: the line on screen
+        // then belongs to another sentence. It only stands in when the tracks are unavailable.
         if (timedTranslation) secondarySubText = timedTranslation.translation;
+        else if (tracks && tracks.secondary.length > 0) secondarySubText = undefined;
 
         const config = this.deps.getConfig();
         const generateAudio = !skipMedia && shouldGenerateAudio(config);

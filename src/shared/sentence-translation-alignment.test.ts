@@ -104,3 +104,16 @@ test('a line repeated by a simultaneous cue is joined once, a later repeat stays
     'First line Second line First line',
   );
 });
+
+test('a long sign starting between two mined lines stays out of the sentence', () => {
+  const primary = [line('一', 0, 1), line('看板', 0.1, 10), line('二', 1, 2)];
+  const secondary = [line('One.', 0, 1), line('SIGN', 0.1, 10), line('Two.', 1, 2)];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 0,
+    endTime: 2,
+  });
+  assert.equal(aligned?.text, '一 二');
+  assert.equal(aligned?.translation, 'One. Two.');
+});

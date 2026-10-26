@@ -800,12 +800,19 @@ export function createMediaTimingReviewModal(
     if (!payload || framePicker.getState().blockConfirm) return;
     const screenshotTime = framePicker.getScreenshotTime();
     const includesAdjacentLines = previousCount > 0 || nextCount > 0;
+    const lines = currentLineSelection();
     void resolveReview({
       action: 'confirm',
       startTime: selectionStart,
       endTime: selectionEnd,
       ...(screenshotTime !== undefined ? { screenshotTime } : {}),
-      ...(includesAdjacentLines ? { text: currentLineSelection().sentence } : {}),
+      ...(includesAdjacentLines
+        ? {
+            text: lines.sentence,
+            sentenceStartTime: lines.rangeStart,
+            sentenceEndTime: lines.rangeEnd,
+          }
+        : {}),
     });
   }
 

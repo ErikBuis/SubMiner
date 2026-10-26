@@ -39,6 +39,9 @@ export type MediaTimingReviewDecision =
       startTime: number;
       endTime: number;
       text?: string;
+      /** Subtitle range of the lines behind `text`; the clip itself can be padded or trimmed. */
+      sentenceStartTime?: number;
+      sentenceEndTime?: number;
       screenshotTime?: number;
     }
   | { action: 'use-original' }

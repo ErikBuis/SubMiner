@@ -188,7 +188,7 @@ Manual clipboard updates (`Ctrl/Cmd+V`) always replace the sentence audio, whate
 
 Sentence cards and audio cards (`Ctrl/Cmd+Shift+A`) always write to the `Sentence` and `SentenceAudio` fields. Normal word cards keep using your `ankiConnect.fields` mapping.
 
-The card's translation is the secondary subtitle line that translates the mined line(s), picked by timing from the parsed subtitle tracks. A secondary line that only overlaps the dialogue, such as a sign or a TV in the background, is left out. Without a readable secondary subtitle file or embedded text track, the secondary subtitle on screen is used.
+The card's translation is the secondary subtitle line that translates the mined line(s), picked by timing from the parsed subtitle tracks. A secondary line that only overlaps the dialogue, such as a sign or a TV in the background, is left out, and a mined line the parsed track has no translation for gets none. Without a readable secondary subtitle file or embedded text track, the secondary subtitle on screen is used.
 
 ## Word card type (Kiku/Lapis)
 
