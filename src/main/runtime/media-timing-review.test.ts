@@ -1218,6 +1218,34 @@ describe('buildMediaTimingReviewPayload speaker labels', () => {
     );
   });
 
+  test('drops adjacent cues that consist only of a label', () => {
+    const payload = buildMediaTimingReviewPayload(
+      { ...request, stripSpeakerLabels: true },
+      {
+        reviewId: 'review-labels',
+        contextLines: {
+          previous: [
+            { text: 'せんせー', startTime: 5, endTime: 6 },
+            { text: '（拍手）', startTime: 7, endTime: 9 },
+          ],
+          next: [
+            { text: '（歓声）', startTime: 13, endTime: 14 },
+            { text: 'ただいま', startTime: 14, endTime: 15 },
+          ],
+        },
+      },
+    );
+
+    assert.deepEqual(
+      payload.previousLines.map((line) => line.text),
+      ['せんせー'],
+    );
+    assert.deepEqual(
+      payload.nextLines.map((line) => line.text),
+      ['ただいま'],
+    );
+  });
+
   test('keeps adjacent lines untouched otherwise', () => {
     const payload = buildMediaTimingReviewPayload(request, {
       reviewId: 'review-labels',

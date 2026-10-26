@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cleanSentenceText, stripSpeakerLabels } from './subtitle-speaker-labels';
+import {
+  cleanSentenceText,
+  removeSpeakerLabels,
+  stripSpeakerLabels,
+} from './subtitle-speaker-labels';
 
 test('stripSpeakerLabels drops a label on its own line', () => {
   assert.equal(
@@ -35,6 +39,12 @@ test('stripSpeakerLabels leaves text without labels untouched', () => {
 test('stripSpeakerLabels never returns an empty sentence', () => {
   assert.equal(stripSpeakerLabels('（ひとり）'), '（ひとり）');
   assert.equal(stripSpeakerLabels('（拍手）\n（歓声）'), '（拍手）\n（歓声）');
+});
+
+test('removeSpeakerLabels returns an empty string for label-only text', () => {
+  assert.equal(removeSpeakerLabels('（歓声）'), '');
+  assert.equal(removeSpeakerLabels('（拍手）\n（歓声）'), '');
+  assert.equal(removeSpeakerLabels('（A）こんにちは'), 'こんにちは');
 });
 
 test('cleanSentenceText respects the behavior flag', () => {
