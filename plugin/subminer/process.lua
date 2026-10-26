@@ -324,6 +324,15 @@ function M.create(ctx)
 		end
 	end
 
+	-- The app asks for the spinner when its overlay window is still loading. While the
+	-- pause-until-ready gate shows its own OSD messages, those own the OSD line.
+	local function request_overlay_loading_osd()
+		if state.auto_play_ready_gate_armed and resolve_osd_messages_enabled() then
+			return
+		end
+		start_overlay_loading_osd()
+	end
+
 	local function disarm_auto_play_ready_gate(options)
 		local should_resume = options == nil or options.resume_playback ~= false
 		local was_armed = state.auto_play_ready_gate_armed
@@ -1039,6 +1048,7 @@ function M.create(ctx)
 		hold_auto_play_ready_gate = hold_auto_play_ready_gate,
 		disarm_auto_play_ready_gate = disarm_auto_play_ready_gate,
 		start_overlay_loading_osd = start_overlay_loading_osd,
+		request_overlay_loading_osd = request_overlay_loading_osd,
 		stop_overlay_loading_osd = stop_overlay_loading_osd,
 	}
 end

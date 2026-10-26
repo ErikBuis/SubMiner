@@ -51,6 +51,7 @@ export interface MpvProtocolHandleMessageDeps {
   };
   getSubtitleMetrics: () => MpvSubtitleRenderMetrics;
   isVisibleOverlayVisible: () => boolean;
+  shouldSuppressMpvSubtitles?: () => boolean;
   emitSubtitleChange: (payload: { text: string; isOverlayVisible: boolean }) => void;
   emitSubtitleTiming: (payload: { text: string; start: number; end: number }) => void;
   emitSecondarySubtitleChange: (payload: { text: string }) => void;
@@ -381,7 +382,8 @@ export async function dispatchMpvProtocolMessage(
         subScaleByWindow: asBoolean(msg.data, deps.getSubtitleMetrics().subScaleByWindow),
       });
     } else if (msg.name === 'sub-visibility') {
-      if (deps.isVisibleOverlayVisible() && asBoolean(msg.data, false)) {
+      const suppress = deps.shouldSuppressMpvSubtitles?.() ?? deps.isVisibleOverlayVisible();
+      if (suppress && asBoolean(msg.data, false)) {
         deps.sendCommand({ command: ['set_property', 'sub-visibility', false] });
       }
     } else if (msg.name === 'secondary-sub-visibility') {

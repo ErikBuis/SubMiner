@@ -213,7 +213,11 @@ function M.create(ctx)
 			-- SubMiner launches mpv with its subtitles hidden, but the overlay can take a while
 			-- to appear. Show mpv's subtitles until then; the app hides them once the overlay
 			-- is ready. App-managed playback controls subtitle visibility itself.
-			if not state.overlay_running and not state.app_managed_playback_pending then
+			if
+				not state.overlay_running
+				and not state.app_managed_playback_pending
+				and has_matching_subminer_socket()
+			then
 				mp.set_property_native("sub-visibility", true)
 			end
 		end

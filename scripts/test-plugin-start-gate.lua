@@ -1734,6 +1734,35 @@ end
 
 do
 	local recorded, err = run_plugin_scenario({
+		defer_timeouts = true,
+		process_list = "",
+		option_overrides = {
+			binary_path = binary_path,
+			auto_start = "yes",
+			auto_start_visible_overlay = "yes",
+			auto_start_pause_until_ready = "yes",
+			osd_messages = true,
+			socket_path = "/tmp/subminer-socket",
+		},
+		input_ipc_server = "/tmp/subminer-socket",
+		media_title = "Random Movie",
+		files = {
+			[binary_path] = true,
+		},
+	})
+	assert_true(recorded ~= nil, "plugin failed to load for gate-owned OSD scenario: " .. tostring(err))
+	fire_event(recorded, "start-file")
+	fire_event(recorded, "file-loaded")
+	local osd_count = #recorded.osd
+	recorded.script_messages["subminer-overlay-loading-start"]()
+	assert_true(
+		#recorded.osd == osd_count,
+		"the app's loading request should not take the OSD from the pause-until-ready messages"
+	)
+end
+
+do
+	local recorded, err = run_plugin_scenario({
 		process_list = "",
 		option_overrides = {
 			binary_path = binary_path,
@@ -2419,6 +2448,11 @@ do
 		},
 	})
 	assert_true(recorded ~= nil, "plugin failed to load for mismatched socket auto-start scenario: " .. tostring(err))
+	fire_event(recorded, "start-file")
+	assert_true(
+		not has_property_set(recorded.property_sets, "sub-visibility", true),
+		"mpv subtitles should stay as they are when the overlay won't attach to this mpv"
+	)
 	fire_event(recorded, "file-loaded")
 	local start_call = find_start_call(recorded.async_calls)
 	assert_true(
