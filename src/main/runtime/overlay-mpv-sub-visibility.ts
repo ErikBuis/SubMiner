@@ -56,7 +56,10 @@ export function createEnsureOverlayMpvSubtitlesHiddenHandler(deps: {
       : null;
 
     // Hide immediately on overlay toggle; capture/restore logic is handled separately.
-    deps.setMpvSubVisibility(deps.isOverlayContentReady?.() === false);
+    const showWhileOverlayLoads = deps.isOverlayContentReady?.() === false;
+    if (!showWhileOverlayLoads) {
+      deps.setMpvSubVisibility(false);
+    }
 
     if (shouldCaptureSavedVisibility && savedVisibilityPromise) {
       try {
@@ -75,6 +78,12 @@ export function createEnsureOverlayMpvSubtitlesHiddenHandler(deps: {
         );
         deps.setSavedSubVisibility(true);
       }
+    }
+
+    // Showing mpv's subtitles waits for the capture: an overlapping call would otherwise
+    // read back this write instead of the user's own visibility.
+    if (showWhileOverlayLoads && revision === deps.getRevision()) {
+      deps.setMpvSubVisibility(true);
     }
   };
 }
