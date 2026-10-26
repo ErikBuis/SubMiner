@@ -19,6 +19,7 @@ function M.create(ctx)
 		end)
 		mp.register_script_message("subminer-visible-overlay-hidden", function()
 			process.record_visible_overlay_visibility(false)
+			process.restore_sub_visibility_before_overlay()
 		end)
 		mp.register_script_message("subminer-visible-overlay-shown", function()
 			process.record_visible_overlay_visibility(true)
@@ -45,8 +46,19 @@ function M.create(ctx)
 		mp.register_script_message("subminer-autoplay-hold", function()
 			process.hold_auto_play_ready_gate()
 		end)
+		mp.register_script_message("subminer-sub-visibility-restored", function(applied)
+			-- The app already wrote its captured value; only restore when it had none.
+			if applied == "applied" then
+				process.clear_sub_visibility_before_overlay()
+			else
+				process.restore_sub_visibility_before_overlay()
+			end
+		end)
+		mp.register_script_message("subminer-overlay-loading-start", function()
+			process.request_overlay_loading_osd()
+		end)
 		mp.register_script_message("subminer-overlay-loading-ready", function()
-			process.stop_overlay_loading_osd()
+			process.finish_overlay_loading_osd()
 		end)
 		mp.register_script_message("subminer-stats-toggle", function()
 			if opts.osd_messages then

@@ -1673,6 +1673,27 @@ async function initializeDiscordPresenceService(): Promise<void> {
   await appState.discordPresenceService.start();
   discordPresenceRuntime.publishDiscordPresence();
 }
+// The overlay takes over from mpv's subtitles once its window has painted and is shown.
+// On Windows it stays hidden after painting until the window tracker has found mpv.
+function isVisibleOverlayWindowContentReady(): boolean {
+  const overlayWindow = overlayManager.getMainWindow();
+  return Boolean(
+    overlayWindow &&
+    !overlayWindow.isDestroyed() &&
+    isOverlayWindowContentReady(overlayWindow) &&
+    overlayWindow.isVisible(),
+  );
+}
+
+// The loading spinner stays up while mpv's subtitles stand in for the overlay, so it ends
+// with them once the window is shown; hiding the overlay ends it right away.
+function dismissOverlayLoadingOnceOverlayShown(): void {
+  if (overlayManager.getVisibleOverlayVisible() && !isVisibleOverlayWindowContentReady()) {
+    return;
+  }
+  overlayNotificationsRuntime.dismissOverlayLoadingStatusNotification();
+}
+
 const ensureOverlayMpvSubtitlesHidden = createEnsureOverlayMpvSubtitlesHiddenHandler({
   getMpvClient: () => appState.mpvClient,
   getSavedSubVisibility: () => appState.overlaySavedMpvSubVisibility,
@@ -1686,6 +1707,7 @@ const ensureOverlayMpvSubtitlesHidden = createEnsureOverlayMpvSubtitlesHiddenHan
   setMpvSubVisibility: (visible) => {
     setMpvSubVisibilityRuntime(appState.mpvClient, visible);
   },
+  isOverlayContentReady: () => isVisibleOverlayWindowContentReady(),
   logWarn: (message, error) => {
     logger.warn(message, error);
   },
@@ -1703,6 +1725,14 @@ const restoreOverlayMpvSubtitles = createRestoreOverlayMpvSubtitlesHandler({
   shouldKeepSuppressedFromVisibleOverlayBinding: () => overlayManager.getVisibleOverlayVisible(),
   setMpvSubVisibility: (visible) => {
     setMpvSubVisibilityRuntime(appState.mpvClient, visible);
+  },
+  isOverlayContentReady: () => isVisibleOverlayWindowContentReady(),
+  onSubVisibilityRestored: (applied) => {
+    sendMpvCommandRuntime(appState.mpvClient, [
+      'script-message',
+      'subminer-sub-visibility-restored',
+      applied ? 'applied' : 'none',
+    ]);
   },
 });
 
@@ -2907,7 +2937,7 @@ const overlayVisibilityRuntime = createOverlayVisibilityRuntimeService(
       overlayNotificationsRuntime.showOverlayLoadingStatusNotification();
     },
     dismissOverlayLoadingOsd: () => {
-      overlayNotificationsRuntime.dismissOverlayLoadingStatusNotification();
+      dismissOverlayLoadingOnceOverlayShown();
     },
     hideNonNativeOverlayWhenTargetUnfocused: () =>
       shouldRunLinuxOverlayZOrderKeepAlive() &&
@@ -5035,6 +5065,8 @@ const {
     isAutoStartOverlayEnabled: () => appState.autoStartOverlay,
     setOverlayVisible: (visible: boolean) => setOverlayVisible(visible),
     isVisibleOverlayVisible: () => overlayManager.getVisibleOverlayVisible(),
+    shouldSuppressMpvSubtitles: () =>
+      overlayManager.getVisibleOverlayVisible() && isVisibleOverlayWindowContentReady(),
     getReconnectTimer: () => appState.reconnectTimer,
     setReconnectTimer: (timer: ReturnType<typeof setTimeout> | null) => {
       appState.reconnectTimer = timer;
@@ -5383,6 +5415,12 @@ function createModalWindow(): BrowserWindow {
 
 function createMainWindow(): BrowserWindow {
   const window = createMainWindowHandler();
+  window.on('show', () => {
+    if (overlayManager.getVisibleOverlayVisible()) {
+      void ensureOverlayMpvSubtitlesHidden();
+      dismissOverlayLoadingOnceOverlayShown();
+    }
+  });
   if (process.platform === 'win32') {
     const overlayHwnd = visibleOverlayInteractionRuntime.getWindowsNativeWindowHandleNumber(window);
     if (!ensureWindowsOverlayTransparency(overlayHwnd)) {
@@ -6556,9 +6594,13 @@ const { createMainWindow: createMainWindowHandler, createModalWindow: createModa
         flushQueuedOverlayNotifications();
       },
       onWindowContentReady: () => {
-        overlayNotificationsRuntime.dismissOverlayLoadingStatusNotification();
+        dismissOverlayLoadingOnceOverlayShown();
         flushQueuedOverlayNotifications();
         overlayVisibilityRuntime.updateVisibleOverlayVisibility();
+        // mpv showed its own subtitles while the overlay loaded; the overlay draws them now.
+        if (overlayManager.getVisibleOverlayVisible()) {
+          void ensureOverlayMpvSubtitlesHidden();
+        }
         visibleOverlayInteractionRuntime.primeLinuxOverlayPointerInteractionAfterFirstMeasurement();
         autoplayReadyGate.flushPendingAutoplayReadySignal();
       },

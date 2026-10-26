@@ -7,8 +7,11 @@ local OVERLAY_RESTART_PING_MAX_ATTEMPTS = 20
 local OVERLAY_LOADING_OSD_PREFIX = "Overlay loading "
 local OVERLAY_LOADING_OSD_FRAMES = { "|", "/", "-", "\\" }
 local OVERLAY_LOADING_OSD_REFRESH_SECONDS = 0.18
-local OVERLAY_LOADING_OSD_DEADLINE_SECONDS = 30
+-- Loading Yomitan with many dictionaries can take half a minute on slower machines.
+local OVERLAY_LOADING_OSD_DEADLINE_SECONDS = 60
 local OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE = "Overlay did not become ready; check SubMiner logs"
+local OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE_SECONDS = 8
+local SUB_VISIBILITY_BEFORE_OVERLAY_PROPERTY = "user-data/subminer/sub-visibility-before-overlay"
 local AUTO_PLAY_READY_LOADING_OSD = "Loading subtitle tokenization..."
 local AUTO_PLAY_READY_READY_OSD = "Subtitle tokenization ready"
 local DEFAULT_AUTO_PLAY_READY_TIMEOUT_SECONDS = 30
@@ -275,7 +278,12 @@ function M.create(ctx)
 		state.overlay_loading_osd_deadline = nil
 	end
 
-	local function stop_overlay_loading_osd()
+	-- keep_pending: the pause-until-ready gate only borrows the OSD line, the overlay is
+	-- still loading and gets its spinner back when the gate releases.
+	local function stop_overlay_loading_osd(options)
+		if not (options and options.keep_pending) then
+			state.overlay_loading_pending = false
+		end
 		state.overlay_loading_osd_active = false
 		state.overlay_loading_osd_frame = 1
 		clear_overlay_loading_osd_timer()
@@ -283,6 +291,7 @@ function M.create(ctx)
 	end
 
 	local function start_overlay_loading_osd()
+		state.overlay_loading_pending = true
 		if state.overlay_loading_osd_active then
 			return
 		end
@@ -314,9 +323,70 @@ function M.create(ctx)
 					"process",
 					"Overlay loading deadline expired before the app reported content ready"
 				)
-				show_osd(OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE, { force = true })
+				show_osd(OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE, {
+					force = true,
+					duration = OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE_SECONDS,
+				})
 			end)
 		end
+	end
+
+	-- mpv's own subtitles are shown while the overlay loads. The app restores the visibility
+	-- from before that when the overlay is hidden or the app quits, so it reads it from here.
+	local function save_sub_visibility_before_overlay()
+		if state.sub_visibility_saved_before_overlay then
+			return
+		end
+		state.sub_visibility_saved_before_overlay = true
+		state.sub_visibility_before_overlay = mp.get_property_native("sub-visibility") == true
+		mp.set_property_native(SUB_VISIBILITY_BEFORE_OVERLAY_PROPERTY, state.sub_visibility_before_overlay)
+	end
+
+	-- Once the app has restored that visibility (overlay hidden or app quitting), later
+	-- captures must read mpv's current one.
+	local function clear_sub_visibility_before_overlay()
+		if not state.sub_visibility_saved_before_overlay then
+			return
+		end
+		state.sub_visibility_saved_before_overlay = false
+		if type(mp.del_property) == "function" then
+			pcall(mp.del_property, SUB_VISIBILITY_BEFORE_OVERLAY_PROPERTY)
+		end
+	end
+
+	-- Hiding the overlay or quitting the app ends the fallback, also when the app had not
+	-- captured the visibility yet (and so has nothing to restore). The app's own restore
+	-- sets the same value.
+	local function restore_sub_visibility_before_overlay()
+		if not state.sub_visibility_saved_before_overlay then
+			return
+		end
+		local visible = state.sub_visibility_before_overlay == true
+		clear_sub_visibility_before_overlay()
+		mp.set_property_native("sub-visibility", visible)
+	end
+
+	-- The app's overlay is ready (or hidden): drop the spinner's last frame too, but leave
+	-- timeout and gate messages alone when the spinner already stopped.
+	local function finish_overlay_loading_osd()
+		state.overlay_loading_pending = false
+		if not state.overlay_loading_osd_active then
+			return
+		end
+		stop_overlay_loading_osd()
+		if type(mp.osd_message) == "function" then
+			mp.osd_message("", 0)
+		end
+	end
+
+	-- The app asks for the spinner when its overlay window is still loading. While the
+	-- pause-until-ready gate shows its own OSD messages, those own the OSD line.
+	local function request_overlay_loading_osd()
+		if state.auto_play_ready_gate_armed and resolve_osd_messages_enabled() then
+			state.overlay_loading_pending = true
+			return
+		end
+		start_overlay_loading_osd()
 	end
 
 	local function disarm_auto_play_ready_gate(options)
@@ -338,10 +408,14 @@ function M.create(ctx)
 		end
 		local should_resume_playback = state.auto_play_ready_should_resume_playback == true
 		if resolve_osd_messages_enabled() then
-			stop_overlay_loading_osd()
+			stop_overlay_loading_osd({ keep_pending = true })
 			show_osd(AUTO_PLAY_READY_READY_OSD)
 		end
 		disarm_auto_play_ready_gate({ resume_playback = false })
+		-- Playback can start before the overlay is shown; keep saying it is still loading.
+		if state.overlay_loading_pending and not state.overlay_loading_osd_active then
+			start_overlay_loading_osd()
+		end
 		if should_resume_playback then
 			mp.set_property_native("pause", false)
 			subminer_log("info", "process", "Resuming playback after startup gate: " .. tostring(reason or "ready"))
@@ -375,7 +449,7 @@ function M.create(ctx)
 		state.auto_play_ready_gate_armed = true
 		mp.set_property_native("pause", true)
 		if resolve_osd_messages_enabled() then
-			stop_overlay_loading_osd()
+			stop_overlay_loading_osd({ keep_pending = true })
 			show_osd(AUTO_PLAY_READY_LOADING_OSD)
 		end
 		if resolve_osd_messages_enabled() and type(mp.add_periodic_timer) == "function" then
@@ -1034,6 +1108,11 @@ function M.create(ctx)
 		hold_auto_play_ready_gate = hold_auto_play_ready_gate,
 		disarm_auto_play_ready_gate = disarm_auto_play_ready_gate,
 		start_overlay_loading_osd = start_overlay_loading_osd,
+		request_overlay_loading_osd = request_overlay_loading_osd,
+		save_sub_visibility_before_overlay = save_sub_visibility_before_overlay,
+		clear_sub_visibility_before_overlay = clear_sub_visibility_before_overlay,
+		restore_sub_visibility_before_overlay = restore_sub_visibility_before_overlay,
+		finish_overlay_loading_osd = finish_overlay_loading_osd,
 		stop_overlay_loading_osd = stop_overlay_loading_osd,
 	}
 end
