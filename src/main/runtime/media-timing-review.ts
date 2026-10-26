@@ -27,7 +27,7 @@ import {
   REVIEW_CONTEXT_EPSILON_SECONDS as CONTEXT_LINE_EPSILON_SECONDS,
   REVIEW_CONTEXT_LINE_LIMIT as CONTEXT_LINE_LIMIT,
 } from '../../shared/sentence-translation-alignment';
-import { stripSpeakerLabels } from '../../shared/subtitle-speaker-labels';
+import { removeSpeakerLabels } from '../../shared/subtitle-speaker-labels';
 
 const INITIAL_TIMELINE_MARGIN_SECONDS = 2;
 const REVIEW_DECISION_TIMEOUT_MS = 5 * 60_000;
@@ -234,7 +234,12 @@ function cleanContextLines(
   strip: boolean | undefined,
 ): MediaTimingReviewContextLine[] {
   if (!lines) return [];
-  return strip ? lines.map((line) => ({ ...line, text: stripSpeakerLabels(line.text) })) : lines;
+  if (!strip) return lines;
+  // A cue holding only a label has nothing to add to the sentence, and composing it
+  // after dialogue would leave the label mid-line where the card cleanup cannot see it.
+  return lines
+    .map((line) => ({ ...line, text: removeSpeakerLabels(line.text) }))
+    .filter((line) => line.text.length > 0);
 }
 
 export function buildMediaTimingReviewPayload(

@@ -5,11 +5,10 @@ const LEADING_LABEL = /^[ \t　]*(?:[（(][^（）()\n]+[）)][ \t　]*)+/;
 
 /**
  * Removes speaker names and similar annotations written in full-width or half-width
- * brackets at the start of a subtitle line. A line holding only a label is dropped; when
- * nothing else would be left, the text is returned unchanged so the card never ends up
- * with an empty sentence.
+ * brackets at the start of a subtitle line. A line holding only a label is dropped, so
+ * the result is empty when nothing else is left.
  */
-export function stripSpeakerLabels(text: string): string {
+export function removeSpeakerLabels(text: string): string {
   const lines = text.split(/\r?\n/);
   const kept: string[] = [];
   for (const line of lines) {
@@ -20,7 +19,15 @@ export function stripSpeakerLabels(text: string): string {
       kept.push(stripped);
     }
   }
-  const result = kept.join('\n').trim();
+  return kept.join('\n').trim();
+}
+
+/**
+ * Like {@link removeSpeakerLabels}, but when nothing else would be left the text is
+ * returned unchanged so the card never ends up with an empty sentence.
+ */
+export function stripSpeakerLabels(text: string): string {
+  const result = removeSpeakerLabels(text);
   return result.length > 0 ? result : text;
 }
 
