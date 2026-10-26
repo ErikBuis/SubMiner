@@ -1,3 +1,5 @@
+import { normalizePlainSubtitleText } from '../core/services/ass-text.js';
+
 // A seek replaces the subtitle line a dictionary lookup was opened from, but the popup
 // keeps showing the old entry. Playback is paused while that happens (the popup pauses
 // it, or the user did), so a line change while paused means the user moved away from
@@ -33,9 +35,12 @@ export function createStaleLookupPopupCloser(deps: {
 
   return {
     handleSubtitleText(text: string): Promise<void> {
-      // The tokenized upgrade of a cue trims and normalizes whitespace in the provisional
-      // text, so whitespace alone never marks a new line.
-      const line = text.replace(/\s+/g, '');
+      // The tokenized upgrade of a cue normalizes whitespace and ASS whitespace escapes in
+      // the provisional text, so neither alone marks a new line.
+      const line = normalizePlainSubtitleText(text, { collapseLineBreaks: true }).replace(
+        /\s+/g,
+        '',
+      );
       const previous = lastLine;
       lastLine = line;
       if (previous === null || previous === line) return Promise.resolve();

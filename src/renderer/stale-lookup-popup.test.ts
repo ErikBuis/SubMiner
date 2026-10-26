@@ -31,6 +31,7 @@ test('a new line while paused closes the lookup popup without resuming playback'
   await closer.handleSubtitleText('  放課後\r\n');
   // The annotated upgrade of the same cue arrives with normalized whitespace.
   await closer.handleSubtitleText('放課後');
+  await closer.handleSubtitleText('放課後\\N');
   assert.deepEqual(calls, []);
 
   await closer.handleSubtitleText('次の台詞');
