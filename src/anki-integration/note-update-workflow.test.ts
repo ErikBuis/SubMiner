@@ -965,3 +965,31 @@ test('NoteUpdateWorkflow review shows no translation field without wordCardTrans
   assert.equal(reviewRequests[0]?.card?.translation, undefined);
   assert.equal(reviewRequests[0]?.card?.word, '野菜');
 });
+
+test('NoteUpdateWorkflow review shows the translation the card already has', async () => {
+  const harness = createWordCardTranslationHarness();
+  const reviewRequests: Array<Pick<MediaTimingReviewRequest, 'card'>> = [];
+  harness.deps.client.notesInfo = async () => [
+    {
+      noteId: 42,
+      fields: {
+        Expression: { value: '野菜' },
+        Sentence: { value: '' },
+        SentenceTranslation: { value: 'Kept <b>as is</b>.' },
+      },
+    },
+  ];
+  harness.deps.getSubtitleTracksForTranslation = () => ({
+    primary: [{ text: '野菜もいっぱい入ってるよ', startTime: 36.4, endTime: 39.2 }],
+    secondary: [{ text: 'Unrelated.', startTime: 50, endTime: 52 }],
+  });
+  harness.deps.reviewMediaTiming = async (request) => {
+    reviewRequests.push({ card: request.card });
+    return { action: 'use-original' };
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.equal(reviewRequests[0]?.card?.translation?.text, 'Kept as is.');
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, undefined);
+});

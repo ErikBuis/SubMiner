@@ -107,6 +107,10 @@ function dedupeSortedLines(
  * translation main resolved for the card; otherwise added lines bring the translation
  * main's sentence grouping assigned them. Null when there are no secondary lines to follow.
  */
+function compactText(text: string): string {
+  return text.normalize('NFKC').replace(/\s+/gu, '');
+}
+
 export function buildMediaTimingReviewTranslation(options: {
   previousLines: MediaTimingReviewContextLine[];
   nextLines: MediaTimingReviewContextLine[];
@@ -135,9 +139,11 @@ export function buildMediaTimingReviewTranslation(options: {
         Math.abs(entry.startTime - line.startTime) < 0.001 &&
         Math.abs(entry.endTime - line.endTime) < 0.001,
     );
-    if (assigned) return assigned.lines;
-    const best = findBestOverlappingLine(options.translationLines, line);
-    return best ? [best] : [];
+    const best = assigned ? null : findBestOverlappingLine(options.translationLines, line);
+    const candidates = assigned?.lines ?? (best ? [best] : []);
+    // A secondary track in the primary language is no translation, as in main.
+    const own = compactText(line.text);
+    return candidates.filter((candidate) => compactText(candidate.text) !== own);
   };
   const before = selection.previous.flatMap(addedTranslation);
   const after = selection.next.flatMap(addedTranslation);

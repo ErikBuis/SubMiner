@@ -189,7 +189,12 @@ export class NoteUpdateWorkflow {
   /** The translation the card would get, so the review can show, follow and edit it. */
   private buildReviewTranslation(
     context: { text: string; startTime: number; endTime: number },
-    options: { tracks: SubtitleTracksForTranslation | null; format: boolean },
+    options: {
+      tracks: SubtitleTracksForTranslation | null;
+      format: boolean;
+      /** The field's current value, which the card keeps when nothing replaces it. */
+      existing: string;
+    },
   ): Pick<MediaTimingReviewCardPreview, 'translation'> {
     const timedTranslation = resolveTimedSentenceTranslation({
       ...context,
@@ -204,7 +209,11 @@ export class NoteUpdateWorkflow {
     const reviewContext = buildReviewTranslationContext({ ...context, tracks: options.tracks });
     return {
       translation: {
-        text: options.format ? formatCardTranslation(text) : text,
+        text: text
+          ? options.format
+            ? formatCardTranslation(text)
+            : text
+          : ankiFieldHtmlToPlainText(options.existing),
         lines: reviewContext.lines,
         currentLines: timedTranslation?.translationLines ?? [],
         lineTranslations: reviewContext.lineTranslations,
@@ -339,6 +348,7 @@ export class NoteUpdateWorkflow {
                   ? this.buildReviewTranslation(mediaTimingContext, {
                       tracks: await getTracks(),
                       format: formatTranslation,
+                      existing: noteInfo.fields[translationFieldName]?.value ?? '',
                     })
                   : {}),
               },

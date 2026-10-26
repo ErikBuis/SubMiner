@@ -280,3 +280,23 @@ test('an on-screen translation stays when lines are added around it', () => {
     'Before. Now. After.',
   );
 });
+
+test('an added line whose secondary text is its own text adds no translation', () => {
+  const same = { text: '次', startTime: 12, endTime: 14 };
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      previousLines: [],
+      nextLines: [same],
+      text: '今',
+      originalStartTime: 10,
+      originalEndTime: 12,
+      previousCount: 0,
+      nextCount: 1,
+      initialTranslation: '',
+      initialTranslationLines: [],
+      translationLines: [{ text: '今', startTime: 10, endTime: 12 }, same],
+      format: false,
+    }),
+    '',
+  );
+});
