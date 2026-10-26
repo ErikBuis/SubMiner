@@ -907,7 +907,7 @@ test('NoteUpdateWorkflow widens the word card sentence and formats its translati
       noteId: 42,
       fields: {
         Sentence: '今日は いい天気ですね',
-        SentenceTranslation: 'Nice weather today, huh.',
+        SentenceTranslation: 'Nice weather today, huh, (...)',
       },
     },
   ]);

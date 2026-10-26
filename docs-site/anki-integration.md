@@ -200,7 +200,7 @@ Two behavior options change how the sentence and its translation come out, on se
 | Key                                   | What it does                                                                                                                                                                                           |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `behavior.widenSentenceToTranslation` | Translators often give one secondary line to a sentence the Japanese track splits over several lines. The card sentence and its media then widen to all of those lines, up to `media.maxMediaDuration` |
-| `behavior.formatTranslation`          | Start the translation with a capital letter and turn a trailing comma into a period, since a line cut off mid-sentence stands alone on the card                                                        |
+| `behavior.formatTranslation`          | Start the translation with a capital letter and add ` (...)` after a trailing comma, since a line cut off mid-sentence stands alone on the card                                                        |
 
 Widening needs both tracks to be readable subtitle files or embedded text tracks.
 
