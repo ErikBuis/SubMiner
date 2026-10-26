@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   ankiFieldHtmlToPlainText,
+  plainTextToAnkiFieldHtml,
   buildReviewTranslationContext,
   widenSentenceToTranslation,
 } from './sentence-translation';
@@ -98,4 +99,17 @@ test('ankiFieldHtmlToPlainText keeps one line per sense', () => {
     ankiFieldHtmlToPlainText('<ol><li>vegetable</li><li>greens &amp; herbs</li></ol>[sound:a.mp3]'),
     'vegetable\ngreens & herbs',
   );
+});
+
+test('character references survive a review edit round trip', () => {
+  const shown = ankiFieldHtmlToPlainText(
+    'It&#x27;s &quot;fine&quot; &amp; &#8212; &lt;b&gt; &copy;&nbsp;ok',
+  );
+  assert.equal(shown, 'It\'s "fine" & — <b> &copy; ok');
+  // The edited text goes back escaped, so the card shows the same characters.
+  assert.equal(
+    ankiFieldHtmlToPlainText(plainTextToAnkiFieldHtml(`${shown}!`)),
+    'It\'s "fine" & — <b> &copy; ok!',
+  );
+  assert.equal(ankiFieldHtmlToPlainText('&amp;lt;'), '&lt;');
 });

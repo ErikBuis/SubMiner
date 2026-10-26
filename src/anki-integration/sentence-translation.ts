@@ -207,6 +207,32 @@ export function buildReviewTranslationContext(input: {
   };
 }
 
+const NAMED_CHARACTER_REFERENCES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  hellip: '…',
+  mdash: '—',
+  ndash: '–',
+  lsquo: '‘',
+  rsquo: '’',
+  ldquo: '“',
+  rdquo: '”',
+};
+
+/** Numeric references and the named ones Anki's editor writes; anything else stays as is. */
+function decodeCharacterReference(reference: string, body: string): string {
+  if (body.startsWith('#')) {
+    const hex = body[1] === 'x' || body[1] === 'X';
+    const codePoint = Number.parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
+    return codePoint > 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : reference;
+  }
+  return NAMED_CHARACTER_REFERENCES[body.toLowerCase()] ?? reference;
+}
+
 /** Plain-text rendering of an Anki field for display: one line per block or list item. */
 export function ankiFieldHtmlToPlainText(html: string): string {
   return html
@@ -214,12 +240,7 @@ export function ankiFieldHtmlToPlainText(html: string): string {
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(?:li|div|p|tr|h[1-6])>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#0*39;|&apos;/gi, "'")
-    .replace(/&amp;/gi, '&')
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, decodeCharacterReference)
     .split('\n')
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean)
