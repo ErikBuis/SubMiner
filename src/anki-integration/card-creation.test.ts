@@ -696,3 +696,42 @@ test('createSentenceCard widens across a sign without taking its translation', a
   assert.equal(addedFields[0]?.Sentence, '前半 後半');
   assert.equal(addedFields[0]?.Translation, 'First half, second half.');
 });
+
+test('createSentenceCard previews the translation in the review and saves the edited one', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const reviewRequests: Array<{ card?: { translation?: { text: string } } }> = [];
+  let reviewedTranslation: string | undefined;
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () => createAnkiConfig({ fields: { translation: 'Translation' } }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [{ text: '今日は', startTime: 1, endTime: 2 }],
+        secondary: [{ text: 'Today.', startTime: 1, endTime: 2 }],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      reviewMediaTiming: async (request) => {
+        reviewRequests.push(request);
+        return reviewedTranslation === undefined
+          ? { action: 'use-original' }
+          : { action: 'use-original', translation: reviewedTranslation };
+      },
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(reviewRequests[0]?.card?.translation?.text, 'Today.');
+  assert.equal(addedFields[0]?.Translation, 'Today.');
+
+  reviewedTranslation = 'Edited.';
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(addedFields[1]?.Translation, 'Edited.');
+
+  reviewedTranslation = '';
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(addedFields[2]?.Translation, undefined);
+});

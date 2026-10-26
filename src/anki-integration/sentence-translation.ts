@@ -1,7 +1,10 @@
 import {
   alignSentenceTranslation,
+  assignLineTranslations,
   findBestOverlappingLine,
   joinSubtitleLineTexts,
+  REVIEW_CONTEXT_EPSILON_SECONDS,
+  REVIEW_CONTEXT_LINE_LIMIT,
   sortSubtitleLines,
   type TimedSubtitleText,
 } from '../shared/sentence-translation-alignment';
@@ -111,11 +114,7 @@ export function resolveTimedSentenceTranslation(input: {
   }
   return {
     translation,
-    translationLines: translationLines.map(({ text, startTime, endTime }) => ({
-      text,
-      startTime,
-      endTime,
-    })),
+    translationLines: translationLines.map(toPlainLine),
   };
 }
 
@@ -154,4 +153,75 @@ export function widenSentenceToTranslation(input: {
     return null;
   }
   return { text: aligned.text, startTime, endTime };
+}
+
+/** Secondary lines this close to the clip always reach the review. */
+const REVIEW_LINE_WINDOW_SECONDS = 90;
+
+function toPlainLine({ text, startTime, endTime }: TimedSubtitleText): TimedSubtitleText {
+  return { text, startTime, endTime };
+}
+
+/**
+ * What the media timing review needs to keep the translation in step when lines are
+ * added: the secondary lines around the clip, and for every primary line it can offer
+ * (up to the review's line limit on each side) the secondary lines the sentence grouping
+ * of the whole track assigns it.
+ */
+export function buildReviewTranslationContext(input: {
+  startTime: number;
+  endTime: number;
+  tracks: SubtitleTracksForTranslation | null;
+}): {
+  lines: TimedSubtitleText[];
+  lineTranslations: Array<{ startTime: number; endTime: number; lines: TimedSubtitleText[] }>;
+} {
+  const primary = sortSubtitleLines(input.tracks?.primary ?? []);
+  const secondary = sortSubtitleLines(input.tracks?.secondary ?? []);
+  if (secondary.length === 0) return { lines: [], lineTranslations: [] };
+  const offeredBefore = primary
+    .filter((line) => line.endTime <= input.startTime + REVIEW_CONTEXT_EPSILON_SECONDS)
+    .slice(-REVIEW_CONTEXT_LINE_LIMIT);
+  const offeredAfter = primary
+    .filter((line) => line.startTime >= input.endTime - REVIEW_CONTEXT_EPSILON_SECONDS)
+    .slice(0, REVIEW_CONTEXT_LINE_LIMIT);
+  const windowStart = Math.min(
+    input.startTime - REVIEW_LINE_WINDOW_SECONDS,
+    offeredBefore[0]?.startTime ?? Infinity,
+  );
+  const windowEnd = Math.max(
+    input.endTime + REVIEW_LINE_WINDOW_SECONDS,
+    ...offeredAfter.map((line) => line.endTime),
+  );
+  const nearClip = (line: TimedSubtitleText): boolean =>
+    line.endTime >= windowStart && line.startTime <= windowEnd;
+  return {
+    lines: secondary.filter(nearClip).map(toPlainLine),
+    lineTranslations: assignLineTranslations(primary, secondary)
+      .filter(({ line }) => nearClip(line))
+      .map(({ line, translationLines }) => ({
+        startTime: line.startTime,
+        endTime: line.endTime,
+        lines: translationLines.map(toPlainLine),
+      })),
+  };
+}
+
+/** Plain-text rendering of an Anki field for display: one line per block or list item. */
+export function ankiFieldHtmlToPlainText(html: string): string {
+  return html
+    .replace(/\[sound:[^\]]+\]/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:li|div|p|tr|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;|&apos;/gi, "'")
+    .replace(/&amp;/gi, '&')
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n');
 }

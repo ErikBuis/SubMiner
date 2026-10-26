@@ -3,6 +3,7 @@ import { getPreferredWordValueFromExtractedFields } from '../anki-field-config';
 import type { SubtitleMiningContext } from '../types/subtitle';
 import type {
   CardKind,
+  MediaTimingReviewCardPreview,
   MediaTimingReviewDecision,
   MediaTimingReviewRequest,
   WordCardKind,
@@ -10,6 +11,8 @@ import type {
 import { resolveWordCardKind } from './note-field-utils';
 import { STATS_MINING_TAG } from '../shared/anki-source';
 import {
+  ankiFieldHtmlToPlainText,
+  buildReviewTranslationContext,
   resolveTimedSentenceTranslation,
   widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
@@ -37,6 +40,7 @@ export interface NoteUpdateWorkflowDeps {
       image?: string;
       miscInfo?: string;
       wordCardTranslation?: string;
+      definition?: string;
     };
     media?: {
       generateAudio?: boolean;
@@ -168,6 +172,47 @@ function subtitleContextMatchesSentence(contextText: string, noteSentence: strin
 export class NoteUpdateWorkflow {
   constructor(private readonly deps: NoteUpdateWorkflowDeps) {}
 
+  /** The definition field as plain text, so the review shows what the card explains. */
+  private getReviewMeaning(
+    noteInfo: NoteUpdateWorkflowNoteInfo,
+    definitionField: string | undefined,
+  ): { meaning?: string } {
+    const fieldName = definitionField
+      ? this.deps.resolveConfiguredFieldName(noteInfo, definitionField)
+      : null;
+    const meaning = fieldName
+      ? ankiFieldHtmlToPlainText(noteInfo.fields[fieldName]?.value ?? '')
+      : '';
+    return meaning ? { meaning } : {};
+  }
+
+  /** The translation the card would get, so the review can show, follow and edit it. */
+  private buildReviewTranslation(
+    context: { text: string; startTime: number; endTime: number },
+    options: { tracks: SubtitleTracksForTranslation | null; format: boolean },
+  ): Pick<MediaTimingReviewCardPreview, 'translation'> {
+    const timedTranslation = resolveTimedSentenceTranslation({
+      ...context,
+      tracks: options.tracks,
+    });
+    // The line on screen only stands in when there is no parsed secondary track.
+    const text =
+      timedTranslation?.translation ??
+      (options.tracks && options.tracks.secondary.length > 0
+        ? ''
+        : (this.deps.getLiveSecondarySubtitleFor?.(context.text) ?? ''));
+    const reviewContext = buildReviewTranslationContext({ ...context, tracks: options.tracks });
+    return {
+      translation: {
+        text: options.format ? formatCardTranslation(text) : text,
+        lines: reviewContext.lines,
+        currentLines: timedTranslation?.translationLines ?? [],
+        lineTranslations: reviewContext.lineTranslations,
+        format: options.format,
+      },
+    };
+  }
+
   private consumeMatchingSubtitleMiningContext(
     fields: Record<string, string>,
     sentenceField: string,
@@ -272,17 +317,34 @@ export class NoteUpdateWorkflow {
       let sentenceRange = mediaTimingContext
         ? { startTime: mediaTimingContext.startTime, endTime: mediaTimingContext.endTime }
         : null;
+      const translationFieldName = config.fields?.wordCardTranslation
+        ? this.deps.resolveConfiguredFieldName(noteInfo, config.fields.wordCardTranslation)
+        : null;
+      const formatTranslation = config.behavior?.formatTranslation === true;
+      let reviewedTranslation: string | undefined;
 
       if (mediaTimingContext) {
-        const timingDecision = this.deps.reviewMediaTiming
-          ? await this.deps.reviewMediaTiming({
+        const reviewMediaTiming = this.deps.reviewMediaTiming;
+        const timingDecision = reviewMediaTiming
+          ? await reviewMediaTiming({
               kind: 'word',
               text: mediaTimingContext.text,
               startTime: mediaTimingContext.startTime,
               endTime: mediaTimingContext.endTime,
               noteId,
+              card: {
+                ...(hasExpressionText ? { word: expressionText } : {}),
+                ...this.getReviewMeaning(noteInfo, config.fields?.definition),
+                ...(translationFieldName
+                  ? this.buildReviewTranslation(mediaTimingContext, {
+                      tracks: await getTracks(),
+                      format: formatTranslation,
+                    })
+                  : {}),
+              },
             })
           : ({ action: 'use-original' } as const);
+        if ('translation' in timingDecision) reviewedTranslation = timingDecision.translation;
         if (timingDecision.action === 'discard') {
           try {
             await this.deps.client.deleteNotes([noteId]);
@@ -325,9 +387,6 @@ export class NoteUpdateWorkflow {
 
       this.deps.appendKnownWordsFromNoteInfo(noteInfo);
 
-      const translationFieldName = config.fields?.wordCardTranslation
-        ? this.deps.resolveConfiguredFieldName(noteInfo, config.fields.wordCardTranslation)
-        : null;
       let translatedText: string | undefined;
       let translation: string | undefined;
       const minedText = mediaTimingContext?.text ?? this.deps.getCurrentSubtitleText();
@@ -347,7 +406,7 @@ export class NoteUpdateWorkflow {
           (parsedTracks && parsedTracks.secondary.length > 0
             ? undefined
             : this.deps.getLiveSecondarySubtitleFor?.(minedText));
-        if (translation && config.behavior?.formatTranslation) {
+        if (translation && formatTranslation) {
           translation = formatCardTranslation(translation);
         }
         if (translation) translatedText = minedText;
@@ -407,8 +466,10 @@ export class NoteUpdateWorkflow {
         }
       }
 
-      if (translationFieldName && translation) {
-        updatedFields[translationFieldName] = translation;
+      // A translation from the review is final, even when cleared.
+      const cardTranslation = reviewedTranslation ?? translation;
+      if (translationFieldName && (cardTranslation || reviewedTranslation !== undefined)) {
+        updatedFields[translationFieldName] = cardTranslation ?? '';
         updatePerformed = true;
       }
 

@@ -1599,6 +1599,66 @@ body:focus-visible,
   color: var(--ctp-text);
 }
 
+/* Card fields shown read-only above the sentence; the translation below is editable. */
+.media-timing-review-card {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.media-timing-review-card.hidden,
+.media-timing-review-card-row.hidden,
+.media-timing-review-translation.hidden {
+  display: none;
+}
+
+.media-timing-review-card-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.media-timing-review-word {
+  color: var(--ctp-text);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.media-timing-review-meaning {
+  max-height: 84px;
+  overflow: auto;
+  color: var(--ctp-subtext1);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.media-timing-review-translation {
+  margin-bottom: 12px;
+}
+
+.media-timing-review-translation-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px solid var(--ctp-surface1);
+  border-left: 3px solid var(--ctp-teal);
+  border-radius: 0 10px 10px 0;
+  background: var(--ctp-mantle);
+  color: var(--ctp-text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.media-timing-review-translation-input:focus {
+  outline: none;
+  border-color: var(--ctp-teal);
+}
+
 /* Only dim context lines when some are actually added. */
 .media-timing-review-text .media-timing-review-line:only-child {
   color: var(--ctp-subtext1);

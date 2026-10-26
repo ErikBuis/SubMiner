@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { widenSentenceToTranslation } from './sentence-translation';
+import {
+  ankiFieldHtmlToPlainText,
+  buildReviewTranslationContext,
+  widenSentenceToTranslation,
+} from './sentence-translation';
 
 const tracks = {
   primary: [
@@ -61,5 +65,37 @@ test('widenSentenceToTranslation leaves out a sign the captured sentence lacks',
       maxSentenceSeconds: 0,
     }),
     { text: '前半の台詞 後半', startTime: 0, endTime: 6 },
+  );
+});
+
+test('buildReviewTranslationContext covers every primary line the review can offer', () => {
+  const context = buildReviewTranslationContext({
+    startTime: 100,
+    endTime: 102,
+    tracks: {
+      primary: [
+        { text: '今', startTime: 100, endTime: 102 },
+        { text: 'ずっと後', startTime: 200, endTime: 202 },
+      ],
+      secondary: [
+        { text: 'Now.', startTime: 100, endTime: 102 },
+        { text: 'Much later.', startTime: 200, endTime: 202 },
+      ],
+    },
+  });
+  assert.deepEqual(
+    context.lines.map((line) => line.text),
+    ['Now.', 'Much later.'],
+  );
+  assert.deepEqual(
+    context.lineTranslations.map((entry) => entry.lines.map((line) => line.text)),
+    [['Now.'], ['Much later.']],
+  );
+});
+
+test('ankiFieldHtmlToPlainText keeps one line per sense', () => {
+  assert.equal(
+    ankiFieldHtmlToPlainText('<ol><li>vegetable</li><li>greens &amp; herbs</li></ol>[sound:a.mp3]'),
+    'vegetable\ngreens & herbs',
   );
 });

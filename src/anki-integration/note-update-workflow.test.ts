@@ -6,7 +6,7 @@ import {
   type NoteUpdateWorkflowNoteInfo,
 } from './note-update-workflow';
 import type { SubtitleMiningContext } from '../types/subtitle';
-import type { CardKind } from '../types/anki';
+import type { CardKind, MediaTimingReviewRequest } from '../types/anki';
 import { applyCardKindFlagFields } from './card-kinds';
 import { STATS_MINING_TAG } from '../shared/anki-source';
 
@@ -911,4 +911,57 @@ test('NoteUpdateWorkflow widens the word card sentence and formats its translati
       },
     },
   ]);
+});
+
+test('NoteUpdateWorkflow shows the whole card in the review and saves its edited translation', async () => {
+  const harness = createWordCardTranslationHarness();
+  const reviewRequests: Array<Pick<MediaTimingReviewRequest, 'card'>> = [];
+  harness.deps.client.notesInfo = async () => [
+    {
+      noteId: 42,
+      fields: {
+        Expression: { value: '野菜' },
+        Sentence: { value: '' },
+        SentenceTranslation: { value: '' },
+        Glossary: { value: '<ol><li>vegetable</li><li>greens</li></ol>' },
+      },
+    },
+  ];
+  harness.deps.getConfig = () => ({
+    fields: {
+      sentence: 'Sentence',
+      wordCardTranslation: 'SentenceTranslation',
+      definition: 'Glossary',
+    },
+    media: { generateAudio: false, generateImage: false },
+  });
+  harness.deps.reviewMediaTiming = async (request) => {
+    reviewRequests.push(request);
+    return { action: 'use-original', translation: 'My own translation.' };
+  };
+
+  await harness.workflow.execute(42);
+
+  const card = reviewRequests[0]?.card;
+  assert.equal(card?.word, '野菜');
+  assert.equal(card?.meaning, 'vegetable\ngreens');
+  assert.equal(card?.translation?.text, 'I put lots of vegetables in it.');
+  assert.deepEqual(card?.translation?.currentLines, [
+    { text: 'I put lots of vegetables in it.', startTime: 36.3, endTime: 39.4 },
+  ]);
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'My own translation.');
+});
+
+test('NoteUpdateWorkflow review shows no translation field without wordCardTranslation', async () => {
+  const harness = createWordCardTranslationHarness('');
+  const reviewRequests: Array<Pick<MediaTimingReviewRequest, 'card'>> = [];
+  harness.deps.reviewMediaTiming = async (request) => {
+    reviewRequests.push(request);
+    return { action: 'use-original' };
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.equal(reviewRequests[0]?.card?.translation, undefined);
+  assert.equal(reviewRequests[0]?.card?.word, '野菜');
 });

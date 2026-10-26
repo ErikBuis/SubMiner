@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildMediaTimingReviewTranslation,
   buildMediaTimingLineSelection,
   buildMediaTimingWaveformPath,
   constrainMediaTimingSelection,
@@ -169,5 +170,91 @@ test('trailing silence trim follows the last speech slice and keeps cut-off or s
   assert.equal(
     trimMediaTimingSelectionEnd({ ...base, peaks: [1], selectionEnd: 8, endPadSeconds: 0 }),
     null,
+  );
+});
+
+test('review translation follows added lines until the card is back to its own line', () => {
+  const base = {
+    previousLines: [{ text: '前の行', startTime: 8, endTime: 10 }],
+    nextLines: [{ text: '次の行', startTime: 12.1, endTime: 14 }],
+    text: '対象の行',
+    originalStartTime: 10.1,
+    originalEndTime: 12,
+    initialTranslation: 'Main translation.',
+    initialTranslationLines: [{ text: 'the mined line', startTime: 10, endTime: 12 }],
+    translationLines: [
+      { text: 'before,', startTime: 7.9, endTime: 10 },
+      { text: 'the mined line', startTime: 10, endTime: 12 },
+      { text: 'and after,', startTime: 12, endTime: 14 },
+    ],
+    format: true,
+  };
+  assert.equal(
+    buildMediaTimingReviewTranslation({ ...base, previousCount: 0, nextCount: 0 }),
+    'Main translation.',
+  );
+  assert.equal(
+    buildMediaTimingReviewTranslation({ ...base, previousCount: 0, nextCount: 1 }),
+    'The mined line and after.',
+  );
+  assert.equal(
+    buildMediaTimingReviewTranslation({ ...base, previousCount: 1, nextCount: 1, format: false }),
+    'before, the mined line and after,',
+  );
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      ...base,
+      translationLines: [],
+      previousCount: 1,
+      nextCount: 0,
+    }),
+    null,
+  );
+});
+
+test('a widened multi-line sentence keeps its own translations when a line is added', () => {
+  const lineA = { text: 'A', startTime: 10, endTime: 12 };
+  const lineB = { text: 'B', startTime: 12, endTime: 14 };
+  const lineC = { text: 'C', startTime: 14, endTime: 16 };
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      previousLines: [],
+      nextLines: [{ text: '三', startTime: 14, endTime: 16 }],
+      // Main widened the card to the primary lines behind A and B.
+      text: '一 二',
+      originalStartTime: 10,
+      originalEndTime: 14,
+      previousCount: 0,
+      nextCount: 1,
+      initialTranslation: 'A B',
+      initialTranslationLines: [lineA, lineB],
+      translationLines: [lineA, lineB, lineC],
+      format: false,
+    }),
+    'A B C',
+  );
+});
+
+test('an added line takes the translation the full-track grouping assigned it', () => {
+  // Grouped against the whole track, 次 belongs to the long X; regrouping it alone
+  // would pick the tightly timed Y instead.
+  const lineX = { text: 'X', startTime: 14, endTime: 18 };
+  const lineY = { text: 'Y', startTime: 16, endTime: 17 };
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      previousLines: [],
+      nextLines: [{ text: '次', startTime: 16, endTime: 17 }],
+      text: '今',
+      originalStartTime: 10,
+      originalEndTime: 14,
+      previousCount: 0,
+      nextCount: 1,
+      initialTranslation: 'Now',
+      initialTranslationLines: [{ text: 'Now', startTime: 10, endTime: 14 }],
+      translationLines: [{ text: 'Now', startTime: 10, endTime: 14 }, lineX, lineY],
+      lineTranslations: [{ startTime: 16, endTime: 17, lines: [lineX] }],
+      format: false,
+    }),
+    'Now X',
   );
 });
