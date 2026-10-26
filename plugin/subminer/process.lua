@@ -348,8 +348,9 @@ function M.create(ctx)
 		end
 	end
 
-	-- Hiding the overlay ends the fallback even when the app hid it before it captured the
-	-- visibility (and so has nothing to restore). The app's own restore sets the same value.
+	-- Hiding the overlay or quitting the app ends the fallback, also when the app had not
+	-- captured the visibility yet (and so has nothing to restore). The app's own restore
+	-- sets the same value.
 	local function restore_sub_visibility_before_overlay()
 		if not state.sub_visibility_saved_before_overlay then
 			return

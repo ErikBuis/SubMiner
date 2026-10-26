@@ -1817,6 +1817,35 @@ do
 		option_overrides = {
 			binary_path = binary_path,
 			auto_start = "yes",
+			auto_start_visible_overlay = "yes",
+			socket_path = "/tmp/subminer-socket",
+		},
+		input_ipc_server = "/tmp/subminer-socket",
+		media_title = "Random Movie",
+		files = {
+			[binary_path] = true,
+		},
+	})
+	assert_true(recorded ~= nil, "plugin failed to load for app restore notice scenario: " .. tostring(err))
+	fire_event(recorded, "start-file")
+	recorded.script_messages["subminer-sub-visibility-restored"]()
+	local last_set = recorded.property_sets[#recorded.property_sets]
+	assert_true(
+		last_set.name == "sub-visibility" and last_set.value == false,
+		"the app quitting before its capture should still end the loading fallback"
+	)
+	assert_true(
+		recorded.property_deletes[1] == "user-data/subminer/sub-visibility-before-overlay",
+		"ending the fallback on the app's notice should drop the saved visibility"
+	)
+end
+
+do
+	local recorded, err = run_plugin_scenario({
+		process_list = "",
+		option_overrides = {
+			binary_path = binary_path,
+			auto_start = "yes",
 			auto_start_visible_overlay = "no",
 			overlay_loading_osd = "yes",
 			socket_path = "/tmp/subminer-socket",
