@@ -102,6 +102,13 @@ export function buildIntegrationConfigOptionRegistry(
       description: 'Card field that receives the source sentence text.',
     },
     {
+      path: 'ankiConnect.fields.sentenceFurigana',
+      kind: 'string',
+      defaultValue: defaultConfig.ankiConnect.fields.sentenceFurigana,
+      description:
+        'Card field that receives the sentence with furigana, regenerated when SubMiner changes the sentence.',
+    },
+    {
       path: 'ankiConnect.fields.miscInfo',
       kind: 'string',
       defaultValue: defaultConfig.ankiConnect.fields.miscInfo,

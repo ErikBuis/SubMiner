@@ -90,6 +90,7 @@ If cards are not getting filled:
 | `fields.wordAudio`           | Read only: Yomitan's word audio, used to time animated images (see below)                                               |
 | `fields.image`               | Screenshot or animated clip                                                                                             |
 | `fields.sentence`            | Subtitle text                                                                                                           |
+| `fields.sentenceFurigana`    | Sentence with furigana, regenerated when SubMiner changes the sentence                                                  |
 | `fields.miscInfo`            | Text from `ankiConnect.metadata.pattern`                                                                                |
 | `fields.wordCardTranslation` | Word cards only: the secondary subtitle translating the mined sentence. Empty by default (no translation on word cards) |
 | `fields.definition`          | Read only: the dictionary meaning, shown in the timing review                                                           |

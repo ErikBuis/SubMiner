@@ -32,6 +32,7 @@ export const INTEGRATIONS_DEFAULT_CONFIG: Pick<
       wordAudio: 'ExpressionAudio',
       image: 'Picture',
       sentence: 'Sentence',
+      sentenceFurigana: 'SentenceFurigana',
       miscInfo: 'MiscInfo',
       translation: 'SelectionText',
       wordCardTranslation: '',

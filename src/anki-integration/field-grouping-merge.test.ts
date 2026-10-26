@@ -577,3 +577,30 @@ test('computeFieldGroupingMergedFields keeps independent groups for identical se
   );
   assert.equal('ExpressionAudio' in merged, false);
 });
+
+test('Kiku merge applies furigana rules to a configured sentenceFurigana field', async () => {
+  const { collaborator } = createCollaborator({
+    config: { fields: { sentenceFurigana: 'Furigana' } },
+  });
+
+  const grouped = await collaborator.computeFieldGroupingMergedFields(
+    300,
+    200,
+    makeNote(300, { Furigana: 'original furigana' }),
+    makeNote(200, { Furigana: 'new furigana' }),
+    false,
+  );
+  assert.equal(
+    grouped.Furigana,
+    '<span data-group-id="300">original furigana</span><span data-group-id="200">new furigana</span>',
+  );
+
+  const cleared = await collaborator.computeFieldGroupingMergedFields(
+    300,
+    200,
+    makeNote(300, { Furigana: 'original furigana' }),
+    makeNote(200, { Furigana: '' }),
+    false,
+  );
+  assert.equal(cleared.Furigana, '');
+});

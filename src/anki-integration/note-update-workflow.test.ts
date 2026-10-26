@@ -1147,3 +1147,28 @@ test('NoteUpdateWorkflow review shows the word as plain text', async () => {
 
   assert.equal(reviewRequests[0]?.card?.word, '貴様');
 });
+
+test('NoteUpdateWorkflow regenerates furigana into the configured sentenceFurigana field', async () => {
+  const harness = createWorkflowHarness();
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Kanji', sentenceFurigana: 'Furigana' },
+    media: {},
+    behavior: {},
+  });
+  harness.deps.client.notesInfo = async () => [
+    {
+      noteId: 42,
+      fields: {
+        Expression: { value: '猫' },
+        Kanji: { value: '' },
+        Furigana: { value: '' },
+        SentenceFurigana: { value: '' },
+      },
+    },
+  ];
+  harness.deps.getCurrentSubtitleText = () => '猫を見た。';
+  harness.deps.generateSentenceFurigana = async () => ' 猫[ねこ]を 見[み]た。';
+  await harness.workflow.execute(42);
+  assert.equal(harness.updates[0]?.fields.Furigana, ' 猫[ねこ]を 見[み]た。');
+  assert.equal(harness.updates[0]?.fields.SentenceFurigana, undefined);
+});
