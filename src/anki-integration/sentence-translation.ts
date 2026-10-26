@@ -51,17 +51,26 @@ function mainScriptFamily(text: string): string | null {
 /**
  * A secondary track in the primary language is no translation: its cue is part of the
  * mined text (cut differently), or holds the mined text plus more of the same language.
- * A bilingual cue that adds a line in another language still translates.
+ * A bilingual cue that adds a line in another script still translates, also when only
+ * part of its source line was mined.
  */
-function isSourceLanguageText(translation: string, minedText: string): boolean {
+function isSourceLanguageText(translationLines: readonly string[], minedText: string): boolean {
   const compact = (text: string) => text.normalize('NFKC').replace(/\s+/gu, '');
-  const candidate = compact(translation);
+  const lines = translationLines
+    .flatMap((text) => text.split(/\r?\n|\\N/))
+    .map(compact)
+    .filter(Boolean);
+  const candidate = lines.join('');
   const mined = compact(minedText);
   if (!mined) return false;
   if (mined.includes(candidate)) return true;
   if (!candidate.includes(mined)) return false;
-  const rest = candidate.split(mined).join('');
-  return mainScriptFamily(rest) === null || mainScriptFamily(rest) === mainScriptFamily(mined);
+  const minedFamily = mainScriptFamily(mined);
+  return !lines.some((line) => {
+    if (mined.includes(line)) return false;
+    const family = mainScriptFamily(line.split(mined).join(''));
+    return family !== null && family !== minedFamily;
+  });
 }
 
 /**
@@ -88,7 +97,15 @@ export function resolveTimedSentenceTranslation(input: {
   const best = aligned ? null : findBestOverlappingLine(secondary, input);
   const translationLines = aligned?.translationLines ?? (best ? [best] : []);
   const translation = joinSubtitleLineTexts(translationLines);
-  if (!translation || isSourceLanguageText(translation, input.text)) return null;
+  if (
+    !translation ||
+    isSourceLanguageText(
+      translationLines.map((line) => line.text),
+      input.text,
+    )
+  ) {
+    return null;
+  }
   return {
     translation,
     translationLines: translationLines.map(({ text, startTime, endTime }) => ({

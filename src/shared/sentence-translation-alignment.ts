@@ -206,48 +206,61 @@ export function joinSubtitleLineTexts(lines: readonly TimedSubtitleText[]): stri
   return taken.map((line) => line.text).join(' ');
 }
 
+function coTimed(
+  a: Pick<TimedSubtitleText, 'startTime' | 'endTime'>,
+  b: Pick<TimedSubtitleText, 'startTime' | 'endTime'>,
+): boolean {
+  return (
+    Math.abs(a.startTime - b.startTime) < CO_TIMED_EPSILON_SECONDS &&
+    Math.abs(a.endTime - b.endTime) < CO_TIMED_EPSILON_SECONDS
+  );
+}
+
 /**
- * Secondary lines translating the primary lines at `indexes` of an already grouped track.
- * A line no secondary event claimed still takes the secondary event it overlaps most.
+ * The secondary line each primary line of an already grouped track translates to, by
+ * primary index. A line no secondary event claimed takes the secondary event it overlaps
+ * most. Consecutive lines of a sentence share their translation. The whole track is
+ * resolved at once so two speakers sharing one interval each get their own translation,
+ * whichever of them is mined.
  */
+export function assignGroupTranslations(
+  primary: readonly TimedSubtitleText[],
+  secondary: readonly TimedSubtitleText[],
+  groups: readonly SentenceTranslationGroup[],
+): Map<number, TimedSubtitleText> {
+  const assigned = new Map<number, TimedSubtitleText>();
+  const takenBy = new Map<TimedSubtitleText, TimedSubtitleText>();
+  primary.forEach((line, index) => {
+    const translation = groups[index]?.secondary ?? findBestOverlappingLine(secondary, line);
+    if (!translation) return;
+    const owner = takenBy.get(translation);
+    // Two speakers can share one interval in both tracks: a line co-timed with the one
+    // that took this translation gets the co-timed secondary cue.
+    const partner =
+      owner && coTimed(line, owner)
+        ? secondary.find((candidate) => !takenBy.has(candidate) && coTimed(candidate, translation))
+        : undefined;
+    const own = partner ?? translation;
+    if (!takenBy.has(own)) takenBy.set(own, line);
+    assigned.set(index, own);
+  });
+  return assigned;
+}
+
+/** Secondary lines translating the primary lines at `indexes` of an already grouped track. */
 export function collectGroupTranslationLines(
   primary: readonly TimedSubtitleText[],
   secondary: readonly TimedSubtitleText[],
   groups: readonly SentenceTranslationGroup[],
   indexes: readonly number[],
 ): TimedSubtitleText[] {
-  const coTimed = (
-    a: Pick<TimedSubtitleText, 'startTime' | 'endTime'>,
-    b: Pick<TimedSubtitleText, 'startTime' | 'endTime'>,
-  ) =>
-    Math.abs(a.startTime - b.startTime) < CO_TIMED_EPSILON_SECONDS &&
-    Math.abs(a.endTime - b.endTime) < CO_TIMED_EPSILON_SECONDS;
-  const result: TimedSubtitleText[] = [];
-  const takenBy = new Map<TimedSubtitleText, TimedSubtitleText>();
+  const assigned = assignGroupTranslations(primary, secondary, groups);
+  const lines = new Set<TimedSubtitleText>();
   for (const index of indexes) {
-    const line = primary[index];
-    if (!line) continue;
-    const translation = groups[index]?.secondary ?? findBestOverlappingLine(secondary, line);
-    if (!translation) continue;
-    const owner = takenBy.get(translation);
-    if (!owner) {
-      result.push(translation);
-      takenBy.set(translation, line);
-      continue;
-    }
-    // Two speakers can share one interval in both tracks: a line co-timed with the one
-    // that took this translation gets the co-timed secondary cue. Consecutive lines of a
-    // sentence just share theirs.
-    if (!coTimed(line, owner)) continue;
-    const partner = secondary.find(
-      (candidate) => !takenBy.has(candidate) && coTimed(candidate, translation),
-    );
-    if (partner) {
-      result.push(partner);
-      takenBy.set(partner, line);
-    }
+    const translation = assigned.get(index);
+    if (translation) lines.add(translation);
   }
-  return result.sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
+  return [...lines].sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
 }
 
 function compactText(text: string): string {

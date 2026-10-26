@@ -502,6 +502,23 @@ test('createSentenceCard keeps a bilingual cue in a script it does not list', as
   assert.equal(addedFields[0]?.Translation, '今日は היום');
 });
 
+test('createSentenceCard keeps a bilingual cue when only part of its source line was mined', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [
+        { text: '今日は', startTime: 1, endTime: 2 },
+        { text: 'いい天気ですね', startTime: 2, endTime: 3 },
+      ],
+      secondary: [
+        { text: '今日はいい天気ですね\nNice weather today, huh?', startTime: 1, endTime: 3 },
+      ],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('いい天気ですね', 2, 3), true);
+  assert.equal(addedFields[0]?.Translation, '今日はいい天気ですね Nice weather today, huh?');
+});
+
 test('createSentenceCard translates every combined line even when the media is capped', async () => {
   const { service, addedFields } = createTimedTranslationService({
     maxMediaDuration: 30,

@@ -180,3 +180,14 @@ test('consecutive lines sharing a translation do not take a co-timed sign', () =
   });
   assert.equal(aligned?.translation, 'Nice weather today.');
 });
+
+test('mining one of two co-timed speakers keeps its own translation', () => {
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('－行くぞ', 1, 3), line('－待って', 1, 3)],
+    secondaryLines: [line("- Let's go.", 1, 3), line('- Wait.', 1, 3)],
+    startTime: 1,
+    endTime: 3,
+    sentenceText: '－待って',
+  });
+  assert.equal(aligned?.translation, '- Wait.');
+});
