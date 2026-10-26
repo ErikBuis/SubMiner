@@ -10,6 +10,7 @@ import type { ModalStateReader, RendererContext } from '../context';
 import { createModalFocusGuard } from './modal-focus-guard';
 import {
   findBestOverlappingLine,
+  isSourceLanguageText,
   formatCardTranslation,
   joinSubtitleLineTexts,
 } from '../../shared/sentence-translation-alignment';
@@ -148,7 +149,7 @@ export function buildMediaTimingReviewTranslation(options: {
     const best = assigned ? null : findBestOverlappingLine(options.translationLines, line);
     const candidates = assigned?.lines ?? (best ? [best] : []);
     // A secondary track in the primary language is no translation, as in main.
-    return candidates.filter((candidate) => compactText(candidate.text) !== own);
+    return candidates.filter((candidate) => !isSourceLanguageText([candidate.text], line.text));
   };
   const before = selection.previous.flatMap(addedTranslation);
   const after = selection.next.flatMap(addedTranslation);

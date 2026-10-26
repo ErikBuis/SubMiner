@@ -26,9 +26,11 @@ import { resolveWordCardKind } from './note-field-utils';
 import type { PendingYoutubeMediaUpdate } from './pending-youtube-media';
 import { resolveMpvVolumeScale } from './mpv-volume';
 import {
+  ankiFieldHtmlToPlainText,
   buildReviewTranslationContext,
   plainTextToAnkiFieldHtml,
   resolveTimedSentenceTranslation,
+  toReviewLine,
   widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
 } from './sentence-translation';
@@ -654,10 +656,12 @@ export class CardCreationService {
               tracks,
             })
           : null;
-        // The line on screen only stands in when there is no parsed secondary track.
-        const reviewTranslationText =
+        // The line on screen only stands in when there is no parsed secondary track. The
+        // review edits plain text, so cue markup is decoded for it.
+        const reviewTranslationText = ankiFieldHtmlToPlainText(
           reviewTranslation?.translation ??
-          (tracks && tracks.secondary.length > 0 ? '' : (secondarySubText ?? ''));
+            (tracks && tracks.secondary.length > 0 ? '' : (secondarySubText ?? '')),
+        );
         const reviewContext = reviewMediaTiming
           ? buildReviewTranslationContext({ startTime, endTime: subtitleEndTime, tracks })
           : null;
@@ -673,7 +677,7 @@ export class CardCreationService {
                     ? formatCardTranslation(reviewTranslationText)
                     : reviewTranslationText,
                   lines: reviewContext?.lines ?? [],
-                  currentLines: reviewTranslation?.translationLines ?? [],
+                  currentLines: (reviewTranslation?.translationLines ?? []).map(toReviewLine),
                   lineTranslations: reviewContext?.lineTranslations ?? [],
                   format: formatTranslation,
                 },

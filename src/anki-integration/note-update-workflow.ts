@@ -15,6 +15,7 @@ import {
   plainTextToAnkiFieldHtml,
   buildReviewTranslationContext,
   resolveTimedSentenceTranslation,
+  toReviewLine,
   widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
 } from './sentence-translation';
@@ -201,12 +202,14 @@ export class NoteUpdateWorkflow {
       ...context,
       tracks: options.tracks,
     });
-    // The line on screen only stands in when there is no parsed secondary track.
-    const text =
+    // The line on screen only stands in when there is no parsed secondary track. The
+    // review edits plain text, so cue markup is decoded for it.
+    const text = ankiFieldHtmlToPlainText(
       timedTranslation?.translation ??
-      (options.tracks && options.tracks.secondary.length > 0
-        ? ''
-        : (this.deps.getLiveSecondarySubtitleFor?.(context.text) ?? ''));
+        (options.tracks && options.tracks.secondary.length > 0
+          ? ''
+          : (this.deps.getLiveSecondarySubtitleFor?.(context.text) ?? '')),
+    );
     const reviewContext = buildReviewTranslationContext({ ...context, tracks: options.tracks });
     return {
       translation: {
@@ -216,7 +219,7 @@ export class NoteUpdateWorkflow {
             : text
           : ankiFieldHtmlToPlainText(options.existing),
         lines: reviewContext.lines,
-        currentLines: timedTranslation?.translationLines ?? [],
+        currentLines: (timedTranslation?.translationLines ?? []).map(toReviewLine),
         lineTranslations: reviewContext.lineTranslations,
         format: options.format,
         ...(text ? {} : { fromField: true }),
@@ -401,7 +404,9 @@ export class NoteUpdateWorkflow {
 
       this.deps.appendKnownWordsFromNoteInfo(noteInfo);
 
-      let translatedText: string | undefined;
+      // A translation from the review belongs to the reviewed sentence.
+      let translatedText: string | undefined =
+        reviewedTranslation !== undefined ? mediaTimingContext?.text : undefined;
       let translation: string | undefined;
       const minedText = mediaTimingContext?.text ?? this.deps.getCurrentSubtitleText();
       if (translationFieldName && minedText) {

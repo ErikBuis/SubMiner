@@ -952,6 +952,44 @@ test('NoteUpdateWorkflow shows the whole card in the review and saves its edited
   assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'My own translation.');
 });
 
+test('NoteUpdateWorkflow keeps the captured sentence for an edited translation', async () => {
+  const harness = createWordCardTranslationHarness();
+  // No secondary line matches, so the card gets no automatic translation.
+  harness.deps.getSubtitleTracksForTranslation = () => ({
+    primary: [{ text: '野菜もいっぱい入ってるよ', startTime: 36.4, endTime: 39.2 }],
+    secondary: [{ text: 'Unrelated.', startTime: 50, endTime: 52 }],
+  });
+  harness.deps.reviewMediaTiming = async () => ({
+    action: 'use-original',
+    translation: 'My own translation.',
+  });
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.Sentence, '野菜もいっぱい入ってるよ');
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'My own translation.');
+});
+
+test('NoteUpdateWorkflow review decodes cue markup in the translation', async () => {
+  const harness = createWordCardTranslationHarness();
+  const reviewRequests: Array<Pick<MediaTimingReviewRequest, 'card'>> = [];
+  harness.deps.getSubtitleTracksForTranslation = () => ({
+    primary: [{ text: '野菜もいっぱい入ってるよ', startTime: 36.4, endTime: 39.2 }],
+    secondary: [{ text: 'Tom &amp; Jerry.', startTime: 36.3, endTime: 39.4 }],
+  });
+  harness.deps.reviewMediaTiming = async (request) => {
+    reviewRequests.push({ card: request.card });
+    return { action: 'use-original' };
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.equal(reviewRequests[0]?.card?.translation?.text, 'Tom & Jerry.');
+  assert.equal(reviewRequests[0]?.card?.translation?.currentLines[0]?.text, 'Tom & Jerry.');
+  // Left untouched, the card keeps the cue as it was.
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'Tom &amp; Jerry.');
+});
+
 test('NoteUpdateWorkflow review shows no translation field without wordCardTranslation', async () => {
   const harness = createWordCardTranslationHarness('');
   const reviewRequests: Array<Pick<MediaTimingReviewRequest, 'card'>> = [];
