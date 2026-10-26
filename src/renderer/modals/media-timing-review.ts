@@ -684,7 +684,11 @@ export function createMediaTimingReviewModal(
     const value = ctx.dom.mediaTimingReviewTranslation.value.replace(/\s+/g, ' ').trim();
     // The preview can span lines (a kept multi-sense field); compare it the same way.
     const initialValue = initial.text.replace(/\s+/g, ' ').trim();
-    const followedChange = includeFollowed && value !== initialValue;
+    // With lines added, main would resolve the translation anew (and lose one taken from
+    // the screen), so the displayed one goes along unless it is the field's own content.
+    const linesAdded = previousCount > 0 || nextCount > 0;
+    const followedChange =
+      includeFollowed && (value !== initialValue || (linesAdded && !initial.fromField));
     return translationEdited || followedChange ? { translation: value } : {};
   }
 

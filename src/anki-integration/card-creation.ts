@@ -27,6 +27,7 @@ import type { PendingYoutubeMediaUpdate } from './pending-youtube-media';
 import { resolveMpvVolumeScale } from './mpv-volume';
 import {
   buildReviewTranslationContext,
+  plainTextToAnkiFieldHtml,
   resolveTimedSentenceTranslation,
   widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
@@ -684,8 +685,10 @@ export class CardCreationService {
           return false;
         }
         // A translation from the review is final, even when cleared: no AI fallback.
-        const reviewedTranslation =
+        const typedTranslation =
           'translation' in timingDecision ? timingDecision.translation?.trim() : undefined;
+        const reviewedTranslation =
+          typedTranslation === undefined ? undefined : plainTextToAnkiFieldHtml(typedTranslation);
         const skipMedia = timingDecision.action === 'skip-media';
         const exactReviewedRange = timingDecision.action === 'confirm';
         let sentenceStartTime = subtitleStartTime;

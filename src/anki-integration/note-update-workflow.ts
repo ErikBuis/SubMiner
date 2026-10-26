@@ -12,6 +12,7 @@ import { resolveWordCardKind } from './note-field-utils';
 import { STATS_MINING_TAG } from '../shared/anki-source';
 import {
   ankiFieldHtmlToPlainText,
+  plainTextToAnkiFieldHtml,
   buildReviewTranslationContext,
   resolveTimedSentenceTranslation,
   widenSentenceToTranslation,
@@ -218,6 +219,7 @@ export class NoteUpdateWorkflow {
         currentLines: timedTranslation?.translationLines ?? [],
         lineTranslations: reviewContext.lineTranslations,
         format: options.format,
+        ...(text ? {} : { fromField: true }),
       },
     };
   }
@@ -354,7 +356,9 @@ export class NoteUpdateWorkflow {
               },
             })
           : ({ action: 'use-original' } as const);
-        if ('translation' in timingDecision) reviewedTranslation = timingDecision.translation;
+        if ('translation' in timingDecision && timingDecision.translation !== undefined) {
+          reviewedTranslation = plainTextToAnkiFieldHtml(timingDecision.translation);
+        }
         if (timingDecision.action === 'discard') {
           try {
             await this.deps.client.deleteNotes([noteId]);

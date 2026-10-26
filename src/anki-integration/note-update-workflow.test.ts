@@ -991,6 +991,7 @@ test('NoteUpdateWorkflow review shows the translation the card already has', asy
   await harness.workflow.execute(42);
 
   assert.equal(reviewRequests[0]?.card?.translation?.text, 'Kept as is.');
+  assert.equal(reviewRequests[0]?.card?.translation?.fromField, true);
   assert.equal(harness.updates[0]?.fields.SentenceTranslation, undefined);
 });
 

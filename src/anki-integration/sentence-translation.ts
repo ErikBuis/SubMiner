@@ -225,3 +225,8 @@ export function ankiFieldHtmlToPlainText(html: string): string {
     .filter(Boolean)
     .join('\n');
 }
+
+/** A plain-text value (typed in the review) written into an Anki HTML field. */
+export function plainTextToAnkiFieldHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}

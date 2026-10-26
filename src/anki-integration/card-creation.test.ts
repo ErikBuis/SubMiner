@@ -734,4 +734,8 @@ test('createSentenceCard previews the translation in the review and saves the ed
   reviewedTranslation = '';
   assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
   assert.equal(addedFields[2]?.Translation, undefined);
+  // Typed text is plain text, so it is escaped for the HTML field.
+  reviewedTranslation = 'Type <name> & go.';
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(addedFields[3]?.Translation, 'Type &lt;name&gt; &amp; go.');
 });

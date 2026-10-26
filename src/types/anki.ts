@@ -43,6 +43,8 @@ export interface MediaTimingReviewCardPreview {
     lineTranslations: MediaTimingReviewLineTranslation[];
     /** Apply the card translation formatting when following added or removed lines. */
     format: boolean;
+    /** `text` is what the field already holds and keeps unless the review changes it. */
+    fromField?: boolean;
   };
 }
 
