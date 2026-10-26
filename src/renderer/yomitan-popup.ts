@@ -59,6 +59,30 @@ export function registerYomitanLookupListener(
   };
 }
 
+/**
+ * Keeps Yomitan's hover scan out of `container`. Yomitan scans from capture
+ * listeners on the window, so hover events are stopped before they reach it.
+ * Events with a button held pass: Yomitan skips them and drags depend on them.
+ * Register before Yomitan hooks its listeners; the first listener wins.
+ */
+export function shieldYomitanHoverScan(
+  container: Pick<Node, 'contains'>,
+  isActive: () => boolean,
+  target: EventTarget = window,
+): () => void {
+  const handler = (event: Event): void => {
+    if (!isActive() || (event as PointerEvent).buttons !== 0) return;
+    const eventTarget = event.target as Node | null;
+    if (typeof eventTarget?.nodeType !== 'number' || !container.contains(eventTarget)) return;
+    event.stopImmediatePropagation();
+  };
+  const events = ['pointerover', 'pointermove'];
+  for (const type of events) target.addEventListener(type, handler, true);
+  return () => {
+    for (const type of events) target.removeEventListener(type, handler, true);
+  };
+}
+
 export function isYomitanPopupIframe(element: Element | null): boolean {
   if (!element) return false;
   if (element.tagName.toUpperCase() !== 'IFRAME') return false;

@@ -8,6 +8,7 @@ import {
   isYomitanPopupIframe,
   isYomitanPopupVisible,
   registerDictionaryPopupVisibilityListener,
+  shieldYomitanHoverScan,
 } from './yomitan-popup.js';
 
 type FakeStyle = Pick<CSSStyleDeclaration, 'visibility' | 'display' | 'opacity'>;
@@ -157,4 +158,44 @@ test('isYomitanPopupVisible falls back to querySelector when querySelectorAll is
   } as ParentNode;
 
   assert.equal(isYomitanPopupVisible(root), true);
+});
+
+test('hover scan shield stops idle pointer hover inside the container before the scanner', () => {
+  const root = new EventTarget();
+  const inside = { nodeType: 1 };
+  const outside = { nodeType: 1 };
+  const container = { contains: (node: unknown) => node === inside } as unknown as Node;
+  let active = true;
+  const scanned: string[] = [];
+  const dispose = shieldYomitanHoverScan(container, () => active, root);
+  // Registered after the shield, like Yomitan's scanner hooking up once its options load.
+  for (const type of ['pointerover', 'pointermove']) {
+    root.addEventListener(type, (event) => scanned.push(`${type}:${String(event.target)}`), true);
+  }
+
+  const fire = (type: string, origin: unknown, buttons = 0) => {
+    const event = new Event(type);
+    Object.defineProperty(event, 'buttons', { value: buttons });
+    Object.defineProperty(event, 'target', { value: origin });
+    root.dispatchEvent(event);
+  };
+
+  fire('pointermove', inside);
+  fire('pointerover', inside);
+  assert.deepEqual(scanned, [], 'idle hover inside the container is not scanned');
+
+  fire('pointermove', inside, 1);
+  assert.equal(scanned.length, 1, 'drags still reach other listeners');
+
+  fire('pointermove', outside);
+  assert.equal(scanned.length, 2, 'hover outside the container is untouched');
+
+  active = false;
+  fire('pointermove', inside);
+  assert.equal(scanned.length, 3, 'an inactive shield lets everything through');
+
+  active = true;
+  dispose();
+  fire('pointermove', inside);
+  assert.equal(scanned.length, 4, 'disposing removes the shield');
 });

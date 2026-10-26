@@ -299,6 +299,7 @@ const playlistBrowserModal = createPlaylistBrowserModal(ctx, {
 const mediaTimingReviewModal = createMediaTimingReviewModal(ctx, {
   modalStateReader: { isAnyModalOpen },
   syncSettingsModalSubtitleSuppression,
+  closeLookupWindow: () => keyboardHandlers.closeLookupWindow(),
 });
 const keyboardHandlers = createKeyboardHandlers(ctx, {
   handleRuntimeOptionsKeydown: runtimeOptionsModal.handleRuntimeOptionsKeydown,

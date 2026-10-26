@@ -7,6 +7,7 @@ import type {
 } from '../../types/anki';
 import type { ModalStateReader, RendererContext } from '../context';
 import { createModalFocusGuard } from './modal-focus-guard';
+import { shieldYomitanHoverScan } from '../yomitan-popup.js';
 
 const MINIMUM_CLIP_SECONDS = 0.1;
 const FINE_ADJUST_SECONDS = 0.1;
@@ -217,6 +218,7 @@ export function createMediaTimingReviewModal(
   options: {
     modalStateReader: Pick<ModalStateReader, 'isAnyModalOpen'>;
     syncSettingsModalSubtitleSuppression: () => void;
+    closeLookupWindow: () => boolean;
   },
 ) {
   let payload: MediaTimingReviewOpenPayload | null = null;
@@ -753,6 +755,7 @@ export function createMediaTimingReviewModal(
     options.syncSettingsModalSubtitleSuppression();
     payload = null;
     framePicker.close();
+    options.closeLookupWindow();
     if (!options.modalStateReader.isAnyModalOpen()) {
       ctx.dom.overlay.classList.remove('interactive');
       if (ctx.platform.shouldToggleMouseIgnore) {
@@ -857,6 +860,7 @@ export function createMediaTimingReviewModal(
   function openMediaTimingReviewModal(nextPayload: MediaTimingReviewOpenPayload): void {
     previewRequest.invalidate();
     cancelDrag();
+    options.closeLookupWindow();
     payload = {
       ...nextPayload,
       previousLines: nextPayload.previousLines ?? [],
@@ -963,6 +967,10 @@ export function createMediaTimingReviewModal(
   }
 
   function wireDomEvents(): void {
+    shieldYomitanHoverScan(
+      ctx.dom.mediaTimingReviewModal,
+      () => ctx.state.mediaTimingReviewModalOpen,
+    );
     ctx.dom.mediaTimingReviewFrameSlider.addEventListener('input', () => {
       if (!resolveInFlight) framePicker.choose(Number(ctx.dom.mediaTimingReviewFrameSlider.value));
     });
