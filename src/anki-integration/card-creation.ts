@@ -499,7 +499,9 @@ export class CardCreationService {
           this.deps.showStatusNotification('Card deleted.');
           return;
         }
-        const skipMedia = timingDecision.action === 'skip-media';
+        const skipMedia =
+          timingDecision.action === 'skip-media' ||
+          (timingDecision.action === 'confirm' && timingDecision.skipMedia === true);
         const exactReviewedRange = timingDecision.action === 'confirm';
         let sentenceText = mpvClient.currentSubText;
         if (timingDecision.action === 'confirm') {
@@ -698,7 +700,9 @@ export class CardCreationService {
           'translation' in timingDecision ? timingDecision.translation?.trim() : undefined;
         const reviewedTranslation =
           typedTranslation === undefined ? undefined : plainTextToAnkiFieldHtml(typedTranslation);
-        const skipMedia = timingDecision.action === 'skip-media';
+        const skipMedia =
+          timingDecision.action === 'skip-media' ||
+          (timingDecision.action === 'confirm' && timingDecision.skipMedia === true);
         const exactReviewedRange = timingDecision.action === 'confirm';
         let sentenceStartTime = subtitleStartTime;
         let sentenceEndTime = subtitleEndTime;

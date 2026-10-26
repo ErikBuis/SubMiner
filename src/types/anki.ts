@@ -76,6 +76,8 @@ export type MediaTimingReviewDecision =
       screenshotTime?: number;
       /** The reviewed card translation, when the card gets one. */
       translation?: string;
+      /** Keep the reviewed sentence and translation but add no audio or image. */
+      skipMedia?: boolean;
     }
   | { action: 'use-original'; translation?: string }
   | { action: 'skip-media'; translation?: string }
