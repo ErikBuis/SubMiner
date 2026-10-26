@@ -18,16 +18,38 @@ export interface TimedSentenceTranslation {
   translationLines: TimedSubtitleText[];
 }
 
-const SCRIPTS = ['Latin', 'Han', 'Hiragana', 'Katakana', 'Hangul', 'Cyrillic', 'Greek', 'Thai'];
+/** Writing systems, with the Japanese scripts as one. */
+const SCRIPT_FAMILIES: Array<[string, RegExp]> = [
+  ['cjk', /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/gu],
+  ['hangul', /\p{Script=Hangul}/gu],
+  ['cyrillic', /\p{Script=Cyrillic}/gu],
+  ['greek', /\p{Script=Greek}/gu],
+  ['thai', /\p{Script=Thai}/gu],
+  ['arabic', /\p{Script=Arabic}/gu],
+  ['latin', /\p{Script=Latin}/gu],
+];
 
-function scriptsOf(text: string): Set<string> {
-  return new Set(SCRIPTS.filter((script) => new RegExp(`\\p{Script=${script}}`, 'u').test(text)));
+/**
+ * The writing system a text is mostly in. Latin only wins without any other script, since
+ * Latin letters in other languages are loanwords and acronyms ("DNAって何？").
+ */
+function mainScriptFamily(text: string): string | null {
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [family, pattern] of SCRIPT_FAMILIES) {
+    const count = text.match(pattern)?.length ?? 0;
+    if (family === 'latin' ? best === null && count > 0 : count > bestCount) {
+      best = family;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 /**
  * A secondary track in the primary language is no translation: its cue is part of the
- * mined text (cut differently), or holds the mined text plus only more of the same
- * language. A bilingual cue that adds a line in another script still translates.
+ * mined text (cut differently), or holds the mined text plus more of the same language.
+ * A bilingual cue that adds a line in another language still translates.
  */
 function isSourceLanguageText(translation: string, minedText: string): boolean {
   const compact = (text: string) => text.normalize('NFKC').replace(/\s+/gu, '');
@@ -36,9 +58,8 @@ function isSourceLanguageText(translation: string, minedText: string): boolean {
   if (!mined) return false;
   if (mined.includes(candidate)) return true;
   if (!candidate.includes(mined)) return false;
-  const minedScripts = scriptsOf(mined);
   const rest = candidate.split(mined).join('');
-  return ![...scriptsOf(rest)].some((script) => !minedScripts.has(script));
+  return mainScriptFamily(rest) === null || mainScriptFamily(rest) === mainScriptFamily(mined);
 }
 
 /**

@@ -35,6 +35,7 @@ export interface AlignedSentenceTranslation {
 /** Fraction of a primary line that must fall inside a secondary event to join its sentence. */
 export const DEFAULT_SENTENCE_GROUP_MIN_OVERLAP = 0.6;
 /** Fraction of a primary line that must fall inside the mined range to count as mined. */
+const CO_TIMED_EPSILON_SECONDS = 0.01;
 const SCORE_EPSILON = 1e-9;
 const MINED_LINE_MIN_OVERLAP = 0.5;
 const MIN_DURATION_SECONDS = 0.001;
@@ -219,10 +220,20 @@ export function collectGroupTranslationLines(
   for (const index of indexes) {
     const line = primary[index];
     if (!line) continue;
-    const translation = groups[index]?.secondary ?? findBestOverlappingLine(secondary, line);
-    if (translation && !result.includes(translation)) {
-      result.push(translation);
+    let translation = groups[index]?.secondary ?? findBestOverlappingLine(secondary, line);
+    // Two speakers can share one interval in both tracks; when another mined line already
+    // took this translation, the co-timed one is this line's.
+    if (translation && result.includes(translation)) {
+      const taken = translation;
+      translation =
+        secondary.find(
+          (candidate) =>
+            !result.includes(candidate) &&
+            Math.abs(candidate.startTime - taken.startTime) < CO_TIMED_EPSILON_SECONDS &&
+            Math.abs(candidate.endTime - taken.endTime) < CO_TIMED_EPSILON_SECONDS,
+        ) ?? null;
     }
+    if (translation) result.push(translation);
   }
   return result.sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
 }

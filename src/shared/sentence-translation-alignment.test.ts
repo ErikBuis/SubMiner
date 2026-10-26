@@ -160,3 +160,13 @@ test('a slightly offset dialogue translation beats a sign covering the line', ()
   });
   assert.equal(aligned?.translation, 'One.');
 });
+
+test('two speakers sharing an interval keep both translations', () => {
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('－行くぞ', 1, 3), line('－待って', 1, 3)],
+    secondaryLines: [line("- Let's go.", 1, 3), line('- Wait.', 1, 3)],
+    startTime: 1,
+    endTime: 3,
+  });
+  assert.equal(aligned?.translationLines.length, 2);
+});
