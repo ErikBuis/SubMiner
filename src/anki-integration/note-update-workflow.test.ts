@@ -819,3 +819,16 @@ test('NoteUpdateWorkflow keeps the translation of a line whose clip the review t
 
   assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'I put lots of vegetables in it.');
 });
+
+test('NoteUpdateWorkflow skips the on-screen line when the parsed track has no match', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => ({
+    primary: [{ text: '野菜もいっぱい入ってるよ', startTime: 36.4, endTime: 39.2 }],
+    secondary: [{ text: 'Next line.', startTime: 40, endTime: 42 }],
+  });
+  harness.deps.getLiveSecondarySubtitleFor = () => 'Next line.';
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, undefined);
+});

@@ -243,7 +243,9 @@ export class NoteUpdateWorkflow {
       let skipMedia = false;
       let reviewedSentenceText: string | undefined;
       const noteLabel = hasExpressionText ? expressionText : noteId;
-      const minedRange = mediaTimingContext
+      // The subtitle lines behind the sentence. The reviewed clip is padded or trimmed
+      // audio, so only lines the review adds widen this.
+      let sentenceRange = mediaTimingContext
         ? { startTime: mediaTimingContext.startTime, endTime: mediaTimingContext.endTime }
         : null;
 
@@ -272,6 +274,16 @@ export class NoteUpdateWorkflow {
         }
         if (timingDecision.action === 'confirm') {
           reviewedSentenceText = timingDecision.text?.trim() || undefined;
+          if (
+            sentenceRange &&
+            timingDecision.sentenceStartTime !== undefined &&
+            timingDecision.sentenceEndTime !== undefined
+          ) {
+            sentenceRange = {
+              startTime: Math.min(sentenceRange.startTime, timingDecision.sentenceStartTime),
+              endTime: Math.max(sentenceRange.endTime, timingDecision.sentenceEndTime),
+            };
+          }
           mediaTimingContext = {
             ...mediaTimingContext,
             ...(reviewedSentenceText !== undefined ? { text: reviewedSentenceText } : {}),
@@ -296,19 +308,19 @@ export class NoteUpdateWorkflow {
       let translation: string | undefined;
       const minedText = mediaTimingContext?.text ?? this.deps.getCurrentSubtitleText();
       if (translationFieldName && minedText) {
-        // Trimming the clip in the review leaves the sentence alone, so the mined lines
-        // stay covered; lines the review added widen the range.
-        const timedTranslation =
-          mediaTimingContext && minedRange
-            ? resolveTimedSentenceTranslation({
-                text: minedText,
-                startTime: Math.min(mediaTimingContext.startTime, minedRange.startTime),
-                endTime: Math.max(mediaTimingContext.endTime, minedRange.endTime),
-                tracks: (await this.deps.getSubtitleTracksForTranslation?.()) ?? null,
-              })
-            : null;
+        const tracks = sentenceRange
+          ? ((await this.deps.getSubtitleTracksForTranslation?.()) ?? null)
+          : null;
+        const timedTranslation = sentenceRange
+          ? resolveTimedSentenceTranslation({ text: minedText, ...sentenceRange, tracks })
+          : null;
+        // A parsed secondary track without a match means no translation; the line on
+        // screen only stands in when the tracks are unavailable.
         translation =
-          timedTranslation?.translation ?? this.deps.getLiveSecondarySubtitleFor?.(minedText);
+          timedTranslation?.translation ??
+          (tracks && tracks.secondary.length > 0
+            ? undefined
+            : this.deps.getLiveSecondarySubtitleFor?.(minedText));
         if (translation) translatedText = minedText;
       }
 
