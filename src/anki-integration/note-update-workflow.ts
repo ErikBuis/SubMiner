@@ -190,6 +190,23 @@ export class NoteUpdateWorkflow {
     return meaning ? { meaning } : {};
   }
 
+  /** The note's sentence furigana as plain text, so the review can show readings on hover. */
+  private getReviewSentenceFurigana(noteInfo: NoteUpdateWorkflowNoteInfo): {
+    sentenceFurigana?: string;
+  } {
+    const fieldName = this.deps.resolveConfiguredFieldName(noteInfo, 'SentenceFurigana');
+    // Notes written as HTML ruby read the same as bracket furigana once flattened to it.
+    const sentenceFurigana = fieldName
+      ? ankiFieldHtmlToPlainText(
+          (noteInfo.fields[fieldName]?.value ?? '').replace(
+            /<ruby>(.*?)<rt>(.*?)<\/rt><\/ruby>/gi,
+            ' $1[$2]',
+          ),
+        )
+      : '';
+    return sentenceFurigana ? { sentenceFurigana } : {};
+  }
+
   /** The translation the card would get, so the review can show, follow and edit it. */
   private buildReviewTranslation(
     context: { text: string; startTime: number; endTime: number },
@@ -372,6 +389,7 @@ export class NoteUpdateWorkflow {
               noteId,
               card: {
                 ...(hasExpressionText ? { word: ankiFieldHtmlToPlainText(expressionText) } : {}),
+                ...this.getReviewSentenceFurigana(noteInfo),
                 ...this.getReviewMeaning(noteInfo, config.fields?.definition),
                 ...reviewTranslation,
               },

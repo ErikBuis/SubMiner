@@ -14,6 +14,11 @@ import {
   formatCardTranslation,
   joinSubtitleLineTexts,
 } from '../../shared/sentence-translation-alignment';
+import {
+  parseBracketFurigana,
+  sliceFuriganaForLine,
+  type FuriganaSegment,
+} from '../../shared/furigana-markup';
 
 const MINIMUM_CLIP_SECONDS = 0.1;
 const FINE_ADJUST_SECONDS = 0.1;
@@ -610,9 +615,27 @@ export function createMediaTimingReviewModal(
     });
   }
 
+  /** Writes text with its readings as ruby, which the stylesheet reveals on hover. */
+  function setFuriganaText(target: HTMLElement, segments: FuriganaSegment[]): void {
+    target.replaceChildren(
+      ...segments.map((segment) => {
+        if (!segment.reading) return document.createTextNode(segment.text);
+        const ruby = document.createElement('ruby');
+        ruby.className = 'media-timing-review-ruby';
+        const reading = document.createElement('rt');
+        reading.textContent = segment.reading;
+        ruby.append(document.createTextNode(segment.text), reading);
+        return ruby;
+      }),
+    );
+  }
+
   function renderSentence(): void {
     if (!payload) return;
     const selection = currentLineSelection();
+    const furigana = payload.card?.sentenceFurigana
+      ? parseBracketFurigana(payload.card.sentenceFurigana)
+      : null;
     ctx.dom.mediaTimingReviewText.replaceChildren(
       ...selection.lineTexts.map((text, index) => {
         const line = document.createElement('span');
@@ -620,7 +643,9 @@ export function createMediaTimingReviewModal(
           index === selection.currentLineIndex
             ? 'media-timing-review-line is-current'
             : 'media-timing-review-line';
-        line.textContent = text;
+        const segments = furigana ? sliceFuriganaForLine(furigana, text) : null;
+        if (segments) setFuriganaText(line, segments);
+        else line.textContent = text;
         return line;
       }),
     );
@@ -639,7 +664,7 @@ export function createMediaTimingReviewModal(
     const dom = ctx.dom;
     const word = card?.word?.trim() ?? '';
     const meaning = card?.meaning?.trim() ?? '';
-    dom.mediaTimingReviewWord.textContent = word;
+    setFuriganaText(dom.mediaTimingReviewWord, parseBracketFurigana(word));
     dom.mediaTimingReviewMeaning.textContent = meaning;
     dom.mediaTimingReviewWordRow.classList.toggle('hidden', !word);
     dom.mediaTimingReviewMeaningRow.classList.toggle('hidden', !meaning);

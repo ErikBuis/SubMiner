@@ -29,7 +29,10 @@ export interface MediaTimingReviewRequest {
 
 /** Card fields shown alongside the media timing. Only the translation is editable. */
 export interface MediaTimingReviewCardPreview {
+  /** Plain text; Anki bracket furigana ("遅[おく]れる") is shown as ruby. */
   word?: string;
+  /** The note's sentence furigana, shown above the lines it spells. Plain text, bracket syntax. */
+  sentenceFurigana?: string;
   /** Plain text; one line per sense. */
   meaning?: string;
   /** Set when the card gets a translation; the review then shows an editable field. */
