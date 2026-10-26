@@ -39,6 +39,7 @@ const HOT_RELOAD_EXACT_OR_PREFIX_PATHS = [
   'ankiConnect.fields.wordAudio',
   'ankiConnect.fields.image',
   'ankiConnect.fields.sentence',
+  'ankiConnect.fields.sentenceFurigana',
   'ankiConnect.fields.miscInfo',
   'ankiConnect.isLapis.sentenceCardModel',
   'ankiConnect.isKiku.fieldGrouping',
