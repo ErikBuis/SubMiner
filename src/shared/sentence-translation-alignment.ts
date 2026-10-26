@@ -372,7 +372,8 @@ export function isSourceLanguageText(
   const candidate = lines.join('');
   const mined = comparable(minedText);
   if (!mined) return false;
-  if (mined.includes(candidate)) return true;
+  // Cues each part of the mined text, also when their pieces are not adjacent there.
+  if (lines.every((line) => mined.includes(line))) return true;
   if (!candidate.includes(mined)) return false;
   const minedFamily = mainScriptFamily(mined);
   // Whole lines are compared: what is left of a line after cutting the mined text out can

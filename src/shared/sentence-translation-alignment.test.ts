@@ -5,6 +5,7 @@ import {
   assignLineTranslations,
   buildSentenceTranslationGroups,
   formatCardTranslation,
+  isSourceLanguageText,
   joinSubtitleLineTexts,
   type TimedSubtitleText,
 } from './sentence-translation-alignment';
@@ -344,4 +345,12 @@ test('assignLineTranslations gives co-timed speakers their own translations', ()
     assigned.map(({ translationLines }) => translationLines.map((entry) => entry.text)),
     [["- Let's go."], ['- Wait.'], ['Nice weather today.'], ['Nice weather today.']],
   );
+});
+
+test('isSourceLanguageText rejects source cues that are separate pieces of the sentence', () => {
+  assert.equal(
+    isSourceLanguageText(['今日は', '明日も'], '今日はいい天気ですね 明日も晴れます'),
+    true,
+  );
+  assert.equal(isSourceLanguageText(['Nice weather.', 'Sunny tomorrow.'], '今日は 明日も'), false);
 });

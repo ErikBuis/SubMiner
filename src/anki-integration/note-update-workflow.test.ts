@@ -1079,6 +1079,40 @@ test('NoteUpdateWorkflow review shows the translation the card already has', asy
   assert.equal(harness.updates[0]?.fields.SentenceTranslation, undefined);
 });
 
+test('NoteUpdateWorkflow keeps the field translation the review showed when lines are added', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.client.notesInfo = async () => [
+    {
+      noteId: 42,
+      fields: {
+        Expression: { value: '野菜' },
+        Sentence: { value: '' },
+        SentenceTranslation: { value: 'Kept <b>as is</b>.' },
+      },
+    },
+  ];
+  harness.deps.getSubtitleTracksForTranslation = () => ({
+    primary: [
+      { text: '野菜もいっぱい入ってるよ', startTime: 36.4, endTime: 39.2 },
+      { text: '食べてね', startTime: 39.3, endTime: 41 },
+    ],
+    secondary: [{ text: 'Eat up.', startTime: 39.3, endTime: 41 }],
+  });
+  harness.deps.reviewMediaTiming = async () => ({
+    action: 'confirm',
+    startTime: 36.4,
+    endTime: 41,
+    text: '野菜もいっぱい入ってるよ 食べてね',
+    sentenceStartTime: 36.4,
+    sentenceEndTime: 41,
+  });
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.Sentence, '野菜もいっぱい入ってるよ 食べてね');
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, undefined);
+});
+
 test('NoteUpdateWorkflow review shows the word as plain text', async () => {
   const harness = createWordCardTranslationHarness();
   const reviewRequests: Array<Pick<MediaTimingReviewRequest, 'card'>> = [];

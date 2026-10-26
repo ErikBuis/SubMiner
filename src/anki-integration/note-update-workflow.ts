@@ -345,9 +345,19 @@ export class NoteUpdateWorkflow {
         : null;
       const formatTranslation = config.behavior?.formatTranslation === true;
       let reviewedTranslation: string | undefined;
+      let keepTranslationField = false;
 
       if (mediaTimingContext) {
         const reviewMediaTiming = this.deps.reviewMediaTiming;
+        const reviewTranslation =
+          reviewMediaTiming && translationFieldName
+            ? this.buildReviewTranslation(mediaTimingContext, {
+                tracks: await getTracks(),
+                format: formatTranslation,
+                existing: noteInfo.fields[translationFieldName]?.value ?? '',
+                liveTranslation: getLiveTranslation,
+              })
+            : {};
         const timingDecision = reviewMediaTiming
           ? await reviewMediaTiming({
               kind: 'word',
@@ -358,19 +368,16 @@ export class NoteUpdateWorkflow {
               card: {
                 ...(hasExpressionText ? { word: ankiFieldHtmlToPlainText(expressionText) } : {}),
                 ...this.getReviewMeaning(noteInfo, config.fields?.definition),
-                ...(translationFieldName
-                  ? this.buildReviewTranslation(mediaTimingContext, {
-                      tracks: await getTracks(),
-                      format: formatTranslation,
-                      existing: noteInfo.fields[translationFieldName]?.value ?? '',
-                      liveTranslation: getLiveTranslation,
-                    })
-                  : {}),
+                ...reviewTranslation,
               },
             })
           : ({ action: 'use-original' } as const);
         if ('translation' in timingDecision && timingDecision.translation !== undefined) {
           reviewedTranslation = plainTextToAnkiFieldHtml(timingDecision.translation);
+        } else if (reviewTranslation.translation?.fromField) {
+          // The review showed the field's own translation and nothing replaced it: keep it
+          // as is rather than resolving one the review never showed.
+          keepTranslationField = true;
         }
         if (timingDecision.action === 'discard') {
           try {
@@ -419,7 +426,7 @@ export class NoteUpdateWorkflow {
         reviewedTranslation !== undefined ? mediaTimingContext?.text : undefined;
       let translation: string | undefined;
       const minedText = mediaTimingContext?.text ?? this.deps.getCurrentSubtitleText();
-      if (translationFieldName && minedText) {
+      if (translationFieldName && minedText && !keepTranslationField) {
         const parsedTracks = sentenceRange ? await getTracks() : null;
         const timedTranslation = sentenceRange
           ? resolveTimedSentenceTranslation({
