@@ -1673,10 +1673,15 @@ async function initializeDiscordPresenceService(): Promise<void> {
   await appState.discordPresenceService.start();
   discordPresenceRuntime.publishDiscordPresence();
 }
+// The overlay takes over from mpv's subtitles once its window has painted and is shown.
+// On Windows it stays hidden after painting until the window tracker has found mpv.
 function isVisibleOverlayWindowContentReady(): boolean {
   const overlayWindow = overlayManager.getMainWindow();
   return Boolean(
-    overlayWindow && !overlayWindow.isDestroyed() && isOverlayWindowContentReady(overlayWindow),
+    overlayWindow &&
+    !overlayWindow.isDestroyed() &&
+    isOverlayWindowContentReady(overlayWindow) &&
+    overlayWindow.isVisible(),
   );
 }
 
@@ -5394,6 +5399,11 @@ function createModalWindow(): BrowserWindow {
 
 function createMainWindow(): BrowserWindow {
   const window = createMainWindowHandler();
+  window.on('show', () => {
+    if (overlayManager.getVisibleOverlayVisible()) {
+      void ensureOverlayMpvSubtitlesHidden();
+    }
+  });
   if (process.platform === 'win32') {
     const overlayHwnd = visibleOverlayInteractionRuntime.getWindowsNativeWindowHandleNumber(window);
     if (!ensureWindowsOverlayTransparency(overlayHwnd)) {
