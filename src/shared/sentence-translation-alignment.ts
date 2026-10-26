@@ -230,10 +230,11 @@ function isDialogue(text: string): boolean {
   return DIALOGUE_DASH.test(text.trim());
 }
 
-/** Speakers in one cue: its dash-led lines, or 1. */
+/** Speakers in one cue: its dash-led lines (a speaker's text can wrap), or 1. */
 function speakerCount(text: string): number {
   const lines = cueLines(text);
-  return lines.length > 1 && lines.every(isDialogue) ? lines.length : 1;
+  const starts = lines.filter(isDialogue).length;
+  return lines.length > 0 && isDialogue(lines[0]!) && starts > 1 ? starts : 1;
 }
 
 /**

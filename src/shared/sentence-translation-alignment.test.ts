@@ -266,3 +266,13 @@ test('consecutive dialogue lines share their translation over a co-timed one', (
   });
   assert.equal(aligned?.translation, '- Nice weather today.');
 });
+
+test('a two-speaker cue whose first speaker wraps keeps both translations', () => {
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('－今日は\nいい天気だね\n－そうだね', 1, 3)],
+    secondaryLines: [line('- Nice weather today.', 1, 3), line('- Yeah.', 1, 3)],
+    startTime: 1,
+    endTime: 3,
+  });
+  assert.equal(aligned?.translation, '- Nice weather today. - Yeah.');
+});
