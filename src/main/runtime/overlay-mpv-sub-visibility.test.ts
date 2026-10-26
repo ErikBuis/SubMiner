@@ -310,7 +310,7 @@ const RESTORE_CASES: Array<{
 ];
 
 test('restore tells the plugin once it applied the saved visibility', () => {
-  let restoredNotices = 0;
+  const restoredNotices: boolean[] = [];
   const calls: boolean[] = [];
   let saved: boolean | null = false;
   const restore = createRestoreOverlayMpvSubtitlesHandler({
@@ -323,21 +323,21 @@ test('restore tells the plugin once it applied the saved visibility', () => {
     isMpvConnected: () => true,
     shouldKeepSuppressedFromVisibleOverlayBinding: () => true,
     setMpvSubVisibility: (visible) => calls.push(visible),
-    onSubVisibilityRestored: () => {
-      restoredNotices += 1;
+    onSubVisibilityRestored: (applied) => {
+      restoredNotices.push(applied);
     },
   });
 
   restore();
-  assert.equal(restoredNotices, 0);
+  assert.deepEqual(restoredNotices, []);
   restore({ force: true });
 
   assert.deepEqual(calls, [false, false]);
-  assert.equal(restoredNotices, 1);
+  assert.deepEqual(restoredNotices, [true]);
 });
 
 test('quitting before the capture finished still ends the plugin fallback', () => {
-  let restoredNotices = 0;
+  const restoredNotices: boolean[] = [];
   const restore = createRestoreOverlayMpvSubtitlesHandler({
     getSavedSubVisibility: () => null,
     setSavedSubVisibility: () => {},
@@ -346,15 +346,15 @@ test('quitting before the capture finished still ends the plugin fallback', () =
     isMpvConnected: () => true,
     shouldKeepSuppressedFromVisibleOverlayBinding: () => true,
     setMpvSubVisibility: () => {},
-    onSubVisibilityRestored: () => {
-      restoredNotices += 1;
+    onSubVisibilityRestored: (applied) => {
+      restoredNotices.push(applied);
     },
   });
 
   restore();
-  assert.equal(restoredNotices, 0);
+  assert.deepEqual(restoredNotices, []);
   restore({ force: true });
-  assert.equal(restoredNotices, 1);
+  assert.deepEqual(restoredNotices, [false]);
 });
 
 for (const c of RESTORE_CASES) {

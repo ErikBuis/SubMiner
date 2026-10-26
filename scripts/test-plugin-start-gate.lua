@@ -1828,14 +1828,26 @@ do
 	})
 	assert_true(recorded ~= nil, "plugin failed to load for app restore notice scenario: " .. tostring(err))
 	fire_event(recorded, "start-file")
-	recorded.script_messages["subminer-sub-visibility-restored"]()
+	local sets_before_applied = #recorded.property_sets
+	recorded.script_messages["subminer-sub-visibility-restored"]("applied")
+	assert_true(
+		#recorded.property_sets == sets_before_applied,
+		"an app restore that already applied its value should not be overwritten by the plugin"
+	)
+	assert_true(
+		recorded.property_deletes[1] == "user-data/subminer/sub-visibility-before-overlay",
+		"an applied app restore should drop the saved visibility"
+	)
+	fire_event(recorded, "end-file", { reason = "eof" })
+	fire_event(recorded, "start-file")
+	recorded.script_messages["subminer-sub-visibility-restored"]("none")
 	local last_set = recorded.property_sets[#recorded.property_sets]
 	assert_true(
 		last_set.name == "sub-visibility" and last_set.value == false,
 		"the app quitting before its capture should still end the loading fallback"
 	)
 	assert_true(
-		recorded.property_deletes[1] == "user-data/subminer/sub-visibility-before-overlay",
+		recorded.property_deletes[2] == "user-data/subminer/sub-visibility-before-overlay",
 		"ending the fallback on the app's notice should drop the saved visibility"
 	)
 end
