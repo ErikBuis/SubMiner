@@ -254,8 +254,12 @@ export function assignGroupTranslations(
     const grouped = groups[index]?.secondary ?? findBestOverlappingLine(secondary, line);
     if (!grouped) return;
     const coTimedCues = secondary.filter((cue) => coTimed(cue, grouped));
+    const owner = takenBy.get(grouped);
     let lines: TimedSubtitleText[];
-    if (isDialogue(line.text)) {
+    if (owner && !coTimed(line, owner)) {
+      // Consecutive lines of one sentence share its translation.
+      lines = [grouped];
+    } else if (isDialogue(line.text)) {
       // Dialogue takes dialogue cues, so a sign sharing the interval stays out. A cue
       // holding several speakers is shared; any other goes to one speaker. A cue with
       // several speakers takes as many cues as it needs, the grouped one first.
@@ -275,15 +279,11 @@ export function assignGroupTranslations(
     } else {
       // A line co-timed with the one that took this translation is another speaker and
       // gets the co-timed secondary cue, unless it repeats that line's text.
-      const owner = takenBy.get(grouped);
       const ownText = compactText(line.text);
       const repeats =
         owner !== undefined &&
         (compactText(owner.text).includes(ownText) || ownText.includes(compactText(owner.text)));
-      const partner =
-        owner && coTimed(line, owner) && !repeats
-          ? coTimedCues.find((cue) => !takenBy.has(cue))
-          : undefined;
+      const partner = owner && !repeats ? coTimedCues.find((cue) => !takenBy.has(cue)) : undefined;
       lines = [partner ?? grouped];
     }
     for (const cue of lines) {

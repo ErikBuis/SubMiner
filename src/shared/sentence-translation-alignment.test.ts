@@ -256,3 +256,13 @@ test('a two-speaker cue prefers dialogue cues over a sign that won the timing ti
   });
   assert.equal(aligned?.translation, "- Let's go. - Wait.");
 });
+
+test('consecutive dialogue lines share their translation over a co-timed one', () => {
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('－今日は', 0, 1), line('－いい天気ですね', 1, 2)],
+    secondaryLines: [line('- Nice weather today.', 0, 2), line('- Background TV.', 0, 2)],
+    startTime: 1,
+    endTime: 2,
+  });
+  assert.equal(aligned?.translation, '- Nice weather today.');
+});
