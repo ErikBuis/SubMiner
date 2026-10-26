@@ -162,13 +162,24 @@ test('overlapping ensure calls while the overlay loads keep the original hidden 
   assert.equal(mpvSubVisible, true);
 });
 
+test('ensure restores the visibility the plugin saved before its loading fallback', async () => {
+  const { ensureHidden, state } = makeEnsure(async (name) =>
+    name === 'sub-visibility' ? 'yes' : false,
+  );
+
+  await ensureHidden();
+
+  assert.equal(state.savedSubVisibility, false);
+});
+
 test('ensure drops a captured visibility when a newer toggle superseded it', async () => {
   let resolveVisibility!: (value: unknown) => void;
-  const { ensureHidden, state } = makeEnsure(
-    () =>
-      new Promise((resolve) => {
-        resolveVisibility = resolve;
-      }),
+  const { ensureHidden, state } = makeEnsure((name) =>
+    name === 'sub-visibility'
+      ? new Promise((resolve) => {
+          resolveVisibility = resolve;
+        })
+      : Promise.reject(new Error('property unavailable')),
   );
 
   const pending = ensureHidden();

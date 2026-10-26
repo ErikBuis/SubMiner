@@ -11,6 +11,7 @@ local function run_plugin_scenario(config)
 		osd = {},
 		logs = {},
 		property_sets = {},
+		property_deletes = {},
 		periodic_timers = {},
 		timeouts = {},
 		timeout_handles = {},
@@ -208,6 +209,9 @@ local function run_plugin_scenario(config)
 			if name == "pause" then
 				config.paused = value == true
 			end
+		end
+		function mp.del_property(name)
+			recorded.property_deletes[#recorded.property_deletes + 1] = name
 		end
 		function mp.set_property(name, value)
 			recorded.property_sets[#recorded.property_sets + 1] = {
@@ -1644,6 +1648,15 @@ do
 	assert_true(
 		has_property_set(recorded.property_sets, "sub-visibility", true),
 		"mpv should show its own subtitles while the overlay is still loading"
+	)
+	assert_true(
+		has_property_set(recorded.property_sets, "user-data/subminer/sub-visibility-before-overlay", false),
+		"the visibility from before the loading fallback should be kept for the app to restore"
+	)
+	recorded.script_messages["subminer-visible-overlay-hidden"]()
+	assert_true(
+		recorded.property_deletes[1] == "user-data/subminer/sub-visibility-before-overlay",
+		"hiding the overlay should drop the saved pre-loading visibility"
 	)
 	assert_true(
 		#recorded.periodic_timers == 1,
