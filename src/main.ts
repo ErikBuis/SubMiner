@@ -1718,6 +1718,12 @@ const restoreOverlayMpvSubtitles = createRestoreOverlayMpvSubtitlesHandler({
     setMpvSubVisibilityRuntime(appState.mpvClient, visible);
   },
   isOverlayContentReady: () => isVisibleOverlayWindowContentReady(),
+  onSubVisibilityRestored: () => {
+    sendMpvCommandRuntime(appState.mpvClient, [
+      'script-message',
+      'subminer-sub-visibility-restored',
+    ]);
+  },
 });
 
 function syncOverlayMpvSubtitleSuppression(): void {

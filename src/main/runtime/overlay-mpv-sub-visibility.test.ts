@@ -230,6 +230,33 @@ const RESTORE_CASES: Array<{
   },
 ];
 
+test('restore tells the plugin once it applied the saved visibility', () => {
+  let restoredNotices = 0;
+  const calls: boolean[] = [];
+  let saved: boolean | null = false;
+  const restore = createRestoreOverlayMpvSubtitlesHandler({
+    getSavedSubVisibility: () => saved,
+    setSavedSubVisibility: (visible) => {
+      saved = visible;
+    },
+    getRevision: () => 0,
+    setRevision: () => {},
+    isMpvConnected: () => true,
+    shouldKeepSuppressedFromVisibleOverlayBinding: () => true,
+    setMpvSubVisibility: (visible) => calls.push(visible),
+    onSubVisibilityRestored: () => {
+      restoredNotices += 1;
+    },
+  });
+
+  restore();
+  assert.equal(restoredNotices, 0);
+  restore({ force: true });
+
+  assert.deepEqual(calls, [false, false]);
+  assert.equal(restoredNotices, 1);
+});
+
 for (const c of RESTORE_CASES) {
   test(c.name, () => {
     const { restore, state, calls } = makeRestore(c.initial);

@@ -1653,10 +1653,10 @@ do
 		has_property_set(recorded.property_sets, "user-data/subminer/sub-visibility-before-overlay", false),
 		"the visibility from before the loading fallback should be kept for the app to restore"
 	)
-	recorded.script_messages["subminer-visible-overlay-hidden"]()
+	recorded.script_messages["subminer-sub-visibility-restored"]()
 	assert_true(
 		recorded.property_deletes[1] == "user-data/subminer/sub-visibility-before-overlay",
-		"hiding the overlay should drop the saved pre-loading visibility"
+		"the app restoring subtitle visibility should drop the saved pre-loading visibility"
 	)
 	assert_true(
 		#recorded.periodic_timers == 1,
@@ -1798,6 +1798,34 @@ do
 	assert_true(
 		not has_property_set(recorded.property_sets, "sub-visibility", true),
 		"mpv subtitles should stay as they are when no visible overlay is coming"
+	)
+end
+
+do
+	local recorded, err = run_plugin_scenario({
+		process_list = "",
+		option_overrides = {
+			binary_path = binary_path,
+			auto_start = "yes",
+			auto_start_visible_overlay = "no",
+			overlay_loading_osd = "yes",
+			socket_path = "/tmp/subminer-socket",
+		},
+		input_ipc_server = "/tmp/subminer-socket",
+		media_title = "Random Movie",
+		files = {
+			[binary_path] = true,
+		},
+	})
+	assert_true(recorded ~= nil, "plugin failed to load for loading OSD without visible overlay: " .. tostring(err))
+	fire_event(recorded, "start-file")
+	assert_true(
+		has_osd_message(recorded.osd, "SubMiner: Overlay loading |"),
+		"overlay_loading_osd should still show the spinner"
+	)
+	assert_true(
+		not has_property_set(recorded.property_sets, "sub-visibility", true),
+		"the subtitle fallback should wait for a visible overlay, not the spinner option"
 	)
 end
 

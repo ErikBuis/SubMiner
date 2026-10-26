@@ -112,6 +112,8 @@ export function createRestoreOverlayMpvSubtitlesHandler(deps: {
   shouldKeepSuppressedFromVisibleOverlayBinding: () => boolean;
   setMpvSubVisibility: (visible: boolean) => void;
   isOverlayContentReady?: () => boolean;
+  // Tells the mpv plugin the visibility it saved before the loading fallback is used up.
+  onSubVisibilityRestored?: () => void;
 }) {
   return (options: RestoreOverlayMpvSubtitlesOptions = {}): void => {
     deps.setRevision(deps.getRevision() + 1);
@@ -132,6 +134,7 @@ export function createRestoreOverlayMpvSubtitlesHandler(deps: {
 
     if (savedVisibility !== null) {
       deps.setMpvSubVisibility(savedVisibility);
+      deps.onSubVisibilityRestored?.();
     }
 
     deps.setSavedSubVisibility(null);
