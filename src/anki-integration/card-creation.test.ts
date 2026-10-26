@@ -490,6 +490,18 @@ test('createSentenceCard keeps a bilingual cue for a sentence with Latin letters
   assert.equal(addedFields[0]?.Translation, 'DNAって何？ What is DNA?');
 });
 
+test('createSentenceCard keeps a bilingual cue in a script it does not list', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [{ text: '今日は', startTime: 1, endTime: 3 }],
+      secondary: [{ text: '今日は\nהיום', startTime: 1, endTime: 3 }],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('今日は', 1, 3), true);
+  assert.equal(addedFields[0]?.Translation, '今日は היום');
+});
+
 test('createSentenceCard translates every combined line even when the media is capped', async () => {
   const { service, addedFields } = createTimedTranslationService({
     maxMediaDuration: 30,

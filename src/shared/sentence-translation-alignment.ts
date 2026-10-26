@@ -216,24 +216,36 @@ export function collectGroupTranslationLines(
   groups: readonly SentenceTranslationGroup[],
   indexes: readonly number[],
 ): TimedSubtitleText[] {
+  const coTimed = (
+    a: Pick<TimedSubtitleText, 'startTime' | 'endTime'>,
+    b: Pick<TimedSubtitleText, 'startTime' | 'endTime'>,
+  ) =>
+    Math.abs(a.startTime - b.startTime) < CO_TIMED_EPSILON_SECONDS &&
+    Math.abs(a.endTime - b.endTime) < CO_TIMED_EPSILON_SECONDS;
   const result: TimedSubtitleText[] = [];
+  const takenBy = new Map<TimedSubtitleText, TimedSubtitleText>();
   for (const index of indexes) {
     const line = primary[index];
     if (!line) continue;
-    let translation = groups[index]?.secondary ?? findBestOverlappingLine(secondary, line);
-    // Two speakers can share one interval in both tracks; when another mined line already
-    // took this translation, the co-timed one is this line's.
-    if (translation && result.includes(translation)) {
-      const taken = translation;
-      translation =
-        secondary.find(
-          (candidate) =>
-            !result.includes(candidate) &&
-            Math.abs(candidate.startTime - taken.startTime) < CO_TIMED_EPSILON_SECONDS &&
-            Math.abs(candidate.endTime - taken.endTime) < CO_TIMED_EPSILON_SECONDS,
-        ) ?? null;
+    const translation = groups[index]?.secondary ?? findBestOverlappingLine(secondary, line);
+    if (!translation) continue;
+    const owner = takenBy.get(translation);
+    if (!owner) {
+      result.push(translation);
+      takenBy.set(translation, line);
+      continue;
     }
-    if (translation) result.push(translation);
+    // Two speakers can share one interval in both tracks: a line co-timed with the one
+    // that took this translation gets the co-timed secondary cue. Consecutive lines of a
+    // sentence just share theirs.
+    if (!coTimed(line, owner)) continue;
+    const partner = secondary.find(
+      (candidate) => !takenBy.has(candidate) && coTimed(candidate, translation),
+    );
+    if (partner) {
+      result.push(partner);
+      takenBy.set(partner, line);
+    }
   }
   return result.sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
 }

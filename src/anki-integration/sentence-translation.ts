@@ -43,6 +43,8 @@ function mainScriptFamily(text: string): string | null {
       bestCount = count;
     }
   }
+  // Letters of a script not listed here (Hebrew, Devanagari, ...) are still a language.
+  if (best === null && /\p{L}/u.test(text)) return 'other';
   return best;
 }
 

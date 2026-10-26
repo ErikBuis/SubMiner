@@ -170,3 +170,13 @@ test('two speakers sharing an interval keep both translations', () => {
   });
   assert.equal(aligned?.translationLines.length, 2);
 });
+
+test('consecutive lines sharing a translation do not take a co-timed sign', () => {
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('今日は', 0, 1), line('いい天気', 1, 2)],
+    secondaryLines: [line('Nice weather today.', 0, 2), line('SIGN', 0, 2)],
+    startTime: 0,
+    endTime: 2,
+  });
+  assert.equal(aligned?.translation, 'Nice weather today.');
+});
