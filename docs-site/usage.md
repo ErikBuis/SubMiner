@@ -20,6 +20,8 @@ Lookups need at least one dictionary in SubMiner's bundled Yomitan (or in Hachid
 
 The bundled Yomitan is separate from any Yomitan in your browser. It has its own dictionaries and settings.
 
+With several frequency dictionaries installed, you can sort lookup results by their average instead of by one dictionary: in Yomitan settings, set **Frequency sorting dictionary** to **Average of all frequency dictionaries**. This uses the same value as Yomitan's "Average" frequency tag, except that dictionaries whose frequency mode (rank or occurrence) doesn't match the sorting mode are left out, so with mixed dictionaries the order can differ from the displayed Average.
+
 ### Hachidori setup
 
 Hachidori is an alternative lookup backend. Set `dictionaryBackend` to `"hachidori"` in settings or `config.jsonc`, then restart SubMiner. Set it back to `"yomitan"` and restart to switch back.
