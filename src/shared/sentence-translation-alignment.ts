@@ -364,14 +364,17 @@ export function alignSentenceTranslation(options: {
   // is not part of the sentence.
   let indexes = minedIndexes;
   if (options.widenSentence) {
+    // Every primary line the matching secondary events translate, also across a sign
+    // with its own translation that splits them into separate runs.
+    const targets = new Set(
+      [groups[minedIndexes[0]!], groups[minedIndexes[minedIndexes.length - 1]!]]
+        .map((group) => group?.secondary)
+        .filter((event): event is TimedSubtitleText => Boolean(event)),
+    );
     const widened = new Set(minedIndexes);
-    for (const group of [
-      groups[minedIndexes[0]!],
-      groups[minedIndexes[minedIndexes.length - 1]!],
-    ]) {
-      if (!group?.secondary) continue;
-      for (let index = group.from; index <= group.to; index += 1) widened.add(index);
-    }
+    groups.forEach((group, index) => {
+      if (group.secondary && targets.has(group.secondary)) widened.add(index);
+    });
     const candidate = [...widened].sort((a, b) => a - b);
     const candidateLines = candidate.map((index) => primary[index]!);
     const span = latestEnd(candidateLines) - candidateLines[0]!.startTime;

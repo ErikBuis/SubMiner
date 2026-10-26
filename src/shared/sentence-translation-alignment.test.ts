@@ -317,3 +317,18 @@ test('formatCardTranslation capitalizes and closes a comma-ended line', () => {
   assert.equal(formatCardTranslation('Already fine!'), 'Already fine!');
   assert.equal(formatCardTranslation('   '), '');
 });
+
+test('widening reaches across a sign with its own translation', () => {
+  const primary = [line('前半', 0, 1), line('看板', 1.5, 2.5), line('後半', 3, 4)];
+  const secondary = [line('First half, second half.', 0, 4.2), line('SIGN', 1.5, 2.5)];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 3,
+    endTime: 4,
+    widenSentence: true,
+  });
+  assert.equal(aligned?.text, '前半 後半');
+  assert.equal(aligned?.startTime, 0);
+  assert.equal(aligned?.translation, 'First half, second half.');
+});
