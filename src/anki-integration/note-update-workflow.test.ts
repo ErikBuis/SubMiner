@@ -1036,6 +1036,18 @@ test('NoteUpdateWorkflow review decodes cue markup in the translation', async ()
   assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'Tom &amp; Jerry.');
 });
 
+test('NoteUpdateWorkflow prepares no review preview while the review is off', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.isMediaTimingReviewEnabled = () => false;
+  harness.deps.reviewMediaTiming = async () => {
+    throw new Error('review must not open');
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'I put lots of vegetables in it.');
+});
+
 test('NoteUpdateWorkflow review shows no translation field without wordCardTranslation', async () => {
   const harness = createWordCardTranslationHarness('');
   const reviewRequests: Array<Pick<MediaTimingReviewRequest, 'card'>> = [];

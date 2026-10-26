@@ -599,6 +599,7 @@ export class AnkiIntegration {
         this.recordCardsMinedSafely(count, noteIds, 'card creation');
       },
       reviewMediaTiming: (request) => this.reviewMediaTiming(request),
+      isMediaTimingReviewEnabled: () => this.isMediaTimingReviewEnabled(),
     });
   }
 
@@ -708,6 +709,7 @@ export class AnkiIntegration {
       logInfo: (...args) => log.info(args[0] as string, ...args.slice(1)),
       logError: (...args) => log.error(args[0] as string, ...args.slice(1)),
       reviewMediaTiming: (request) => this.reviewMediaTiming(request),
+      isMediaTimingReviewEnabled: () => this.isMediaTimingReviewEnabled(),
     });
   }
 
@@ -1824,6 +1826,10 @@ export class AnkiIntegration {
     callback: ((request: MediaTimingReviewRequest) => Promise<MediaTimingReviewDecision>) | null,
   ): void {
     this.mediaTimingReviewCallback = callback;
+  }
+
+  private isMediaTimingReviewEnabled(): boolean {
+    return this.config.media?.reviewTiming === true && Boolean(this.mediaTimingReviewCallback);
   }
 
   private async reviewMediaTiming(

@@ -141,6 +141,8 @@ export interface NoteUpdateWorkflowDeps {
   reviewMediaTiming?: (
     request: Omit<MediaTimingReviewRequest, 'audioPadding' | 'maxMediaDuration'>,
   ) => Promise<MediaTimingReviewDecision>;
+  /** Whether `reviewMediaTiming` opens a review; false skips preparing its preview. */
+  isMediaTimingReviewEnabled?: () => boolean;
 }
 
 function normalizeSubtitleContextText(text: string): string {
@@ -348,7 +350,10 @@ export class NoteUpdateWorkflow {
       let keepTranslationField = false;
 
       if (mediaTimingContext) {
-        const reviewMediaTiming = this.deps.reviewMediaTiming;
+        const reviewMediaTiming =
+          this.deps.isMediaTimingReviewEnabled?.() === false
+            ? undefined
+            : this.deps.reviewMediaTiming;
         const reviewTranslation =
           reviewMediaTiming && translationFieldName
             ? this.buildReviewTranslation(mediaTimingContext, {

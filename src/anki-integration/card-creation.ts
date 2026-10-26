@@ -170,6 +170,8 @@ interface CardCreationDeps {
   reviewMediaTiming?: (
     request: Omit<MediaTimingReviewRequest, 'audioPadding' | 'maxMediaDuration'>,
   ) => Promise<MediaTimingReviewDecision>;
+  /** Whether `reviewMediaTiming` opens a review; false skips preparing its preview. */
+  isMediaTimingReviewEnabled?: () => boolean;
 }
 
 export class CardCreationService {
@@ -647,7 +649,10 @@ export class CardCreationService {
         }
 
         const formatTranslation = behavior?.formatTranslation === true;
-        const reviewMediaTiming = this.deps.reviewMediaTiming;
+        const reviewMediaTiming =
+          this.deps.isMediaTimingReviewEnabled?.() === false
+            ? undefined
+            : this.deps.reviewMediaTiming;
         const reviewTranslation = reviewMediaTiming
           ? resolveTimedSentenceTranslation({
               text: sentence,

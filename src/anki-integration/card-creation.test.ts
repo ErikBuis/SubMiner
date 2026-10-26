@@ -760,6 +760,32 @@ test('createSentenceCard review previews the formatted translation the card save
   assert.equal(shown[0], ankiFieldHtmlToPlainText(addedFields[0]?.Translation ?? ''));
 });
 
+test('createSentenceCard prepares no review preview while the review is off', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () => createAnkiConfig({ fields: { translation: 'Translation' } }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [{ text: '今日は', startTime: 1, endTime: 2 }],
+        secondary: [{ text: 'Today.', startTime: 1, endTime: 2 }],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      isMediaTimingReviewEnabled: () => false,
+      reviewMediaTiming: async () => {
+        throw new Error('review must not open');
+      },
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(addedFields[0]?.Translation, 'Today.');
+});
+
 test('createSentenceCard previews the translation in the review and saves the edited one', async () => {
   const addedFields: Array<Record<string, string>> = [];
   const reviewRequests: Array<{ card?: { translation?: { text: string } } }> = [];
