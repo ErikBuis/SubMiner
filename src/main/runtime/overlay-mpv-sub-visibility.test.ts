@@ -129,6 +129,39 @@ test('ensure keeps mpv subtitles visible until the overlay content is ready', as
   assert.deepEqual(hidden, [true, false]);
 });
 
+test('overlapping ensure calls while the overlay loads keep the original hidden visibility', async () => {
+  // mpv answers property reads in order with its current value, after earlier writes.
+  let mpvSubVisible = false;
+  const writes: boolean[] = [];
+  const state: VisibilityState = { savedSubVisibility: null, revision: 0 };
+  const ensure = createEnsureOverlayMpvSubtitlesHiddenHandler({
+    getMpvClient: () => ({
+      connected: true,
+      requestProperty: () => Promise.resolve(mpvSubVisible ? 'yes' : 'no'),
+    }),
+    getSavedSubVisibility: () => state.savedSubVisibility,
+    setSavedSubVisibility: (visible) => {
+      state.savedSubVisibility = visible;
+    },
+    getRevision: () => state.revision,
+    setRevision: (revision) => {
+      state.revision = revision;
+    },
+    setMpvSubVisibility: (visible) => {
+      mpvSubVisible = visible;
+      writes.push(visible);
+    },
+    isOverlayContentReady: () => false,
+    logWarn: () => {},
+  });
+
+  await Promise.all([ensure(), ensure()]);
+
+  assert.equal(state.savedSubVisibility, false);
+  assert.deepEqual(writes, [true]);
+  assert.equal(mpvSubVisible, true);
+});
+
 test('ensure drops a captured visibility when a newer toggle superseded it', async () => {
   let resolveVisibility!: (value: unknown) => void;
   const { ensureHidden, state } = makeEnsure(
