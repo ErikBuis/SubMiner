@@ -342,7 +342,7 @@ export class NoteUpdateWorkflow {
               endTime: mediaTimingContext.endTime,
               noteId,
               card: {
-                ...(hasExpressionText ? { word: expressionText } : {}),
+                ...(hasExpressionText ? { word: ankiFieldHtmlToPlainText(expressionText) } : {}),
                 ...this.getReviewMeaning(noteInfo, config.fields?.definition),
                 ...(translationFieldName
                   ? this.buildReviewTranslation(mediaTimingContext, {

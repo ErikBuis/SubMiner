@@ -993,3 +993,26 @@ test('NoteUpdateWorkflow review shows the translation the card already has', asy
   assert.equal(reviewRequests[0]?.card?.translation?.text, 'Kept as is.');
   assert.equal(harness.updates[0]?.fields.SentenceTranslation, undefined);
 });
+
+test('NoteUpdateWorkflow review shows the word as plain text', async () => {
+  const harness = createWordCardTranslationHarness();
+  const reviewRequests: Array<Pick<MediaTimingReviewRequest, 'card'>> = [];
+  harness.deps.client.notesInfo = async () => [
+    {
+      noteId: 42,
+      fields: {
+        Expression: { value: '<span data-x="1">貴様</span>' },
+        Sentence: { value: '' },
+        SentenceTranslation: { value: '' },
+      },
+    },
+  ];
+  harness.deps.reviewMediaTiming = async (request) => {
+    reviewRequests.push({ card: request.card });
+    return { action: 'use-original' };
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.equal(reviewRequests[0]?.card?.word, '貴様');
+});

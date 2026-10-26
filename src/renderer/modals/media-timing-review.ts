@@ -682,7 +682,9 @@ export function createMediaTimingReviewModal(
     const initial = payload?.card?.translation;
     if (!initial) return {};
     const value = ctx.dom.mediaTimingReviewTranslation.value.replace(/\s+/g, ' ').trim();
-    const followedChange = includeFollowed && value !== initial.text.trim();
+    // The preview can span lines (a kept multi-sense field); compare it the same way.
+    const initialValue = initial.text.replace(/\s+/g, ' ').trim();
+    const followedChange = includeFollowed && value !== initialValue;
     return translationEdited || followedChange ? { translation: value } : {};
   }
 
