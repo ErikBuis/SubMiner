@@ -397,10 +397,7 @@ export function assignLineTranslations(
   const secondary = sortSubtitleLines(secondaryLines);
   const groups = buildSentenceTranslationGroups(primary, secondary, minOverlapRatio);
   const assigned = assignGroupTranslations(primary, secondary, groups);
-  return primary.map((line, index) => {
-    const translation = assigned.get(index);
-    return { line, translationLines: translation ? [translation] : [] };
-  });
+  return primary.map((line, index) => ({ line, translationLines: assigned.get(index) ?? [] }));
 }
 
 /**
