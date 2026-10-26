@@ -206,8 +206,9 @@ do
 	)
 end
 
--- Windows: a background start spawns a detached app that would inherit mpv's capture
--- pipes and keep mpv's subprocess call (and shutdown) pending until the app exits.
+-- Windows: a background start spawns a detached app that would inherit the pipes mpv
+-- creates for a non-detached subprocess call and keep that call (and mpv's shutdown)
+-- pending until the app exits, so it must be launched detached.
 do
 	local function run_start_capture_case(is_windows, app_running)
 		local calls = {}
@@ -286,16 +287,19 @@ do
 
 	local windows_background = run_start_capture_case(true, false)
 	assert_true(has_flag(windows_background, "--background"), "expected background start when app is not running")
-	assert_true(windows_background.capture_stdout == false, "Windows background start must not capture stdout")
-	assert_true(windows_background.capture_stderr == false, "Windows background start must not capture stderr")
+	assert_true(windows_background.detach == true, "Windows background start must be detached")
+	assert_true(windows_background.capture_stdout == false, "detached start must not capture stdout")
+	assert_true(windows_background.capture_stderr == false, "detached start must not capture stderr")
 
 	local windows_attached = run_start_capture_case(true, true)
 	assert_true(not has_flag(windows_attached, "--background"), "expected foreground start when app is running")
+	assert_true(windows_attached.detach == false, "attaching to a running app should wait for the command")
 	assert_true(windows_attached.capture_stdout == true, "attaching to a running app should still capture stdout")
 	assert_true(windows_attached.capture_stderr == true, "attaching to a running app should still capture stderr")
 
 	local posix_background = run_start_capture_case(false, false)
 	assert_true(has_flag(posix_background, "--background"), "expected background start on non-Windows")
+	assert_true(posix_background.detach == false, "non-Windows background start should not be detached")
 	assert_true(posix_background.capture_stdout == true, "non-Windows background start should keep capturing stdout")
 	assert_true(posix_background.capture_stderr == true, "non-Windows background start should keep capturing stderr")
 end
