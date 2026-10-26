@@ -117,3 +117,36 @@ test('a long sign starting between two mined lines stays out of the sentence', (
   assert.equal(aligned?.text, '一 二');
   assert.equal(aligned?.translation, 'One. Two.');
 });
+
+test('a dialogue line under a long sign takes its own translation on a tie', () => {
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('看板', 0, 10), line('一', 1, 2)],
+    secondaryLines: [line('SIGN', 0, 10), line('One.', 1, 2)],
+    startTime: 1,
+    endTime: 2,
+  });
+  assert.equal(aligned?.text, '一');
+  assert.equal(aligned?.translation, 'One.');
+});
+
+test('mined lines missing from the card sentence are left out', () => {
+  const primary = [line('長い台詞です', 0, 4), line('看板', 1, 2)];
+  const secondary = [line('A long line.', 0, 4), line('SIGN', 1, 2)];
+  const withSentence = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 0,
+    endTime: 4,
+    sentenceText: '長い台詞です',
+  });
+  assert.equal(withSentence?.translation, 'A long line.');
+  // Text that matches no line keeps every mined line.
+  const unmatched = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 0,
+    endTime: 4,
+    sentenceText: 'something else',
+  });
+  assert.equal(unmatched?.translation, 'A long line. SIGN');
+});

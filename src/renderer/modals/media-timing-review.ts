@@ -73,7 +73,8 @@ export function buildMediaTimingLineSelection(options: {
     currentLineIndex: previous.length,
     sentence: lineTexts.join(' '),
     rangeStart: previous[0]?.startTime ?? options.originalStartTime,
-    rangeEnd: next[next.length - 1]?.endTime ?? options.originalEndTime,
+    // The latest end, not the last cue's: an earlier added cue can run longer.
+    rangeEnd: Math.max(options.originalEndTime, ...next.map((line) => line.endTime)),
   };
 }
 

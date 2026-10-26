@@ -35,6 +35,7 @@ export interface AlignedSentenceTranslation {
 /** Fraction of a primary line that must fall inside a secondary event to join its sentence. */
 export const DEFAULT_SENTENCE_GROUP_MIN_OVERLAP = 0.6;
 /** Fraction of a primary line that must fall inside the mined range to count as mined. */
+const SCORE_EPSILON = 1e-9;
 const MINED_LINE_MIN_OVERLAP = 0.5;
 const MIN_DURATION_SECONDS = 0.001;
 
@@ -84,7 +85,7 @@ export function buildSentenceTranslationGroups(
   secondary: readonly TimedSubtitleText[],
   minOverlapRatio = DEFAULT_SENTENCE_GROUP_MIN_OVERLAP,
 ): SentenceTranslationGroup[] {
-  const best: Array<{ score: number; secondary: TimedSubtitleText } | undefined> = [];
+  const best: Array<{ score: number; fit: number; secondary: TimedSubtitleText } | undefined> = [];
 
   let first = 0;
   for (const event of secondary) {
@@ -111,9 +112,19 @@ export function buildSentenceTranslationGroups(
       overlapSeconds({ startTime: spanStart, endTime: spanEnd }, event) /
       Math.max(duration(event), spanEnd - spanStart, MIN_DURATION_SECONDS);
     for (const member of members) {
+      const line = primary[member]!;
+      // On a tie, the event timed closest to the line itself wins, so a dialogue line
+      // under a long sign takes its own translation rather than the sign's.
+      const fit =
+        overlapSeconds(line, event) /
+        Math.max(duration(event), duration(line), MIN_DURATION_SECONDS);
       const current = best[member];
-      if (!current || current.score < score) {
-        best[member] = { score, secondary: event };
+      if (
+        !current ||
+        current.score < score - SCORE_EPSILON ||
+        (Math.abs(current.score - score) <= SCORE_EPSILON && current.fit < fit)
+      ) {
+        best[member] = { score, fit, secondary: event };
       }
     }
   }
@@ -196,6 +207,10 @@ export function collectGroupTranslationLines(
   return result.sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
 }
 
+function compactText(text: string): string {
+  return text.normalize('NFKC').replace(/\s+/gu, '');
+}
+
 /**
  * Resolves the primary lines of a mined subtitle range and the secondary line(s) that
  * translate them. Returns null when the mined range matches no primary line.
@@ -205,6 +220,11 @@ export function alignSentenceTranslation(options: {
   secondaryLines: readonly TimedSubtitleText[];
   startTime: number;
   endTime: number;
+  /**
+   * The card sentence. Mined lines whose text it lacks (a short sign inside the dialogue,
+   * a line skipped by a seek) are left out, unless that would leave none.
+   */
+  sentenceText?: string;
   minOverlapRatio?: number;
 }): AlignedSentenceTranslation | null {
   const primary = sortSubtitleLines(options.primaryLines);
@@ -212,13 +232,20 @@ export function alignSentenceTranslation(options: {
   const minedRange = { startTime: options.startTime, endTime: options.endTime };
   if (primary.length === 0 || !(minedRange.endTime > minedRange.startTime)) return null;
 
-  const minedIndexes: number[] = [];
+  let minedIndexes: number[] = [];
   primary.forEach((line, index) => {
     if (overlapSeconds(line, minedRange) / duration(line) >= MINED_LINE_MIN_OVERLAP) {
       minedIndexes.push(index);
     }
   });
   if (minedIndexes.length === 0) return null;
+  const sentence = compactText(options.sentenceText ?? '');
+  if (sentence) {
+    const inSentence = minedIndexes.filter((index) =>
+      sentence.includes(compactText(primary[index]!.text)),
+    );
+    if (inSentence.length > 0) minedIndexes = inSentence;
+  }
 
   const groups = buildSentenceTranslationGroups(
     primary,

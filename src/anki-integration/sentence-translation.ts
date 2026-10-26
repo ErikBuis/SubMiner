@@ -37,6 +37,7 @@ export function resolveTimedSentenceTranslation(input: {
     secondaryLines: secondary,
     startTime: input.startTime,
     endTime: input.endTime,
+    sentenceText: input.text,
   });
   const best = aligned ? null : findBestOverlappingLine(secondary, input);
   const translationLines = aligned?.translationLines ?? (best ? [best] : []);
