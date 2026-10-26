@@ -502,6 +502,21 @@ test('createSentenceCard keeps a bilingual cue in a script it does not list', as
   assert.equal(addedFields[0]?.Translation, '今日は היום');
 });
 
+test('createSentenceCard rejects a same-language cue whose mixed-script rest looks foreign', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [
+        { text: 'DNA', startTime: 0, endTime: 1 },
+        { text: 'って何？', startTime: 1, endTime: 3 },
+      ],
+      secondary: [{ text: 'DNAって何？', startTime: 0, endTime: 3 }],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('って何？', 1, 3), true);
+  assert.equal(addedFields[0]?.Translation, undefined);
+});
+
 test('createSentenceCard keeps a bilingual cue when only part of its source line was mined', async () => {
   const { service, addedFields } = createTimedTranslationService({
     tracks: {

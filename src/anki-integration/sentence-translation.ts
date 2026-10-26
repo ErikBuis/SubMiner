@@ -52,7 +52,8 @@ function mainScriptFamily(text: string): string | null {
  * A secondary track in the primary language is no translation: its cue is part of the
  * mined text (cut differently), or holds the mined text plus more of the same language.
  * A bilingual cue that adds a line in another script still translates, also when only
- * part of its source line was mined.
+ * part of its source line was mined. Scripts stand in for languages, so a cue pairing two
+ * languages of one script (Japanese and Chinese) cannot be told apart from one language.
  */
 function isSourceLanguageText(translationLines: readonly string[], minedText: string): boolean {
   const compact = (text: string) => text.normalize('NFKC').replace(/\s+/gu, '');
@@ -66,9 +67,11 @@ function isSourceLanguageText(translationLines: readonly string[], minedText: st
   if (mined.includes(candidate)) return true;
   if (!candidate.includes(mined)) return false;
   const minedFamily = mainScriptFamily(mined);
+  // Whole lines are compared: what is left of a line after cutting the mined text out can
+  // look foreign ("DNA" of "DNAって何？") while the line is not.
   return !lines.some((line) => {
     if (mined.includes(line)) return false;
-    const family = mainScriptFamily(line.split(mined).join(''));
+    const family = mainScriptFamily(line);
     return family !== null && family !== minedFamily;
   });
 }
