@@ -191,3 +191,39 @@ test('mining one of two co-timed speakers keeps its own translation', () => {
   });
   assert.equal(aligned?.translation, '- Wait.');
 });
+
+test('a co-timed cue repeating another line reuses its translation', () => {
+  const secondary = [line("Let's go.\nWait.", 1, 3), line('SIGN', 1, 3)];
+  for (const primary of [
+    [line('行くぞ\n待って', 1, 3), line('行くぞ', 1, 3)],
+    [line('行くぞ', 1, 3), line('行くぞ\n待って', 1, 3)],
+  ]) {
+    const aligned = alignSentenceTranslation({
+      primaryLines: primary,
+      secondaryLines: secondary,
+      startTime: 1,
+      endTime: 3,
+    });
+    assert.equal(aligned?.translation, "Let's go. Wait.");
+  }
+});
+
+test('one cue holding two speakers takes both co-timed dialogue translations', () => {
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('－行くぞ\n－待って', 1, 3)],
+    secondaryLines: [line("- Let's go.", 1, 3), line('- Wait.', 1, 3), line('SIGN', 1, 3)],
+    startTime: 1,
+    endTime: 3,
+  });
+  assert.equal(aligned?.translation, "- Let's go. - Wait.");
+});
+
+test('a wrapped two-line cue does not take a co-timed sign', () => {
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('今日は\nいい天気ですね', 1, 3)],
+    secondaryLines: [line('Nice weather today.', 1, 3), line('SIGN', 1, 3)],
+    startTime: 1,
+    endTime: 3,
+  });
+  assert.equal(aligned?.translation, 'Nice weather today.');
+});
