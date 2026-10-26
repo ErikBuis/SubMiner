@@ -337,57 +337,6 @@
               ></textarea>
             </div>
 
-            <div id="mediaTimingReviewFramePicker" class="media-timing-frame-picker hidden">
-              <div class="media-timing-frame-image-shell">
-                <img
-                  id="mediaTimingReviewFrameImage"
-                  class="hidden"
-                  alt="Selected card screenshot"
-                />
-              </div>
-              <div class="media-timing-frame-controls">
-                <div class="media-timing-frame-heading">
-                  <label for="mediaTimingReviewFrameSlider">Card screenshot</label>
-                  <output id="mediaTimingReviewFrameTime" for="mediaTimingReviewFrameSlider"
-                    >—</output
-                  >
-                </div>
-                <input
-                  id="mediaTimingReviewFrameSlider"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.001"
-                  value="0"
-                  aria-label="Screenshot time"
-                />
-                <div class="media-timing-frame-buttons">
-                  <button
-                    id="mediaTimingReviewFramePrevious"
-                    type="button"
-                    aria-label="Previous video frame"
-                  >
-                    ← Frame
-                  </button>
-                  <button
-                    id="mediaTimingReviewFrameNext"
-                    type="button"
-                    aria-label="Next video frame"
-                  >
-                    Frame →
-                  </button>
-                  <button
-                    id="mediaTimingReviewFrameReset"
-                    type="button"
-                    aria-label="Reset screenshot"
-                  >
-                    Reset
-                  </button>
-                </div>
-                <p id="mediaTimingReviewFrameStatus" role="status"></p>
-              </div>
-            </div>
-
             <div class="media-timing-review-readout" aria-live="polite">
               <div>
                 <span>Starts</span>
@@ -497,6 +446,14 @@
                   +0.1s
                 </button>
               </div>
+              <button
+                id="mediaTimingReviewReset"
+                class="media-timing-review-quiet-button media-timing-review-reset-button"
+                type="button"
+                title="Restore the mined subtitle timing and sentence"
+              >
+                Reset timing
+              </button>
               <div class="media-timing-review-fine-control">
                 <span>End</span>
                 <button
@@ -516,14 +473,59 @@
               </div>
             </div>
 
-            <div
-              id="mediaTimingReviewStatus"
-              class="media-timing-review-status"
-              role="status"
-              aria-live="polite"
-            ></div>
-            <div class="media-timing-review-footer">
-              <div class="media-timing-review-preview-actions">
+            <div id="mediaTimingReviewFramePicker" class="media-timing-frame-picker hidden">
+              <div class="media-timing-frame-image-shell">
+                <img
+                  id="mediaTimingReviewFrameImage"
+                  class="hidden"
+                  alt="Selected card screenshot"
+                />
+              </div>
+              <div class="media-timing-frame-controls">
+                <div class="media-timing-frame-heading">
+                  <label for="mediaTimingReviewFrameSlider">Card screenshot</label>
+                  <output id="mediaTimingReviewFrameTime" for="mediaTimingReviewFrameSlider"
+                    >—</output
+                  >
+                </div>
+                <input
+                  id="mediaTimingReviewFrameSlider"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.001"
+                  value="0"
+                  aria-label="Screenshot time"
+                />
+                <div class="media-timing-frame-buttons">
+                  <button
+                    id="mediaTimingReviewFramePrevious"
+                    type="button"
+                    aria-label="Previous video frame"
+                  >
+                    ← Frame
+                  </button>
+                  <button
+                    id="mediaTimingReviewFrameNext"
+                    type="button"
+                    aria-label="Next video frame"
+                  >
+                    Frame →
+                  </button>
+                  <button
+                    id="mediaTimingReviewFrameReset"
+                    type="button"
+                    aria-label="Reset screenshot"
+                  >
+                    Reset
+                  </button>
+                </div>
+                <p id="mediaTimingReviewFrameStatus" role="status"></p>
+              </div>
+            </div>
+
+            <div class="media-timing-review-dock">
+              <div class="media-timing-review-footer">
                 <button
                   id="mediaTimingReviewPlay"
                   class="media-timing-review-play-button"
@@ -532,28 +534,34 @@
                   <span class="media-timing-review-play-glyph" aria-hidden="true"></span>
                   <span id="mediaTimingReviewPlayLabel">Play selection</span>
                 </button>
+                <div
+                  id="mediaTimingReviewStatus"
+                  class="media-timing-review-status"
+                  role="status"
+                  aria-live="polite"
+                ></div>
                 <button
-                  id="mediaTimingReviewReset"
-                  class="media-timing-review-quiet-button"
+                  id="mediaTimingReviewConfirm"
+                  class="media-timing-review-confirm-button"
                   type="button"
                 >
-                  Reset timing
+                  Export card
                 </button>
               </div>
-              <button
-                id="mediaTimingReviewConfirm"
-                class="media-timing-review-confirm-button"
-                type="button"
-              >
-                Use this timing
-              </button>
-            </div>
-            <div class="media-timing-review-hints" aria-hidden="true">
-              <span><kbd>Space</kbd> preview</span>
-              <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> nudge focused edge</span>
-              <span><kbd>P</kbd>/<kbd>N</kbd> add prev/next line</span>
-              <span><kbd>Enter</kbd> confirm</span>
-              <span><kbd>Esc</kbd> cancel</span>
+              <div class="media-timing-review-hints" aria-hidden="true">
+                <span><kbd>Space</kbd> preview</span>
+                <span
+                  ><kbd class="media-timing-review-arrow-key" title="Left arrow"
+                    ><svg viewBox="0 0 12 12"><path d="M10 6H2.5M6 2.5 2.5 6 6 9.5" /></svg></kbd
+                  ><kbd class="media-timing-review-arrow-key" title="Right arrow"
+                    ><svg viewBox="0 0 12 12"><path d="M2 6h7.5M6 2.5 9.5 6 6 9.5" /></svg
+                  ></kbd>
+                  nudge focused edge</span
+                >
+                <span><kbd>P</kbd>/<kbd>N</kbd> add prev/next line</span>
+                <span><kbd>Enter</kbd> export card</span>
+                <span><kbd>Esc</kbd> cancel</span>
+              </div>
             </div>
           </div>
 
