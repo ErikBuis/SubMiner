@@ -204,22 +204,20 @@ export class NoteUpdateWorkflow {
       ...context,
       tracks: options.tracks,
     });
-    // The line on screen only stands in when there is no parsed secondary track. The
-    // review edits plain text, so cue markup is decoded for it.
-    const text = ankiFieldHtmlToPlainText(
+    // The line on screen only stands in when there is no parsed secondary track.
+    const cue =
       timedTranslation?.translation ??
-        (options.tracks && options.tracks.secondary.length > 0
-          ? ''
-          : (options.liveTranslation(context.text) ?? '')),
-    );
+      (options.tracks && options.tracks.secondary.length > 0
+        ? ''
+        : (options.liveTranslation(context.text) ?? ''));
+    // Formatted as the card saves it, then decoded: the review edits plain text.
+    const text = cue
+      ? ankiFieldHtmlToPlainText(options.format ? formatCardTranslation(cue) : cue)
+      : '';
     const reviewContext = buildReviewTranslationContext({ ...context, tracks: options.tracks });
     return {
       translation: {
-        text: text
-          ? options.format
-            ? formatCardTranslation(text)
-            : text
-          : ankiFieldHtmlToPlainText(options.existing),
+        text: text || ankiFieldHtmlToPlainText(options.existing),
         lines: reviewContext.lines,
         currentLines: (timedTranslation?.translationLines ?? []).map(toReviewLine),
         lineTranslations: reviewContext.lineTranslations,

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { ankiFieldHtmlToPlainText } from './sentence-translation';
 import assert from 'node:assert/strict';
 import {
   NoteUpdateWorkflow,
@@ -825,6 +826,31 @@ test('NoteUpdateWorkflow saves the on-screen translation the review showed', asy
 
   assert.deepEqual(shown, ['Lots of vegetables.']);
   assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'Lots of <i>vegetables</i>.');
+});
+
+test('NoteUpdateWorkflow review previews the formatted translation the card saves', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => ({
+    primary: [{ text: '野菜もいっぱい入ってるよ', startTime: 36.4, endTime: 39.2 }],
+    secondary: [{ text: '&quot;hello,&quot;', startTime: 36.3, endTime: 39.4 }],
+  });
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Sentence', wordCardTranslation: 'SentenceTranslation' },
+    behavior: { formatTranslation: true },
+    media: { generateAudio: false, generateImage: false },
+  });
+  const shown: Array<string | undefined> = [];
+  harness.deps.reviewMediaTiming = async (request) => {
+    shown.push(request.card?.translation?.text);
+    return { action: 'use-original' };
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.equal(
+    shown[0],
+    ankiFieldHtmlToPlainText(harness.updates[0]?.fields.SentenceTranslation ?? ''),
+  );
 });
 
 test('NoteUpdateWorkflow keeps the translation of a line whose clip the review trimmed', async () => {

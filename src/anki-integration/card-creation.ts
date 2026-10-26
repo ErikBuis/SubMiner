@@ -656,11 +656,13 @@ export class CardCreationService {
               tracks,
             })
           : null;
-        // The line on screen only stands in when there is no parsed secondary track. The
-        // review edits plain text, so cue markup is decoded for it.
-        const reviewTranslationText = ankiFieldHtmlToPlainText(
+        // The line on screen only stands in when there is no parsed secondary track.
+        const reviewTranslationCue =
           reviewTranslation?.translation ??
-            (tracks && tracks.secondary.length > 0 ? '' : (secondarySubText ?? '')),
+          (tracks && tracks.secondary.length > 0 ? '' : (secondarySubText ?? ''));
+        // Formatted as the card saves it, then decoded: the review edits plain text.
+        const reviewTranslationText = ankiFieldHtmlToPlainText(
+          formatTranslation ? formatCardTranslation(reviewTranslationCue) : reviewTranslationCue,
         );
         const reviewContext = reviewMediaTiming
           ? buildReviewTranslationContext({ startTime, endTime: subtitleEndTime, tracks })
@@ -673,9 +675,7 @@ export class CardCreationService {
               endTime,
               card: {
                 translation: {
-                  text: formatTranslation
-                    ? formatCardTranslation(reviewTranslationText)
-                    : reviewTranslationText,
+                  text: reviewTranslationText,
                   lines: reviewContext?.lines ?? [],
                   currentLines: (reviewTranslation?.translationLines ?? []).map(toReviewLine),
                   lineTranslations: reviewContext?.lineTranslations ?? [],
