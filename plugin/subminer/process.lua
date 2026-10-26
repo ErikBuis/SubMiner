@@ -278,7 +278,12 @@ function M.create(ctx)
 		state.overlay_loading_osd_deadline = nil
 	end
 
-	local function stop_overlay_loading_osd()
+	-- keep_pending: the pause-until-ready gate only borrows the OSD line, the overlay is
+	-- still loading and gets its spinner back when the gate releases.
+	local function stop_overlay_loading_osd(options)
+		if not (options and options.keep_pending) then
+			state.overlay_loading_pending = false
+		end
 		state.overlay_loading_osd_active = false
 		state.overlay_loading_osd_frame = 1
 		clear_overlay_loading_osd_timer()
@@ -286,6 +291,7 @@ function M.create(ctx)
 	end
 
 	local function start_overlay_loading_osd()
+		state.overlay_loading_pending = true
 		if state.overlay_loading_osd_active then
 			return
 		end
@@ -363,6 +369,7 @@ function M.create(ctx)
 	-- The app's overlay is ready (or hidden): drop the spinner's last frame too, but leave
 	-- timeout and gate messages alone when the spinner already stopped.
 	local function finish_overlay_loading_osd()
+		state.overlay_loading_pending = false
 		if not state.overlay_loading_osd_active then
 			return
 		end
@@ -376,6 +383,7 @@ function M.create(ctx)
 	-- pause-until-ready gate shows its own OSD messages, those own the OSD line.
 	local function request_overlay_loading_osd()
 		if state.auto_play_ready_gate_armed and resolve_osd_messages_enabled() then
+			state.overlay_loading_pending = true
 			return
 		end
 		start_overlay_loading_osd()
@@ -400,10 +408,14 @@ function M.create(ctx)
 		end
 		local should_resume_playback = state.auto_play_ready_should_resume_playback == true
 		if resolve_osd_messages_enabled() then
-			stop_overlay_loading_osd()
+			stop_overlay_loading_osd({ keep_pending = true })
 			show_osd(AUTO_PLAY_READY_READY_OSD)
 		end
 		disarm_auto_play_ready_gate({ resume_playback = false })
+		-- Playback can start before the overlay is shown; keep saying it is still loading.
+		if state.overlay_loading_pending and not state.overlay_loading_osd_active then
+			start_overlay_loading_osd()
+		end
 		if should_resume_playback then
 			mp.set_property_native("pause", false)
 			subminer_log("info", "process", "Resuming playback after startup gate: " .. tostring(reason or "ready"))
@@ -437,7 +449,7 @@ function M.create(ctx)
 		state.auto_play_ready_gate_armed = true
 		mp.set_property_native("pause", true)
 		if resolve_osd_messages_enabled() then
-			stop_overlay_loading_osd()
+			stop_overlay_loading_osd({ keep_pending = true })
 			show_osd(AUTO_PLAY_READY_LOADING_OSD)
 		end
 		if resolve_osd_messages_enabled() and type(mp.add_periodic_timer) == "function" then

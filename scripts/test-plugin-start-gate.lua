@@ -1782,6 +1782,16 @@ do
 		#recorded.osd == osd_count,
 		"the app's loading request should not take the OSD from the pause-until-ready messages"
 	)
+	recorded.script_messages["subminer-autoplay-ready"]()
+	assert_true(
+		recorded.osd[#recorded.osd] == "SubMiner: Overlay loading |",
+		"playback starting before the overlay is shown should bring the loading spinner back"
+	)
+	recorded.script_messages["subminer-overlay-loading-ready"]()
+	assert_true(
+		recorded.osd[#recorded.osd] == "",
+		"the overlay taking over should clear the spinner"
+	)
 end
 
 do

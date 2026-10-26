@@ -1685,6 +1685,15 @@ function isVisibleOverlayWindowContentReady(): boolean {
   );
 }
 
+// The loading spinner stays up while mpv's subtitles stand in for the overlay, so it ends
+// with them once the window is shown; hiding the overlay ends it right away.
+function dismissOverlayLoadingOnceOverlayShown(): void {
+  if (overlayManager.getVisibleOverlayVisible() && !isVisibleOverlayWindowContentReady()) {
+    return;
+  }
+  overlayNotificationsRuntime.dismissOverlayLoadingStatusNotification();
+}
+
 const ensureOverlayMpvSubtitlesHidden = createEnsureOverlayMpvSubtitlesHiddenHandler({
   getMpvClient: () => appState.mpvClient,
   getSavedSubVisibility: () => appState.overlaySavedMpvSubVisibility,
@@ -2928,7 +2937,7 @@ const overlayVisibilityRuntime = createOverlayVisibilityRuntimeService(
       overlayNotificationsRuntime.showOverlayLoadingStatusNotification();
     },
     dismissOverlayLoadingOsd: () => {
-      overlayNotificationsRuntime.dismissOverlayLoadingStatusNotification();
+      dismissOverlayLoadingOnceOverlayShown();
     },
     hideNonNativeOverlayWhenTargetUnfocused: () =>
       shouldRunLinuxOverlayZOrderKeepAlive() &&
@@ -5409,6 +5418,7 @@ function createMainWindow(): BrowserWindow {
   window.on('show', () => {
     if (overlayManager.getVisibleOverlayVisible()) {
       void ensureOverlayMpvSubtitlesHidden();
+      dismissOverlayLoadingOnceOverlayShown();
     }
   });
   if (process.platform === 'win32') {
@@ -6584,7 +6594,7 @@ const { createMainWindow: createMainWindowHandler, createModalWindow: createModa
         flushQueuedOverlayNotifications();
       },
       onWindowContentReady: () => {
-        overlayNotificationsRuntime.dismissOverlayLoadingStatusNotification();
+        dismissOverlayLoadingOnceOverlayShown();
         flushQueuedOverlayNotifications();
         overlayVisibilityRuntime.updateVisibleOverlayVisibility();
         // mpv showed its own subtitles while the overlay loaded; the overlay draws them now.
