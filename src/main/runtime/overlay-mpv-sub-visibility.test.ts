@@ -201,6 +201,45 @@ test('overlapping ensure calls that hide share the capture of the visible subtit
   assert.equal(mpvSubVisible, false);
 });
 
+test('a capture from before a restore never overwrites the next cycle', async () => {
+  let mpvSubVisible = true;
+  const resolvers: Array<() => void> = [];
+  const state: VisibilityState = { savedSubVisibility: null, revision: 0 };
+  const ensure = createEnsureOverlayMpvSubtitlesHiddenHandler({
+    getMpvClient: () => ({
+      connected: true,
+      requestProperty: (name) => {
+        if (name !== 'sub-visibility') return Promise.resolve(null);
+        const value = mpvSubVisible ? 'yes' : 'no';
+        return new Promise((resolve) => resolvers.push(() => resolve(value)));
+      },
+    }),
+    getSavedSubVisibility: () => state.savedSubVisibility,
+    setSavedSubVisibility: (visible) => {
+      state.savedSubVisibility = visible;
+    },
+    getRevision: () => state.revision,
+    setRevision: (revision) => {
+      state.revision = revision;
+    },
+    setMpvSubVisibility: (visible) => {
+      mpvSubVisible = visible;
+    },
+    logWarn: () => {},
+  });
+
+  const first = ensure();
+  state.revision += 1; // the overlay is hidden before the first read answers
+  mpvSubVisible = false; // and the user turns mpv's subtitles off
+  const second = ensure();
+  resolvers[0]!();
+  await first;
+  resolvers[1]!();
+  await second;
+
+  assert.equal(state.savedSubVisibility, false);
+});
+
 test('ensure drops a captured visibility when a newer toggle superseded it', async () => {
   let resolveVisibility!: (value: unknown) => void;
   const { ensureHidden, state } = makeEnsure((name) =>

@@ -104,8 +104,9 @@ export function createEnsureOverlayMpvSubtitlesHiddenHandler(deps: {
 
     if (capture) {
       const capturedVisibility = await capture;
-      // A restore after the latest call ended this suppression cycle.
-      if (deps.getRevision() !== latestEnsureRevision) {
+      // Only the newest call commits: a newer one shares this capture or, after a restore,
+      // started its own.
+      if (revision !== deps.getRevision()) {
         return;
       }
       if (deps.getSavedSubVisibility() === null) {
