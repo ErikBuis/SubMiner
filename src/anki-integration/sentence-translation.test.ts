@@ -39,3 +39,27 @@ test('widenSentenceToTranslation never takes the clip past the maximum duration'
     null,
   );
 });
+
+test('widenSentenceToTranslation leaves out a sign the captured sentence lacks', () => {
+  const tracks = {
+    primary: [
+      { text: '前半の台詞', startTime: 0, endTime: 4 },
+      { text: '看板', startTime: 1, endTime: 2 },
+      { text: '後半', startTime: 4, endTime: 6 },
+    ],
+    secondary: [
+      { text: 'The whole sentence.', startTime: 0, endTime: 6 },
+      { text: 'SIGN', startTime: 1, endTime: 2 },
+    ],
+  };
+  assert.deepEqual(
+    widenSentenceToTranslation({
+      text: '前半の台詞',
+      startTime: 0,
+      endTime: 4,
+      tracks,
+      maxSentenceSeconds: 0,
+    }),
+    { text: '前半の台詞 後半', startTime: 0, endTime: 6 },
+  );
+});

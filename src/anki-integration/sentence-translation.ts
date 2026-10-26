@@ -126,6 +126,8 @@ export function resolveTimedSentenceTranslation(input: {
  * nothing to widen.
  */
 export function widenSentenceToTranslation(input: {
+  /** The captured sentence; mined lines it lacks (a sign) are not widened from. */
+  text?: string;
   startTime: number;
   endTime: number;
   tracks: SubtitleTracksForTranslation | null;
@@ -136,6 +138,7 @@ export function widenSentenceToTranslation(input: {
     secondaryLines: input.tracks?.secondary ?? [],
     startTime: input.startTime,
     endTime: input.endTime,
+    sentenceText: input.text,
     widenSentence: true,
     maxSentenceSeconds: input.maxSentenceSeconds,
   });

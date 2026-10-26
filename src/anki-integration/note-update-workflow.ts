@@ -255,6 +255,7 @@ export class NoteUpdateWorkflow {
       let widenedSentenceText: string | undefined;
       if (mediaTimingContext && config.behavior?.widenSentenceToTranslation) {
         const widened = widenSentenceToTranslation({
+          text: mediaTimingContext.text,
           startTime: mediaTimingContext.startTime,
           endTime: mediaTimingContext.endTime,
           tracks: await getTracks(),

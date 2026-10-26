@@ -628,6 +628,7 @@ export class CardCreationService {
         const tracks = (await this.deps.getSubtitleTracksForTranslation?.()) ?? null;
         const widened = behavior?.widenSentenceToTranslation
           ? widenSentenceToTranslation({
+              text: sentence,
               startTime,
               endTime: subtitleEndTime,
               tracks,
