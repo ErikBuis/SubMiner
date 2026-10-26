@@ -132,7 +132,9 @@ export function createRestoreOverlayMpvSubtitlesHandler(deps: {
   setMpvSubVisibility: (visible: boolean) => void;
   isOverlayContentReady?: () => boolean;
   // Tells the mpv plugin the visibility it saved before the loading fallback is used up.
-  onSubVisibilityRestored?: () => void;
+  // `applied` says whether the app restored a captured value itself; if not (quitting before
+  // the capture finished), the plugin restores its own snapshot.
+  onSubVisibilityRestored?: (applied: boolean) => void;
 }) {
   return (options: RestoreOverlayMpvSubtitlesOptions = {}): void => {
     const savedVisibility = deps.getSavedSubVisibility();
@@ -152,7 +154,7 @@ export function createRestoreOverlayMpvSubtitlesHandler(deps: {
     if (savedVisibility === null) {
       // Quitting before the capture finished: the plugin still ends its loading fallback.
       if (options.force) {
-        deps.onSubVisibilityRestored?.();
+        deps.onSubVisibilityRestored?.(false);
       }
       return;
     }
@@ -163,7 +165,7 @@ export function createRestoreOverlayMpvSubtitlesHandler(deps: {
 
     if (savedVisibility !== null) {
       deps.setMpvSubVisibility(savedVisibility);
-      deps.onSubVisibilityRestored?.();
+      deps.onSubVisibilityRestored?.(true);
     }
 
     deps.setSavedSubVisibility(null);

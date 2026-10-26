@@ -1721,10 +1721,11 @@ const restoreOverlayMpvSubtitles = createRestoreOverlayMpvSubtitlesHandler({
     setMpvSubVisibilityRuntime(appState.mpvClient, visible);
   },
   isOverlayContentReady: () => isVisibleOverlayWindowContentReady(),
-  onSubVisibilityRestored: () => {
+  onSubVisibilityRestored: (applied) => {
     sendMpvCommandRuntime(appState.mpvClient, [
       'script-message',
       'subminer-sub-visibility-restored',
+      applied ? 'applied' : 'none',
     ]);
   },
 });
