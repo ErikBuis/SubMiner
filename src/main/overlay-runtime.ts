@@ -220,9 +220,14 @@ export function createOverlayModalRuntimeService(
 
   const elevateModalWindow = (window: BrowserWindow): void => {
     if (window.isDestroyed()) return;
-    if (platform === 'win32' && options.bindModalWindowAboveMpv) {
-      window.setAlwaysOnTop(false);
-      if (options.bindModalWindowAboveMpv(window)) return;
+    // No setAlwaysOnTop(false) first: once the modal is owned by mpv, demoting it also demotes
+    // mpv, which would drop mpv's own ontop state. The binding matches mpv's topmost state.
+    if (
+      platform === 'win32' &&
+      options.bindModalWindowAboveMpv &&
+      options.bindModalWindowAboveMpv(window)
+    ) {
+      return;
     }
     window.setAlwaysOnTop(true, 'screen-saver', 3);
     window.moveTop();

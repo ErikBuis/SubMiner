@@ -107,11 +107,13 @@ test('Windows modal window stacks above mpv instead of staying topmost', () => {
     restoreOnModalClose: 'runtime-options',
   });
   h.runtime.notifyOverlayModalOpened('runtime-options');
+  h.runtime.notifyOverlayModalOpened('runtime-options');
 
-  assert.ok(bound.length > 0);
+  // Elevation repeats on an already-owned modal; none may touch the topmost state directly,
+  // since demoting an owned window also demotes an mpv running with --ontop.
+  assert.ok(bound.length >= 2);
   assert.ok(bound.every((window) => window === modal));
-  assert.ok(modal.alwaysOnTopCalls.length > 0);
-  assert.ok(modal.alwaysOnTopCalls.every((call) => call === 'top:false::'));
+  assert.deepEqual(modal.alwaysOnTopCalls, []);
 });
 
 test('Windows modal window stays topmost when mpv cannot be bound', () => {
