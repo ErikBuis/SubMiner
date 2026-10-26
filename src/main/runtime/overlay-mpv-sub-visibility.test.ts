@@ -218,6 +218,17 @@ const RESTORE_CASES: Array<{
     expected: { saved: true, revision: 10, calls: [true] },
   },
   {
+    name: 'restore leaves mpv subtitles alone while loading when their visibility is not captured yet',
+    initial: {
+      saved: null,
+      revision: 3,
+      connected: true,
+      keepSuppressed: true,
+      overlayReady: false,
+    },
+    expected: { saved: null, revision: 4, calls: [] },
+  },
+  {
     name: 'forced restore ignores visible-overlay suppression during app shutdown',
     initial: { saved: true, revision: 9, connected: true, keepSuppressed: true },
     force: true,
