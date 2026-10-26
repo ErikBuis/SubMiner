@@ -30,8 +30,8 @@ export function stripBracketFurigana(value: string): string {
 
 /**
  * The part of furigana-annotated text that spells `line`, or null when `line` does not
- * start and end on segment boundaries. Whitespace is ignored when matching, since the
- * furigana syntax uses spaces as delimiters.
+ * start and end outside a segment that carries a reading. Whitespace is ignored when
+ * matching, since the furigana syntax uses spaces as delimiters.
  */
 export function sliceFuriganaForLine(
   segments: FuriganaSegment[],
@@ -39,7 +39,11 @@ export function sliceFuriganaForLine(
 ): FuriganaSegment[] | null {
   const target = line.replace(/\s+/g, '');
   if (!target) return null;
-  const visible = segments.map((segment) => segment.text.replace(/\s+/g, ''));
+  // Plain text may span several lines, so it is split per character; readings stay whole.
+  const atoms = segments.flatMap((segment): FuriganaSegment[] =>
+    segment.reading ? [segment] : Array.from(segment.text, (text) => ({ text })),
+  );
+  const visible = atoms.map((atom) => atom.text.replace(/\s+/g, ''));
   const full = visible.join('');
   let from = full.indexOf(target);
   while (from >= 0) {
@@ -52,7 +56,14 @@ export function sliceFuriganaForLine(
       position += text.length;
       if (text.length > 0 && position === to) last = index;
     }
-    if (first >= 0 && last >= first) return segments.slice(first, last + 1);
+    if (first >= 0 && last >= first) {
+      return atoms.slice(first, last + 1).reduce<FuriganaSegment[]>((merged, atom) => {
+        const previous = merged[merged.length - 1];
+        if (previous && !previous.reading && !atom.reading) previous.text += atom.text;
+        else merged.push({ ...atom });
+        return merged;
+      }, []);
+    }
     from = full.indexOf(target, from + 1);
   }
   return null;

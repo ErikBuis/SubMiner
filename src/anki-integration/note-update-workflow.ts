@@ -198,10 +198,13 @@ export class NoteUpdateWorkflow {
     // Notes written as HTML ruby read the same as bracket furigana once flattened to it.
     const sentenceFurigana = fieldName
       ? ankiFieldHtmlToPlainText(
-          (noteInfo.fields[fieldName]?.value ?? '').replace(
-            /<ruby>(.*?)<rt>(.*?)<\/rt><\/ruby>/gi,
-            ' $1[$2]',
-          ),
+          (noteInfo.fields[fieldName]?.value ?? '')
+            .replace(/<rp\b[^>]*>[\s\S]*?<\/rp>/gi, '')
+            .replace(
+              /<ruby\b[^>]*>([\s\S]*?)<rt\b[^>]*>([\s\S]*?)<\/rt>\s*<\/ruby>/gi,
+              (_match, base: string, reading: string) =>
+                ` ${base.replace(/\s+/g, '')}[${reading.replace(/\s+/g, '')}]`,
+            ),
         )
       : '';
     return sentenceFurigana ? { sentenceFurigana } : {};

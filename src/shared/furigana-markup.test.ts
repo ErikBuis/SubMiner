@@ -47,6 +47,20 @@ test('sliceFuriganaForLine picks the segments that spell one line', () => {
   ]);
 });
 
+test('sliceFuriganaForLine splits plain text that crosses a line boundary', () => {
+  const segments = parseBracketFurigana('猫[ねこ]がいる。\nあの 犬[いぬ]もいる。\nうん');
+  assert.deepEqual(sliceFuriganaForLine(segments, '猫がいる。'), [
+    { text: '猫', reading: 'ねこ' },
+    { text: 'がいる。' },
+  ]);
+  assert.deepEqual(sliceFuriganaForLine(segments, 'あの犬もいる。'), [
+    { text: 'あの' },
+    { text: '犬', reading: 'いぬ' },
+    { text: 'もいる。' },
+  ]);
+  assert.deepEqual(sliceFuriganaForLine(segments, 'うん'), [{ text: 'うん' }]);
+});
+
 test('sliceFuriganaForLine gives up when the line cuts through a segment or is absent', () => {
   const segments = parseBracketFurigana(' 猫[ねこ]を 見[み]た。');
   assert.equal(sliceFuriganaForLine(segments, '鳥が飛ぶ'), null);
