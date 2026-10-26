@@ -1,0 +1,6 @@
+type: fixed
+area: overlay
+
+- Mouse buttons bound in `keybindings` (for example a button bound to `cycle pause`) no longer fire for clicks inside SubMiner UI: modals such as the review dialog and playlist browser, the dictionary popup, the subtitle sidebar, notifications, or subtitle text. They also stay quiet while the playlist browser or a dictionary popup is open.
+- Keys the playlist browser does not use (such as the default `Space` pause or arrow-key seeks) no longer fall through to playback keybindings.
+- The overlay stays interactive while the TsukiHime, review, playlist browser, character dictionary, or changelog modal is open, instead of dropping back to click-through on a focus change and letting clicks reach mpv.

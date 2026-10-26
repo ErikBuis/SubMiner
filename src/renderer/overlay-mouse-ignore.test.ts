@@ -110,6 +110,26 @@ const toggleCases: Array<{
     options: { state: { isOverNotificationHistory: true } },
     capture: true,
   },
+  // A focus or blur resync while any of these is open used to drop the overlay back to
+  // click-through, so presses inside the modal reached mpv.
+  ...(
+    [
+      'tsukihimeModalOpen',
+      'mediaTimingReviewModalOpen',
+      'playlistBrowserModalOpen',
+      'characterDictionaryModalOpen',
+      'changelogModalOpen',
+    ] as const
+  ).map((flag) => ({
+    name: `${flag} keeps overlay interactive`,
+    options: { state: { [flag]: true } },
+    capture: true,
+  })),
+  {
+    name: 'open subtitle sidebar alone leaves playback click-through',
+    options: { state: { subtitleSidebarModalOpen: true } },
+    capture: false,
+  },
   {
     name: 'subtitle sidebar drag selection keeps overlay interactive',
     options: { sidebarSelecting: true },
