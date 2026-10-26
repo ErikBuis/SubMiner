@@ -91,6 +91,11 @@ async function showCue(cue: (typeof FIXTURE_CUES)[number]): Promise<RenderedToke
     });
 }
 
+async function isPaused(): Promise<boolean> {
+  const { session } = await useSession();
+  return (await session.mpv.command('get_property', 'pause')) === true;
+}
+
 function hasToken(tokens: RenderedToken[], surface: string, headword: string): boolean {
   return tokens.some((token) => token.surface === surface && token.headword === headword);
 }
@@ -241,5 +246,27 @@ test(
     });
     await overlay.send('Input.dispatchKeyEvent', { type: 'keyUp', ...shift });
     assert.match(entry, /天気/);
+  },
+);
+
+// Follows the popup scenario above, which leaves the popup open on the first cue.
+test(
+  'seeking to another line while paused closes the stale lookup popup and stays paused',
+  { timeout: TEST_TIMEOUT_MS },
+  async () => {
+    const { session, overlay } = await useSession();
+    await overlay.waitFor(
+      `document.querySelector('[data-subminer-yomitan-popup-visible="true"]') !== null`,
+      { description: 'the lookup popup from the previous scenario to still be open' },
+    );
+    await session.mpv.command('set_property', 'pause', true);
+
+    await showCue(FIXTURE_CUES[2]);
+    await overlay.waitFor(
+      `document.querySelector('[data-subminer-yomitan-popup-visible="true"]') === null`,
+      { description: 'the stale lookup popup to close' },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.equal(await isPaused(), true);
   },
 );

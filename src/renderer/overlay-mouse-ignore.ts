@@ -2,18 +2,25 @@ import type { RendererContext } from './context';
 import type { RendererState } from './state';
 import { isYomitanPopupVisible } from './yomitan-popup.js';
 
+// Every overlay-hosted modal except the subtitle sidebar, which is a side panel over
+// playback rather than a modal that owns the whole window.
 function isBlockingOverlayModalOpen(state: RendererState): boolean {
   return Boolean(
     state.controllerSelectModalOpen ||
     state.controllerDebugModalOpen ||
     state.jimakuModalOpen ||
+    state.tsukihimeModalOpen ||
     state.youtubePickerModalOpen ||
+    state.mediaTimingReviewModalOpen ||
+    state.playlistBrowserModalOpen ||
     state.kikuModalOpen ||
     state.runtimeOptionsModalOpen ||
+    state.characterDictionaryModalOpen ||
     state.subtitleSelectionModalOpen ||
     state.subsyncModalOpen ||
     state.subtitleGenerationModalOpen ||
-    state.sessionHelpModalOpen,
+    state.sessionHelpModalOpen ||
+    state.changelogModalOpen,
   );
 }
 
