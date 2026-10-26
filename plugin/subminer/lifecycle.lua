@@ -210,6 +210,12 @@ function M.create(ctx)
 	local function on_start_file()
 		if should_show_overlay_loading_osd() then
 			process.start_overlay_loading_osd()
+			-- SubMiner launches mpv with its subtitles hidden, but the overlay can take a while
+			-- to appear. Show mpv's subtitles until then; the app hides them once the overlay
+			-- is ready. App-managed playback controls subtitle visibility itself.
+			if not state.overlay_running and not state.app_managed_playback_pending then
+				mp.set_property_native("sub-visibility", true)
+			end
 		end
 		if state.pending_reload_media_identity ~= nil then
 			local media_identity = resolve_media_identity()

@@ -1642,10 +1642,14 @@ do
 		"auto-start visible overlay should force overlay loading OSD spinner on start-file"
 	)
 	assert_true(
+		has_property_set(recorded.property_sets, "sub-visibility", true),
+		"mpv should show its own subtitles while the overlay is still loading"
+	)
+	assert_true(
 		#recorded.periodic_timers == 1,
 		"auto-start visible overlay should refresh the early overlay loading OSD"
 	)
-	local overlay_loading_deadline = find_timeout_handle(recorded, 30)
+	local overlay_loading_deadline = find_timeout_handle(recorded, 60)
 	assert_true(overlay_loading_deadline ~= nil, "overlay loading OSD should have a bounded deadline")
 	local overlay_loading_timer = recorded.periodic_timers[1]
 	recorded.periodic_timers[1].callback()
@@ -1706,7 +1710,7 @@ do
 	})
 	assert_true(recorded ~= nil, "plugin failed to load for overlay loading deadline scenario: " .. tostring(err))
 	fire_event(recorded, "start-file")
-	local overlay_loading_deadline = find_timeout_handle(recorded, 30)
+	local overlay_loading_deadline = find_timeout_handle(recorded, 60)
 	assert_true(overlay_loading_deadline ~= nil, "overlay loading deadline should be scheduled")
 	overlay_loading_deadline.callback()
 	assert_true(
@@ -1720,6 +1724,11 @@ do
 	assert_true(
 		has_log_containing(recorded.logs, "Overlay loading deadline expired"),
 		"overlay loading deadline should leave a diagnostic log entry"
+	)
+	recorded.script_messages["subminer-overlay-loading-start"]()
+	assert_true(
+		#recorded.periodic_timers == 2 and recorded.periodic_timers[2].killed ~= true,
+		"the app's overlay loading request should start the plugin spinner"
 	)
 end
 
@@ -1743,6 +1752,10 @@ do
 	assert_true(
 		not has_osd_message(recorded.osd, "SubMiner: Overlay loading |"),
 		"auto-start hidden visible overlay should not show early overlay loading OSD"
+	)
+	assert_true(
+		not has_property_set(recorded.property_sets, "sub-visibility", true),
+		"mpv subtitles should stay as they are when no visible overlay is coming"
 	)
 end
 

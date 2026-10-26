@@ -11,7 +11,10 @@ type VisibilityState = {
   revision: number;
 };
 
-function makeEnsure(requestProperty: (name: string) => Promise<unknown>) {
+function makeEnsure(
+  requestProperty: (name: string) => Promise<unknown>,
+  isOverlayContentReady?: () => boolean,
+) {
   const state: VisibilityState = { savedSubVisibility: null, revision: 0 };
   const hidden: boolean[] = [];
   const warnings: string[] = [];
@@ -28,6 +31,7 @@ function makeEnsure(requestProperty: (name: string) => Promise<unknown>) {
     setMpvSubVisibility: (visible) => {
       hidden.push(visible);
     },
+    isOverlayContentReady,
     logWarn: (message) => warnings.push(message),
   });
   return { ensureHidden, state, hidden, warnings };
@@ -38,6 +42,7 @@ function makeRestore(initial: {
   revision: number;
   connected: boolean;
   keepSuppressed: boolean;
+  overlayReady?: boolean;
 }) {
   const state: VisibilityState = {
     savedSubVisibility: initial.saved,
@@ -58,6 +63,8 @@ function makeRestore(initial: {
     setMpvSubVisibility: (visible) => {
       calls.push(visible);
     },
+    isOverlayContentReady:
+      initial.overlayReady === undefined ? undefined : () => initial.overlayReady === true,
   });
   return { restore, state, calls };
 }
@@ -107,6 +114,21 @@ test('ensure falls back to visible restore and logs when the visibility read fai
   assert.equal(warnings.length, 1);
 });
 
+test('ensure keeps mpv subtitles visible until the overlay content is ready', async () => {
+  let ready = false;
+  const { ensureHidden, state, hidden } = makeEnsure(
+    async () => 'yes',
+    () => ready,
+  );
+
+  await ensureHidden();
+  ready = true;
+  await ensureHidden();
+
+  assert.equal(state.savedSubVisibility, true);
+  assert.deepEqual(hidden, [true, false]);
+});
+
 test('ensure drops a captured visibility when a newer toggle superseded it', async () => {
   let resolveVisibility!: (value: unknown) => void;
   const { ensureHidden, state } = makeEnsure(
@@ -139,6 +161,17 @@ const RESTORE_CASES: Array<{
     name: 'restore keeps mpv subtitles hidden when visible-overlay binding still requires suppression',
     initial: { saved: true, revision: 9, connected: true, keepSuppressed: true },
     expected: { saved: true, revision: 10, calls: [false] },
+  },
+  {
+    name: 'restore keeps mpv subtitles visible while the visible overlay is still loading',
+    initial: {
+      saved: true,
+      revision: 9,
+      connected: true,
+      keepSuppressed: true,
+      overlayReady: false,
+    },
+    expected: { saved: true, revision: 10, calls: [true] },
   },
   {
     name: 'forced restore ignores visible-overlay suppression during app shutdown',

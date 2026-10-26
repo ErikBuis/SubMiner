@@ -1673,6 +1673,13 @@ async function initializeDiscordPresenceService(): Promise<void> {
   await appState.discordPresenceService.start();
   discordPresenceRuntime.publishDiscordPresence();
 }
+function isVisibleOverlayWindowContentReady(): boolean {
+  const overlayWindow = overlayManager.getMainWindow();
+  return Boolean(
+    overlayWindow && !overlayWindow.isDestroyed() && isOverlayWindowContentReady(overlayWindow),
+  );
+}
+
 const ensureOverlayMpvSubtitlesHidden = createEnsureOverlayMpvSubtitlesHiddenHandler({
   getMpvClient: () => appState.mpvClient,
   getSavedSubVisibility: () => appState.overlaySavedMpvSubVisibility,
@@ -1686,6 +1693,7 @@ const ensureOverlayMpvSubtitlesHidden = createEnsureOverlayMpvSubtitlesHiddenHan
   setMpvSubVisibility: (visible) => {
     setMpvSubVisibilityRuntime(appState.mpvClient, visible);
   },
+  isOverlayContentReady: () => isVisibleOverlayWindowContentReady(),
   logWarn: (message, error) => {
     logger.warn(message, error);
   },
@@ -1704,6 +1712,7 @@ const restoreOverlayMpvSubtitles = createRestoreOverlayMpvSubtitlesHandler({
   setMpvSubVisibility: (visible) => {
     setMpvSubVisibilityRuntime(appState.mpvClient, visible);
   },
+  isOverlayContentReady: () => isVisibleOverlayWindowContentReady(),
 });
 
 function syncOverlayMpvSubtitleSuppression(): void {
@@ -6559,6 +6568,10 @@ const { createMainWindow: createMainWindowHandler, createModalWindow: createModa
         overlayNotificationsRuntime.dismissOverlayLoadingStatusNotification();
         flushQueuedOverlayNotifications();
         overlayVisibilityRuntime.updateVisibleOverlayVisibility();
+        // mpv showed its own subtitles while the overlay loaded; the overlay draws them now.
+        if (overlayManager.getVisibleOverlayVisible()) {
+          void ensureOverlayMpvSubtitlesHidden();
+        }
         visibleOverlayInteractionRuntime.primeLinuxOverlayPointerInteractionAfterFirstMeasurement();
         autoplayReadyGate.flushPendingAutoplayReadySignal();
       },

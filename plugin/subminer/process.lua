@@ -7,8 +7,10 @@ local OVERLAY_RESTART_PING_MAX_ATTEMPTS = 20
 local OVERLAY_LOADING_OSD_PREFIX = "Overlay loading "
 local OVERLAY_LOADING_OSD_FRAMES = { "|", "/", "-", "\\" }
 local OVERLAY_LOADING_OSD_REFRESH_SECONDS = 0.18
-local OVERLAY_LOADING_OSD_DEADLINE_SECONDS = 30
+-- Loading Yomitan with many dictionaries can take half a minute on slower machines.
+local OVERLAY_LOADING_OSD_DEADLINE_SECONDS = 60
 local OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE = "Overlay did not become ready; check SubMiner logs"
+local OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE_SECONDS = 8
 local AUTO_PLAY_READY_LOADING_OSD = "Loading subtitle tokenization..."
 local AUTO_PLAY_READY_READY_OSD = "Subtitle tokenization ready"
 local DEFAULT_AUTO_PLAY_READY_TIMEOUT_SECONDS = 30
@@ -314,7 +316,10 @@ function M.create(ctx)
 					"process",
 					"Overlay loading deadline expired before the app reported content ready"
 				)
-				show_osd(OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE, { force = true })
+				show_osd(OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE, {
+					force = true,
+					duration = OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE_SECONDS,
+				})
 			end)
 		end
 	end
