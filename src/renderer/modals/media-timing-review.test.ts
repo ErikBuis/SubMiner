@@ -258,3 +258,25 @@ test('an added line takes the translation the full-track grouping assigned it', 
     'Now X',
   );
 });
+
+test('an on-screen translation stays when lines are added around it', () => {
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      previousLines: [{ text: '前', startTime: 8, endTime: 10 }],
+      nextLines: [{ text: '次', startTime: 12, endTime: 14 }],
+      text: '今',
+      originalStartTime: 10,
+      originalEndTime: 12,
+      previousCount: 1,
+      nextCount: 1,
+      initialTranslation: 'Now.',
+      initialTranslationLines: [],
+      translationLines: [
+        { text: 'Before.', startTime: 8, endTime: 10 },
+        { text: 'After.', startTime: 12, endTime: 14 },
+      ],
+      format: false,
+    }),
+    'Before. Now. After.',
+  );
+});

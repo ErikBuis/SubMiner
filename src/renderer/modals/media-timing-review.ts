@@ -139,12 +139,21 @@ export function buildMediaTimingReviewTranslation(options: {
     const best = findBestOverlappingLine(options.translationLines, line);
     return best ? [best] : [];
   };
-  const lines = dedupeSortedLines([
-    ...selection.previous.flatMap(addedTranslation),
-    ...options.initialTranslationLines,
-    ...selection.next.flatMap(addedTranslation),
-  ]);
-  const translation = joinSubtitleLineTexts(lines);
+  const before = selection.previous.flatMap(addedTranslation);
+  const after = selection.next.flatMap(addedTranslation);
+  // A translation taken from the screen has no timed lines behind it; keep its text.
+  const translation =
+    options.initialTranslationLines.length > 0
+      ? joinSubtitleLineTexts(
+          dedupeSortedLines([...before, ...options.initialTranslationLines, ...after]),
+        )
+      : [
+          joinSubtitleLineTexts(dedupeSortedLines(before)),
+          options.initialTranslation.trim(),
+          joinSubtitleLineTexts(dedupeSortedLines(after)),
+        ]
+          .filter(Boolean)
+          .join(' ');
   return options.format ? formatCardTranslation(translation) : translation;
 }
 
