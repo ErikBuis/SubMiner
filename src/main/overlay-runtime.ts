@@ -70,6 +70,12 @@ export interface OverlayModalRuntimeOptions {
   onFinalModalClosed?: () => void;
   scheduleRevealFallback?: (callback: () => void, delayMs: number) => RevealFallbackHandle;
   clearRevealFallback?: (timeout: RevealFallbackHandle) => void;
+  /**
+   * Windows only: stacks the modal window directly above mpv, owned by it, instead of making
+   * it topmost, so switching to another app covers the modal like it covers mpv. Returns false
+   * when mpv's window is unknown, which keeps the topmost fallback.
+   */
+  bindModalWindowAboveMpv?: (window: BrowserWindow) => boolean;
 }
 
 export function createOverlayModalRuntimeService(
@@ -214,6 +220,10 @@ export function createOverlayModalRuntimeService(
 
   const elevateModalWindow = (window: BrowserWindow): void => {
     if (window.isDestroyed()) return;
+    if (platform === 'win32' && options.bindModalWindowAboveMpv) {
+      window.setAlwaysOnTop(false);
+      if (options.bindModalWindowAboveMpv(window)) return;
+    }
     window.setAlwaysOnTop(true, 'screen-saver', 3);
     window.moveTop();
   };

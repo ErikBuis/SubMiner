@@ -869,6 +869,8 @@ const bootServices = createMainBootServices({
     return createOverlayModalRuntimeService(buildHandler(), {
       onModalStateChange: (isActive: boolean) =>
         overlayModalInputState.handleModalInputStateChange(isActive),
+      bindModalWindowAboveMpv: (window) =>
+        visibleOverlayInteractionRuntime.bindWindowsModalWindowAboveMpv(window),
       // On macOS, after the last modal closes the post-close visibility sync hides the overlay
       // when neither it nor mpv is focused, and keyboard focus is left in limbo (mpv keys like
       // shift-to-unpause stop working). Programmatically focusing mpv from our background helper

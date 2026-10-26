@@ -330,6 +330,17 @@ export function createVisibleOverlayInteractionRuntime(deps: VisibleOverlayInter
     }
   }
 
+  function bindWindowsModalWindowAboveMpv(window: BrowserWindow): boolean {
+    if (process.platform !== 'win32' || window.isDestroyed()) {
+      return false;
+    }
+    const targetWindowHwnd = resolveWindowsOverlayBindTargetHandle(deps.getMpvSocketPath());
+    if (targetWindowHwnd === null) {
+      return false;
+    }
+    return bindWindowsOverlayAboveMpv(getWindowsNativeWindowHandleNumber(window), targetWindowHwnd);
+  }
+
   function releaseVisibleOverlayOwner(): void {
     const mainWindow = overlayManager.getMainWindow();
     if (process.platform === 'linux') {
@@ -841,6 +852,7 @@ export function createVisibleOverlayInteractionRuntime(deps: VisibleOverlayInter
     clearVisibleOverlayX11OwnerBinding,
     createOverlayWindowTracker,
     bindVisibleOverlayOwner,
+    bindWindowsModalWindowAboveMpv,
     releaseVisibleOverlayOwner,
     startOverlayWindowTrackerForCurrentSocket,
     retargetOverlayWindowTrackerForMpvSocket,
