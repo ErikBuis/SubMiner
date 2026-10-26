@@ -220,6 +220,20 @@ test('dispatchMpvProtocolMessage enforces sub-visibility hidden when overlay sup
   ]);
 });
 
+test('dispatchMpvProtocolMessage keeps mpv subtitles while the visible overlay is still loading', async () => {
+  const { deps, state } = createDeps({
+    isVisibleOverlayVisible: () => true,
+    shouldSuppressMpvSubtitles: () => false,
+  });
+
+  await dispatchMpvProtocolMessage(
+    { event: 'property-change', name: 'sub-visibility', data: 'yes' },
+    deps,
+  );
+
+  assert.equal(state.commands.length, 0);
+});
+
 test('dispatchMpvProtocolMessage emits fullscreen changes', async () => {
   const { deps, state } = createDeps();
 

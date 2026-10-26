@@ -9,6 +9,7 @@ export function createBuildMpvClientRuntimeServiceFactoryDepsHandler<
   isAutoStartOverlayEnabled: () => boolean;
   setOverlayVisible: (visible: boolean) => void;
   isVisibleOverlayVisible: () => boolean;
+  shouldSuppressMpvSubtitles?: () => boolean;
   getReconnectTimer: () => ReturnType<typeof setTimeout> | null;
   setReconnectTimer: (timer: ReturnType<typeof setTimeout> | null) => void;
   shouldAutoLoadSecondarySubTrack?: (path: string) => boolean;
@@ -24,6 +25,9 @@ export function createBuildMpvClientRuntimeServiceFactoryDepsHandler<
       autoStartOverlay: deps.isAutoStartOverlayEnabled(),
       setOverlayVisible: (visible: boolean) => deps.setOverlayVisible(visible),
       isVisibleOverlayVisible: () => deps.isVisibleOverlayVisible(),
+      shouldSuppressMpvSubtitles: deps.shouldSuppressMpvSubtitles
+        ? () => deps.shouldSuppressMpvSubtitles?.() ?? true
+        : undefined,
       getReconnectTimer: () => deps.getReconnectTimer(),
       setReconnectTimer: (timer: ReturnType<typeof setTimeout> | null) =>
         deps.setReconnectTimer(timer),

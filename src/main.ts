@@ -5047,6 +5047,8 @@ const {
     isAutoStartOverlayEnabled: () => appState.autoStartOverlay,
     setOverlayVisible: (visible: boolean) => setOverlayVisible(visible),
     isVisibleOverlayVisible: () => overlayManager.getVisibleOverlayVisible(),
+    shouldSuppressMpvSubtitles: () =>
+      overlayManager.getVisibleOverlayVisible() && isVisibleOverlayWindowContentReady(),
     getReconnectTimer: () => appState.reconnectTimer,
     setReconnectTimer: (timer: ReturnType<typeof setTimeout> | null) => {
       appState.reconnectTimer = timer;
