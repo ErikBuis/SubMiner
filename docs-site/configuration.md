@@ -193,6 +193,8 @@ Controls how primary and secondary subtitles look and which annotations they sho
 
 Two CSS custom properties style the hovered word: `--subtitle-hover-token-color` (`#f4dbd6`) and `--subtitle-hover-token-background-color` (`transparent`). Set them inside `subtitleStyle.css`.
 
+When the subtitle line changes while playback is paused (a seek, subtitle step, or track or delay change), an open dictionary popup closes, because its word is no longer on screen. Playback stays paused.
+
 ### Subtitle sidebar
 
 A scrollable cue list for the current subtitle file. It only works when SubMiner could parse the active subtitle into cues. See [Subtitle sidebar](/subtitle-sidebar).
