@@ -113,3 +113,7 @@ test('character references survive a review edit round trip', () => {
   );
   assert.equal(ankiFieldHtmlToPlainText('&amp;lt;'), '&lt;');
 });
+
+test('ankiFieldHtmlToPlainText keeps literal comparison signs', () => {
+  assert.equal(ankiFieldHtmlToPlainText('<i>1 < 2 and 3 > 2</i>'), '1 < 2 and 3 > 2');
+});

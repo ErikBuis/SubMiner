@@ -8,7 +8,7 @@
  * one moment therefore both cuts sentences short and pulls in unrelated lines.
  */
 
-import { decodeCharacterReferences } from './subtitle-markup';
+import { decodeCharacterReferences, stripSubtitleTags } from './subtitle-markup';
 
 export interface TimedSubtitleText {
   text: string;
@@ -364,7 +364,7 @@ export function isSourceLanguageText(
 ): boolean {
   // Cue markup (`<i>`, `&amp;`) differs between tracks and is not language.
   const comparable = (text: string) =>
-    compactText(decodeCharacterReferences(text.replace(/<[^>]+>/g, '')));
+    compactText(decodeCharacterReferences(stripSubtitleTags(text)));
   const lines = translationLines
     .flatMap((text) => text.split(/\r?\n|\\N/))
     .map(comparable)

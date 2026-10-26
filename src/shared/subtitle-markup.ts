@@ -28,3 +28,11 @@ function decodeCharacterReference(reference: string, body: string): string {
 export function decodeCharacterReferences(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, decodeCharacterReference);
 }
+
+/** An HTML-style tag (`<i>`, `</font>`); a literal `<` in text such as `1 < 2` is not one. */
+export const HTML_SUBTITLE_TAG_PATTERN = /<\/?[A-Za-z][^>\n]*>/g;
+
+/** Removes HTML-style tags, keeping literal comparison signs. */
+export function stripSubtitleTags(text: string): string {
+  return text.replace(HTML_SUBTITLE_TAG_PATTERN, '');
+}

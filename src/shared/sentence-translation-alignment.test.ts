@@ -354,3 +354,8 @@ test('isSourceLanguageText rejects source cues that are separate pieces of the s
   );
   assert.equal(isSourceLanguageText(['Nice weather.', 'Sunny tomorrow.'], '今日は 明日も'), false);
 });
+
+test('isSourceLanguageText keeps literal comparison signs apart from tags', () => {
+  assert.equal(isSourceLanguageText(['1 < 2 et 3 > 2'], '1 < 2 and 3 > 2'), false);
+  assert.equal(isSourceLanguageText(['<i>今日は</i>'], '今日は'), true);
+});

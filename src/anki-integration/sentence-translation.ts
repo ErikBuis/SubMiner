@@ -9,7 +9,7 @@ import {
   sortSubtitleLines,
   type TimedSubtitleText,
 } from '../shared/sentence-translation-alignment';
-import { decodeCharacterReferences } from '../shared/subtitle-markup';
+import { decodeCharacterReferences, HTML_SUBTITLE_TAG_PATTERN } from '../shared/subtitle-markup';
 
 /** Parsed primary and secondary subtitle tracks, in the same timeline as the mined range. */
 export interface SubtitleTracksForTranslation {
@@ -172,7 +172,7 @@ export function ankiFieldHtmlToPlainText(html: string): string {
       .replace(/\[sound:[^\]]+\]/gi, '')
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/(?:li|div|p|tr|h[1-6])>/gi, '\n')
-      .replace(/<[^>]+>/g, ''),
+      .replace(HTML_SUBTITLE_TAG_PATTERN, ''),
   )
     .split('\n')
     .map((line) => line.replace(/\s+/g, ' ').trim())
