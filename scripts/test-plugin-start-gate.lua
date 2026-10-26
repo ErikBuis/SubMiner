@@ -1653,11 +1653,17 @@ do
 		has_property_set(recorded.property_sets, "user-data/subminer/sub-visibility-before-overlay", false),
 		"the visibility from before the loading fallback should be kept for the app to restore"
 	)
-	recorded.script_messages["subminer-sub-visibility-restored"]()
+	recorded.script_messages["subminer-visible-overlay-hidden"]()
+	assert_true(
+		recorded.property_sets[#recorded.property_sets].name == "sub-visibility"
+			and recorded.property_sets[#recorded.property_sets].value == false,
+		"hiding the overlay should end the loading fallback with the earlier visibility"
+	)
 	assert_true(
 		recorded.property_deletes[1] == "user-data/subminer/sub-visibility-before-overlay",
-		"the app restoring subtitle visibility should drop the saved pre-loading visibility"
+		"ending the fallback should drop the saved pre-loading visibility"
 	)
+	recorded.script_messages["subminer-visible-overlay-shown"]()
 	assert_true(
 		#recorded.periodic_timers == 1,
 		"auto-start visible overlay should refresh the early overlay loading OSD"
@@ -1694,6 +1700,10 @@ do
 		"overlay loading ready script message should be registered"
 	)
 	recorded.script_messages["subminer-overlay-loading-ready"]()
+	assert_true(
+		recorded.osd[#recorded.osd] == "",
+		"overlay loading ready should clear the spinner's last frame"
+	)
 	assert_true(
 		recorded.periodic_timers[1].killed == true,
 		"overlay loading ready should stop the early overlay loading OSD refresher"

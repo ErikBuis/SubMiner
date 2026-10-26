@@ -332,10 +332,8 @@ function M.create(ctx)
 			return
 		end
 		state.sub_visibility_saved_before_overlay = true
-		mp.set_property_native(
-			SUB_VISIBILITY_BEFORE_OVERLAY_PROPERTY,
-			mp.get_property_native("sub-visibility") == true
-		)
+		state.sub_visibility_before_overlay = mp.get_property_native("sub-visibility") == true
+		mp.set_property_native(SUB_VISIBILITY_BEFORE_OVERLAY_PROPERTY, state.sub_visibility_before_overlay)
 	end
 
 	-- Once the app has restored that visibility (overlay hidden or app quitting), later
@@ -347,6 +345,29 @@ function M.create(ctx)
 		state.sub_visibility_saved_before_overlay = false
 		if type(mp.del_property) == "function" then
 			pcall(mp.del_property, SUB_VISIBILITY_BEFORE_OVERLAY_PROPERTY)
+		end
+	end
+
+	-- Hiding the overlay ends the fallback even when the app hid it before it captured the
+	-- visibility (and so has nothing to restore). The app's own restore sets the same value.
+	local function restore_sub_visibility_before_overlay()
+		if not state.sub_visibility_saved_before_overlay then
+			return
+		end
+		local visible = state.sub_visibility_before_overlay == true
+		clear_sub_visibility_before_overlay()
+		mp.set_property_native("sub-visibility", visible)
+	end
+
+	-- The app's overlay is ready (or hidden): drop the spinner's last frame too, but leave
+	-- timeout and gate messages alone when the spinner already stopped.
+	local function finish_overlay_loading_osd()
+		if not state.overlay_loading_osd_active then
+			return
+		end
+		stop_overlay_loading_osd()
+		if type(mp.osd_message) == "function" then
+			mp.osd_message("", 0)
 		end
 	end
 
@@ -1077,6 +1098,8 @@ function M.create(ctx)
 		request_overlay_loading_osd = request_overlay_loading_osd,
 		save_sub_visibility_before_overlay = save_sub_visibility_before_overlay,
 		clear_sub_visibility_before_overlay = clear_sub_visibility_before_overlay,
+		restore_sub_visibility_before_overlay = restore_sub_visibility_before_overlay,
+		finish_overlay_loading_osd = finish_overlay_loading_osd,
 		stop_overlay_loading_osd = stop_overlay_loading_osd,
 	}
 end
