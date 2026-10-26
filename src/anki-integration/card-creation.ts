@@ -35,6 +35,7 @@ import {
   type SubtitleTracksForTranslation,
 } from './sentence-translation';
 import { formatCardTranslation } from '../shared/sentence-translation-alignment';
+import { cleanSentenceText } from '../shared/subtitle-speaker-labels';
 
 const log = createLogger('anki').child('integration.card-creation');
 
@@ -507,6 +508,7 @@ export class CardCreationService {
           endTime = timingDecision.endTime;
           sentenceText = timingDecision.text?.trim() || sentenceText;
         }
+        sentenceText = cleanSentenceText(sentenceText, this.deps.getConfig().behavior);
 
         const updatedFields: Record<string, string> = {};
         const errors: string[] = [];
@@ -728,6 +730,7 @@ export class CardCreationService {
         else if (tracks && tracks.secondary.length > 0) secondarySubText = undefined;
 
         const config = this.deps.getConfig();
+        sentence = cleanSentenceText(sentence, config.behavior);
         const generateAudio = !skipMedia && shouldGenerateAudio(config);
         const generateImage = !skipMedia && shouldGenerateImage(config);
         const mediaResolverOptions = this.getMediaResolverOptions();

@@ -25,6 +25,8 @@ export interface MediaTimingReviewRequest {
   screenshotEnabled?: boolean;
   /** What else the card will get, so the review covers the whole export. */
   card?: MediaTimingReviewCardPreview;
+  /** Strip leading speaker labels from the adjacent lines offered by the review. */
+  stripSpeakerLabels?: boolean;
 }
 
 /** Card fields shown alongside the media timing. Only the translation is editable. */
@@ -249,6 +251,7 @@ export interface AnkiConnectConfig {
     formatTranslation?: boolean;
     mediaInsertMode?: 'append' | 'prepend';
     highlightWord?: boolean;
+    stripSpeakerLabels?: boolean;
     notificationType?: NotificationType;
     autoUpdateNewCards?: boolean;
   };

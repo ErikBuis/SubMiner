@@ -20,6 +20,7 @@ import {
   type SubtitleTracksForTranslation,
 } from './sentence-translation';
 import { formatCardTranslation } from '../shared/sentence-translation-alignment';
+import { cleanSentenceText } from '../shared/subtitle-speaker-labels';
 
 export interface NoteUpdateWorkflowNoteInfo {
   noteId: number;
@@ -56,6 +57,7 @@ export interface NoteUpdateWorkflowDeps {
       overwriteImage?: boolean;
       widenSentenceToTranslation?: boolean;
       formatTranslation?: boolean;
+      stripSpeakerLabels?: boolean;
     };
   };
   getCurrentSubtitleText: () => string | undefined;
@@ -453,13 +455,16 @@ export class NoteUpdateWorkflow {
         if (translation) translatedText = minedText;
       }
 
-      const currentSubtitleText =
+      const rawSubtitleText =
         reviewedSentenceText ??
         widenedSentenceText ??
         subtitleMiningContext?.text ??
         // The translation belongs to the captured line, so the sentence must be that line too.
         translatedText ??
         this.deps.getCurrentSubtitleText();
+      const currentSubtitleText = rawSubtitleText
+        ? cleanSentenceText(rawSubtitleText, config.behavior)
+        : rawSubtitleText;
       if (sentenceField && currentSubtitleText) {
         const processedSentence = this.deps.processSentence(currentSubtitleText, fields);
         updatedFields[sentenceField] = processedSentence;

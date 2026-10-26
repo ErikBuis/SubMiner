@@ -1147,3 +1147,55 @@ test('NoteUpdateWorkflow review shows the word as plain text', async () => {
 
   assert.equal(reviewRequests[0]?.card?.word, '貴様');
 });
+
+test('NoteUpdateWorkflow strips speaker labels from the mined sentence', async () => {
+  const harness = createWorkflowHarness();
+  harness.deps.consumeSubtitleMiningContext = () => ({
+    source: 'overlay',
+    text: '（ひとり）\n部活も入らず 放課後は即帰宅',
+    startTime: 4,
+    endTime: 6,
+  });
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(harness.updates, [
+    { noteId: 42, fields: { Sentence: '部活も入らず 放課後は即帰宅' } },
+  ]);
+});
+
+test('NoteUpdateWorkflow strips speaker labels from a reviewed sentence', async () => {
+  const harness = createWorkflowHarness();
+  harness.deps.captureSubtitleMediaContext = () => ({
+    source: 'overlay',
+    text: 'current-line',
+    startTime: 4,
+    endTime: 6,
+  });
+  harness.deps.reviewMediaTiming = async () => ({
+    action: 'confirm',
+    startTime: 2,
+    endTime: 7,
+    text: '（園児）先生 current-line',
+  });
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(harness.updates, [{ noteId: 42, fields: { Sentence: '先生 current-line' } }]);
+});
+
+test('NoteUpdateWorkflow keeps speaker labels when stripSpeakerLabels is off', async () => {
+  const harness = createWorkflowHarness();
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Sentence' },
+    media: {},
+    behavior: { stripSpeakerLabels: false },
+  });
+  harness.deps.getCurrentSubtitleText = () => '（ひとり）\n部活も入らず';
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(harness.updates, [
+    { noteId: 42, fields: { Sentence: '（ひとり）\n部活も入らず' } },
+  ]);
+});

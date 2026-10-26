@@ -196,6 +196,13 @@ export function buildIntegrationConfigOptionRegistry(
         'Write card translations as one line that starts with a capital letter, adding " (...)" after a trailing comma.',
     },
     {
+      path: 'ankiConnect.behavior.stripSpeakerLabels',
+      kind: 'boolean',
+      defaultValue: defaultConfig.ankiConnect.behavior.stripSpeakerLabels,
+      description:
+        'Remove speaker names and annotations in brackets at the start of a subtitle line, such as （ひとり）, from the sentence on the saved Anki card and in the review preview.',
+    },
+    {
       path: 'ankiConnect.behavior.notificationType',
       kind: 'enum',
       enumValues: NOTIFICATION_TYPE_VALUES,

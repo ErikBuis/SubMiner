@@ -168,14 +168,15 @@ When you cancel, you can go back to editing, keep the original timing, create th
 
 ### Update behavior
 
-| Key                           | What it does                                         |
-| ----------------------------- | ---------------------------------------------------- |
-| `behavior.overwriteAudio`     | Replace existing audio instead of adding to it       |
-| `behavior.overwriteImage`     | Replace the existing image instead of adding to it   |
-| `behavior.mediaInsertMode`    | `append` or `prepend` new media when not overwriting |
-| `behavior.autoUpdateNewCards` | Fill new Yomitan notes automatically                 |
-| `behavior.highlightWord`      | Bold the mined word in the sentence field            |
-| `behavior.notificationType`   | `overlay`, `system`, `both`, or `none`               |
+| Key                           | What it does                                                     |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `behavior.overwriteAudio`     | Replace existing audio instead of adding to it                   |
+| `behavior.overwriteImage`     | Replace the existing image instead of adding to it               |
+| `behavior.mediaInsertMode`    | `append` or `prepend` new media when not overwriting             |
+| `behavior.autoUpdateNewCards` | Fill new Yomitan notes automatically                             |
+| `behavior.highlightWord`      | Bold the mined word in the sentence field                        |
+| `behavior.stripSpeakerLabels` | Drop bracketed speaker names like `（ひとり）` from the sentence |
+| `behavior.notificationType`   | `overlay`, `system`, `both`, or `none`                           |
 
 Manual clipboard updates (`Ctrl/Cmd+V`) always replace the sentence audio, whatever `overwriteAudio` says.
 

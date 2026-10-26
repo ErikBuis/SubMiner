@@ -27,6 +27,7 @@ import {
   REVIEW_CONTEXT_EPSILON_SECONDS as CONTEXT_LINE_EPSILON_SECONDS,
   REVIEW_CONTEXT_LINE_LIMIT as CONTEXT_LINE_LIMIT,
 } from '../../shared/sentence-translation-alignment';
+import { stripSpeakerLabels } from '../../shared/subtitle-speaker-labels';
 
 const INITIAL_TIMELINE_MARGIN_SECONDS = 2;
 const REVIEW_DECISION_TIMEOUT_MS = 5 * 60_000;
@@ -228,6 +229,14 @@ function isValidMediaTimingRange(
   );
 }
 
+function cleanContextLines(
+  lines: MediaTimingReviewContextLine[] | undefined,
+  strip: boolean | undefined,
+): MediaTimingReviewContextLine[] {
+  if (!lines) return [];
+  return strip ? lines.map((line) => ({ ...line, text: stripSpeakerLabels(line.text) })) : lines;
+}
+
 export function buildMediaTimingReviewPayload(
   request: MediaTimingReviewRequest,
   options: {
@@ -261,8 +270,8 @@ export function buildMediaTimingReviewPayload(
     reviewId: options.reviewId,
     kind: request.kind,
     text: request.text,
-    previousLines: options.contextLines?.previous ?? [],
-    nextLines: options.contextLines?.next ?? [],
+    previousLines: cleanContextLines(options.contextLines?.previous, request.stripSpeakerLabels),
+    nextLines: cleanContextLines(options.contextLines?.next, request.stripSpeakerLabels),
     ...(request.noteId !== undefined ? { noteId: request.noteId } : {}),
     originalStartTime: request.startTime,
     originalEndTime: request.endTime,

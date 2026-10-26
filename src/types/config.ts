@@ -285,6 +285,7 @@ export interface ResolvedConfig {
       formatTranslation: boolean;
       mediaInsertMode: 'append' | 'prepend';
       highlightWord: boolean;
+      stripSpeakerLabels: boolean;
       notificationType: NotificationType;
       autoUpdateNewCards: boolean;
     };
