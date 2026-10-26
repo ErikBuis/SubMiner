@@ -225,11 +225,22 @@ function cueLines(text: string): string[] {
     .filter(Boolean);
 }
 
+/** A cue led by a dialogue dash: one speaker of several sharing the screen. */
+function isDialogue(text: string): boolean {
+  return DIALOGUE_DASH.test(text.trim());
+}
+
+/** Speakers in one cue: its dash-led lines, or 1. */
+function speakerCount(text: string): number {
+  const lines = cueLines(text);
+  return lines.length > 1 && lines.every(isDialogue) ? lines.length : 1;
+}
+
 /**
  * The secondary lines each primary line of an already grouped track translates to, by
  * primary index. A line no secondary event claimed takes the secondary event it overlaps
  * most. Consecutive lines of a sentence share their translation. The whole track is
- * resolved at once so two speakers sharing one interval each get their own translation,
+ * resolved at once so speakers sharing one interval each get their own translation,
  * whichever of them is mined.
  */
 export function assignGroupTranslations(
@@ -239,34 +250,44 @@ export function assignGroupTranslations(
 ): Map<number, TimedSubtitleText[]> {
   const assigned = new Map<number, TimedSubtitleText[]>();
   const takenBy = new Map<TimedSubtitleText, TimedSubtitleText>();
-  const freePartner = (of: TimedSubtitleText, accept: (cue: TimedSubtitleText) => boolean) =>
-    secondary.find((cue) => !takenBy.has(cue) && coTimed(cue, of) && accept(cue));
   primary.forEach((line, index) => {
-    const translation = groups[index]?.secondary ?? findBestOverlappingLine(secondary, line);
-    if (!translation) return;
-    const owner = takenBy.get(translation);
-    // Two speakers can share one interval in both tracks: a line co-timed with the one
-    // that took this translation gets the co-timed secondary cue. A line repeating the
-    // other's text is no other speaker.
-    const ownText = compactText(line.text);
-    const repeats =
-      owner !== undefined &&
-      (compactText(owner.text).includes(ownText) || ownText.includes(compactText(owner.text)));
-    const own =
-      (owner && coTimed(line, owner) && !repeats ? freePartner(translation, () => true) : null) ??
-      translation;
-    if (!takenBy.has(own)) takenBy.set(own, line);
-    const lines = [own];
-    // One cue can hold several speakers' dash-led lines while the secondary track gives
-    // each its own cue; only dash-led cues join, so a sign at the same time stays out.
-    const speakers = cueLines(line.text);
-    if (speakers.length > 1 && speakers.every((speaker) => DIALOGUE_DASH.test(speaker))) {
-      while (lines.length < speakers.length) {
-        const partner = freePartner(own, (cue) => DIALOGUE_DASH.test(cue.text.trim()));
-        if (!partner) break;
-        takenBy.set(partner, line);
-        lines.push(partner);
+    const grouped = groups[index]?.secondary ?? findBestOverlappingLine(secondary, line);
+    if (!grouped) return;
+    const coTimedCues = secondary.filter((cue) => coTimed(cue, grouped));
+    let lines: TimedSubtitleText[];
+    if (isDialogue(line.text)) {
+      // Dialogue takes dialogue cues, so a sign sharing the interval stays out. A cue
+      // holding several speakers is shared; any other goes to one speaker. A cue with
+      // several speakers takes as many cues as it needs, the grouped one first.
+      const available = coTimedCues
+        .filter((cue) => isDialogue(cue.text))
+        .filter((cue) => !takenBy.has(cue) || speakerCount(cue.text) > 1)
+        .sort((a, b) => Number(b === grouped) - Number(a === grouped));
+      const speakers = speakerCount(line.text);
+      lines = [];
+      let covered = 0;
+      for (const cue of available) {
+        if (covered >= speakers) break;
+        lines.push(cue);
+        covered += speakerCount(cue.text);
       }
+      if (lines.length === 0) lines = [grouped];
+    } else {
+      // A line co-timed with the one that took this translation is another speaker and
+      // gets the co-timed secondary cue, unless it repeats that line's text.
+      const owner = takenBy.get(grouped);
+      const ownText = compactText(line.text);
+      const repeats =
+        owner !== undefined &&
+        (compactText(owner.text).includes(ownText) || ownText.includes(compactText(owner.text)));
+      const partner =
+        owner && coTimed(line, owner) && !repeats
+          ? coTimedCues.find((cue) => !takenBy.has(cue))
+          : undefined;
+      lines = [partner ?? grouped];
+    }
+    for (const cue of lines) {
+      if (!takenBy.has(cue)) takenBy.set(cue, line);
     }
     assigned.set(index, lines);
   });

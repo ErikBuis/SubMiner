@@ -227,3 +227,32 @@ test('a wrapped two-line cue does not take a co-timed sign', () => {
   });
   assert.equal(aligned?.translation, 'Nice weather today.');
 });
+
+test('co-timed speakers share a combined dialogue cue and leave a sign out', () => {
+  const primary = [line('－行くぞ', 1, 3), line('－待って', 1, 3)];
+  for (const secondary of [
+    [line('SIGN', 1, 3), line("- Let's go.\n- Wait.", 1, 3)],
+    [line("- Let's go.\n- Wait.", 1, 3), line('SIGN', 1, 3)],
+  ]) {
+    for (const sentenceText of ['－待って', undefined]) {
+      const aligned = alignSentenceTranslation({
+        primaryLines: primary,
+        secondaryLines: secondary,
+        startTime: 1,
+        endTime: 3,
+        ...(sentenceText ? { sentenceText } : {}),
+      });
+      assert.equal(aligned?.translation, "- Let's go. - Wait.");
+    }
+  }
+});
+
+test('a two-speaker cue prefers dialogue cues over a sign that won the timing tie', () => {
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('－行くぞ\n－待って', 1, 3)],
+    secondaryLines: [line('SIGN', 1, 3), line("- Let's go.", 1, 3), line('- Wait.', 1, 3)],
+    startTime: 1,
+    endTime: 3,
+  });
+  assert.equal(aligned?.translation, "- Let's go. - Wait.");
+});
