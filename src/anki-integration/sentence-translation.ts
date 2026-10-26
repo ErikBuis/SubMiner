@@ -18,6 +18,29 @@ export interface TimedSentenceTranslation {
   translationLines: TimedSubtitleText[];
 }
 
+const SCRIPTS = ['Latin', 'Han', 'Hiragana', 'Katakana', 'Hangul', 'Cyrillic', 'Greek', 'Thai'];
+
+function scriptsOf(text: string): Set<string> {
+  return new Set(SCRIPTS.filter((script) => new RegExp(`\\p{Script=${script}}`, 'u').test(text)));
+}
+
+/**
+ * A secondary track in the primary language is no translation: its cue is part of the
+ * mined text (cut differently), or holds the mined text plus only more of the same
+ * language. A bilingual cue that adds a line in another script still translates.
+ */
+function isSourceLanguageText(translation: string, minedText: string): boolean {
+  const compact = (text: string) => text.normalize('NFKC').replace(/\s+/gu, '');
+  const candidate = compact(translation);
+  const mined = compact(minedText);
+  if (!mined) return false;
+  if (mined.includes(candidate)) return true;
+  if (!candidate.includes(mined)) return false;
+  const minedScripts = scriptsOf(mined);
+  const rest = candidate.split(mined).join('');
+  return ![...scriptsOf(rest)].some((script) => !minedScripts.has(script));
+}
+
 /**
  * Picks the secondary subtitle line(s) that translate a mined range by their timing. The
  * secondary text on screen when mining can include unrelated overlapping lines (a TV in
@@ -42,11 +65,7 @@ export function resolveTimedSentenceTranslation(input: {
   const best = aligned ? null : findBestOverlappingLine(secondary, input);
   const translationLines = aligned?.translationLines ?? (best ? [best] : []);
   const translation = joinSubtitleLineTexts(translationLines);
-  // A secondary track in the same language as the primary one is no translation, also
-  // when it splits the lines differently and its cue holds the whole mined line.
-  const compact = (text: string) => text.normalize('NFKC').replace(/\s+/gu, '');
-  const mined = compact(input.text);
-  if (!translation || (mined && compact(translation).includes(mined))) return null;
+  if (!translation || isSourceLanguageText(translation, input.text)) return null;
   return {
     translation,
     translationLines: translationLines.map(({ text, startTime, endTime }) => ({

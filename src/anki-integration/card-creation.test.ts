@@ -449,6 +449,35 @@ test('createSentenceCard ignores a same-language track that splits lines differe
   assert.equal(addedFields[0]?.Translation, undefined);
 });
 
+test('createSentenceCard ignores a shorter same-language cue inside the mined line', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [{ text: '今日はいい天気ですね', startTime: 1, endTime: 4 }],
+      secondary: [
+        { text: '今日は', startTime: 1, endTime: 2 },
+        { text: 'いい天気ですね', startTime: 2, endTime: 4 },
+      ],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('今日はいい天気ですね', 1, 4), true);
+  assert.equal(addedFields[0]?.Translation, undefined);
+});
+
+test('createSentenceCard keeps a bilingual secondary cue', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [{ text: '今日はいい天気ですね', startTime: 1, endTime: 4 }],
+      secondary: [
+        { text: '今日はいい天気ですね\nNice weather today, huh?', startTime: 1, endTime: 4 },
+      ],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('今日はいい天気ですね', 1, 4), true);
+  assert.equal(addedFields[0]?.Translation, '今日はいい天気ですね Nice weather today, huh?');
+});
+
 test('createSentenceCard translates every combined line even when the media is capped', async () => {
   const { service, addedFields } = createTimedTranslationService({
     maxMediaDuration: 30,
