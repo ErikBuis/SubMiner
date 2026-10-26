@@ -218,6 +218,7 @@ function M.create(ctx)
 				and not state.app_managed_playback_pending
 				and has_matching_subminer_socket()
 			then
+				process.save_sub_visibility_before_overlay()
 				mp.set_property_native("sub-visibility", true)
 			end
 		end

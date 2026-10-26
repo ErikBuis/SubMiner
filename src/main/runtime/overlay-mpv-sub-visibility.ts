@@ -29,6 +29,21 @@ function parseSubVisibility(value: unknown): boolean {
   return true;
 }
 
+// The mpv plugin shows mpv's subtitles while the overlay loads and keeps the visibility
+// from before that here, so restoring it doesn't turn on subtitles the user had hidden.
+export const SUB_VISIBILITY_BEFORE_OVERLAY_PROPERTY =
+  'user-data/subminer/sub-visibility-before-overlay';
+
+function readSubVisibilityBeforeOverlay(mpvClient: MpvVisibilityClient): Promise<unknown> {
+  // Both reads go out before any visibility write so neither sees the overlay's own change.
+  const beforeOverlay = mpvClient
+    .requestProperty(SUB_VISIBILITY_BEFORE_OVERLAY_PROPERTY)
+    .catch(() => null);
+  const current = mpvClient.requestProperty('sub-visibility');
+  current.catch(() => {});
+  return beforeOverlay.then((value) => (typeof value === 'boolean' ? value : current));
+}
+
 export function createEnsureOverlayMpvSubtitlesHiddenHandler(deps: {
   getMpvClient: () => MpvVisibilityClient | null;
   getSavedSubVisibility: () => boolean | null;
@@ -52,7 +67,7 @@ export function createEnsureOverlayMpvSubtitlesHiddenHandler(deps: {
 
     const shouldCaptureSavedVisibility = deps.getSavedSubVisibility() === null;
     const savedVisibilityPromise = shouldCaptureSavedVisibility
-      ? mpvClient.requestProperty('sub-visibility')
+      ? readSubVisibilityBeforeOverlay(mpvClient)
       : null;
 
     // Hide immediately on overlay toggle; capture/restore logic is handled separately.

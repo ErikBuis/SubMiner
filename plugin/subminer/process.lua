@@ -11,6 +11,7 @@ local OVERLAY_LOADING_OSD_REFRESH_SECONDS = 0.18
 local OVERLAY_LOADING_OSD_DEADLINE_SECONDS = 60
 local OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE = "Overlay did not become ready; check SubMiner logs"
 local OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE_SECONDS = 8
+local SUB_VISIBILITY_BEFORE_OVERLAY_PROPERTY = "user-data/subminer/sub-visibility-before-overlay"
 local AUTO_PLAY_READY_LOADING_OSD = "Loading subtitle tokenization..."
 local AUTO_PLAY_READY_READY_OSD = "Subtitle tokenization ready"
 local DEFAULT_AUTO_PLAY_READY_TIMEOUT_SECONDS = 30
@@ -321,6 +322,31 @@ function M.create(ctx)
 					duration = OVERLAY_LOADING_OSD_TIMEOUT_MESSAGE_SECONDS,
 				})
 			end)
+		end
+	end
+
+	-- mpv's own subtitles are shown while the overlay loads. The app restores the visibility
+	-- from before that when the overlay is hidden or the app quits, so it reads it from here.
+	local function save_sub_visibility_before_overlay()
+		if state.sub_visibility_saved_before_overlay then
+			return
+		end
+		state.sub_visibility_saved_before_overlay = true
+		mp.set_property_native(
+			SUB_VISIBILITY_BEFORE_OVERLAY_PROPERTY,
+			mp.get_property_native("sub-visibility") == true
+		)
+	end
+
+	-- Once the overlay is hidden the app has restored that visibility, and later captures
+	-- must read mpv's current one.
+	local function clear_sub_visibility_before_overlay()
+		if not state.sub_visibility_saved_before_overlay then
+			return
+		end
+		state.sub_visibility_saved_before_overlay = false
+		if type(mp.del_property) == "function" then
+			pcall(mp.del_property, SUB_VISIBILITY_BEFORE_OVERLAY_PROPERTY)
 		end
 	end
 
@@ -1049,6 +1075,8 @@ function M.create(ctx)
 		disarm_auto_play_ready_gate = disarm_auto_play_ready_gate,
 		start_overlay_loading_osd = start_overlay_loading_osd,
 		request_overlay_loading_osd = request_overlay_loading_osd,
+		save_sub_visibility_before_overlay = save_sub_visibility_before_overlay,
+		clear_sub_visibility_before_overlay = clear_sub_visibility_before_overlay,
 		stop_overlay_loading_osd = stop_overlay_loading_osd,
 	}
 end
