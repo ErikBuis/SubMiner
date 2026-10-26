@@ -338,8 +338,8 @@ function M.create(ctx)
 		)
 	end
 
-	-- Once the overlay is hidden the app has restored that visibility, and later captures
-	-- must read mpv's current one.
+	-- Once the app has restored that visibility (overlay hidden or app quitting), later
+	-- captures must read mpv's current one.
 	local function clear_sub_visibility_before_overlay()
 		if not state.sub_visibility_saved_before_overlay then
 			return

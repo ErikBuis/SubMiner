@@ -214,7 +214,9 @@ function M.create(ctx)
 			-- to appear. Show mpv's subtitles until then; the app hides them once the overlay
 			-- is ready. App-managed playback controls subtitle visibility itself.
 			if
-				not state.overlay_running
+				resolve_auto_start_enabled()
+				and resolve_auto_start_visible_overlay_enabled()
+				and not state.overlay_running
 				and not state.app_managed_playback_pending
 				and has_matching_subminer_socket()
 			then
