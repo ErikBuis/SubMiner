@@ -56,19 +56,45 @@ export function createEnsureOverlayMpvSubtitlesHiddenHandler(deps: {
   isOverlayContentReady?: () => boolean;
   logWarn: (message: string, error: unknown) => void;
 }) {
+  // Overlapping calls (show, readiness and toggle callbacks) share one capture, so a later
+  // call can't read back an earlier call's visibility write as the user's setting.
+  let pendingCapture: Promise<boolean> | null = null;
+  let latestEnsureRevision = deps.getRevision();
+
   return async (): Promise<void> => {
+    // Anything else that moved the revision (a restore) ended the previous cycle.
+    if (deps.getRevision() !== latestEnsureRevision) {
+      pendingCapture = null;
+    }
     const revision = deps.getRevision() + 1;
     deps.setRevision(revision);
+    latestEnsureRevision = revision;
 
     const mpvClient = deps.getMpvClient();
     if (!mpvClient || !mpvClient.connected) {
       return;
     }
 
-    const shouldCaptureSavedVisibility = deps.getSavedSubVisibility() === null;
-    const savedVisibilityPromise = shouldCaptureSavedVisibility
-      ? readSubVisibilityBeforeOverlay(mpvClient)
-      : null;
+    let capture: Promise<boolean> | null = null;
+    if (deps.getSavedSubVisibility() === null) {
+      if (!pendingCapture) {
+        const started = readSubVisibilityBeforeOverlay(mpvClient).then(
+          parseSubVisibility,
+          (error: unknown) => {
+            deps.logWarn(
+              '[overlay] Failed to capture mpv sub-visibility; falling back to visible restore',
+              error,
+            );
+            return true;
+          },
+        );
+        pendingCapture = started;
+        void started.then(() => {
+          if (pendingCapture === started) pendingCapture = null;
+        });
+      }
+      capture = pendingCapture;
+    }
 
     // Hide immediately on overlay toggle; capture/restore logic is handled separately.
     const showWhileOverlayLoads = deps.isOverlayContentReady?.() === false;
@@ -76,22 +102,14 @@ export function createEnsureOverlayMpvSubtitlesHiddenHandler(deps: {
       deps.setMpvSubVisibility(false);
     }
 
-    if (shouldCaptureSavedVisibility && savedVisibilityPromise) {
-      try {
-        const currentSubVisibility = await savedVisibilityPromise;
-        if (revision !== deps.getRevision()) {
-          return;
-        }
-        deps.setSavedSubVisibility(parseSubVisibility(currentSubVisibility));
-      } catch (error) {
-        if (revision !== deps.getRevision()) {
-          return;
-        }
-        deps.logWarn(
-          '[overlay] Failed to capture mpv sub-visibility; falling back to visible restore',
-          error,
-        );
-        deps.setSavedSubVisibility(true);
+    if (capture) {
+      const capturedVisibility = await capture;
+      // A restore after the latest call ended this suppression cycle.
+      if (deps.getRevision() !== latestEnsureRevision) {
+        return;
+      }
+      if (deps.getSavedSubVisibility() === null) {
+        deps.setSavedSubVisibility(capturedVisibility);
       }
     }
 
@@ -116,9 +134,8 @@ export function createRestoreOverlayMpvSubtitlesHandler(deps: {
   onSubVisibilityRestored?: () => void;
 }) {
   return (options: RestoreOverlayMpvSubtitlesOptions = {}): void => {
-    deps.setRevision(deps.getRevision() + 1);
-
     const savedVisibility = deps.getSavedSubVisibility();
+    // Still suppressed, so the cycle and any capture in flight stay valid.
     if (!options.force && deps.shouldKeepSuppressedFromVisibleOverlayBinding()) {
       const overlayLoading = deps.isOverlayContentReady?.() === false;
       // Showing mpv's subtitles before their visibility was captured would make the
@@ -129,7 +146,13 @@ export function createRestoreOverlayMpvSubtitlesHandler(deps: {
       return;
     }
 
+    deps.setRevision(deps.getRevision() + 1);
+
     if (savedVisibility === null) {
+      // Quitting before the capture finished: the plugin still ends its loading fallback.
+      if (options.force) {
+        deps.onSubVisibilityRestored?.();
+      }
       return;
     }
 
