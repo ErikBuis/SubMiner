@@ -533,6 +533,23 @@ function M.create(ctx)
 		return { args = args }
 	end
 
+	-- A background `start` hands off to a detached app process. On Windows that app
+	-- inherits the stdout/stderr pipes mpv creates for every non-detached subprocess
+	-- call (even without capture), so mpv keeps the call, and with it mpv's shutdown,
+	-- pending until the app exits. Launch it detached so mpv creates no pipes and
+	-- does not wait; spawn failures are still reported.
+	local function should_detach_start(args)
+		if type(environment.is_windows) ~= "function" or not environment.is_windows() then
+			return false
+		end
+		for _, arg in ipairs(args) do
+			if arg == "--background" then
+				return true
+			end
+		end
+		return false
+	end
+
 	run_control_command_async = function(action, overrides, callback)
 		local args = build_command_args(action, overrides)
 		local command = build_subprocess_command(args)
@@ -721,14 +738,16 @@ function M.create(ctx)
 			state.overlay_running = true
 
 			local command = build_subprocess_command(args)
+			local detach_start = should_detach_start(args)
 			record_start_visibility_args(args)
 			mp.command_native_async({
 				name = "subprocess",
 				args = command.args,
 				env = command.env,
 				playback_only = false,
-				capture_stdout = true,
-				capture_stderr = true,
+				capture_stdout = not detach_start,
+				capture_stderr = not detach_start,
+				detach = detach_start,
 			}, function(success, result, error)
 				if not success or (result and result.status ~= 0) then
 					local reason = error or (result and result.stderr) or "unknown error"
@@ -946,13 +965,15 @@ function M.create(ctx)
 
 				state.overlay_running = true
 				local command = build_subprocess_command(start_args)
+				local detach_start = should_detach_start(start_args)
 				mp.command_native_async({
 					name = "subprocess",
 					args = command.args,
 					env = command.env,
 					playback_only = false,
-					capture_stdout = true,
-					capture_stderr = true,
+					capture_stdout = not detach_start,
+					capture_stderr = not detach_start,
+					detach = detach_start,
 				}, function(success, result, error)
 					if not success or (result and result.status ~= 0) then
 						state.overlay_running = false
