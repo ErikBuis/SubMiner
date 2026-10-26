@@ -832,3 +832,43 @@ test('NoteUpdateWorkflow skips the on-screen line when the parsed track has no m
 
   assert.equal(harness.updates[0]?.fields.SentenceTranslation, undefined);
 });
+
+test('NoteUpdateWorkflow translates the lines of the sentence, not of the clip', async () => {
+  const tracks = {
+    primary: [
+      { text: '一', startTime: 0, endTime: 2 },
+      { text: 'え？', startTime: 2, endTime: 2.4 },
+      { text: '三', startTime: 2.5, endTime: 4 },
+    ],
+    secondary: [
+      { text: 'One.', startTime: 0, endTime: 2 },
+      { text: 'Huh?', startTime: 2, endTime: 2.4 },
+      { text: 'Three.', startTime: 2.5, endTime: 4 },
+    ],
+  };
+  const context = { source: 'overlay' as const, text: '一', startTime: 0, endTime: 2 };
+
+  // The clip runs into the next line, which the sentence does not include.
+  const padded = createWordCardTranslationHarness();
+  padded.deps.captureSubtitleMediaContext = () => context;
+  padded.deps.getSubtitleTracksForTranslation = () => tracks;
+  padded.deps.reviewMediaTiming = async () => ({ action: 'confirm', startTime: 0, endTime: 2.5 });
+  await padded.workflow.execute(42);
+  assert.equal(padded.updates[0]?.fields.SentenceTranslation, 'One.');
+
+  // An added line keeps its translation although the clip was trimmed before it.
+  const added = createWordCardTranslationHarness();
+  added.deps.captureSubtitleMediaContext = () => context;
+  added.deps.getSubtitleTracksForTranslation = () => tracks;
+  added.deps.reviewMediaTiming = async () => ({
+    action: 'confirm',
+    startTime: 0,
+    endTime: 2.2,
+    text: '一 え？',
+    sentenceStartTime: 0,
+    sentenceEndTime: 2.4,
+  });
+  await added.workflow.execute(42);
+  assert.equal(added.updates[0]?.fields.Sentence, '一 え？');
+  assert.equal(added.updates[0]?.fields.SentenceTranslation, 'One. Huh?');
+});
