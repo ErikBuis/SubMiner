@@ -49,6 +49,8 @@ export interface MediaTimingReviewCardPreview {
 }
 
 export interface MediaTimingReviewLineTranslation {
+  /** The primary line's text, which tells apart lines sharing one interval. */
+  text?: string;
   startTime: number;
   endTime: number;
   lines: MediaTimingReviewContextLine[];

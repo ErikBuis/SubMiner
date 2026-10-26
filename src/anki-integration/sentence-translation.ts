@@ -174,7 +174,12 @@ export function buildReviewTranslationContext(input: {
   tracks: SubtitleTracksForTranslation | null;
 }): {
   lines: TimedSubtitleText[];
-  lineTranslations: Array<{ startTime: number; endTime: number; lines: TimedSubtitleText[] }>;
+  lineTranslations: Array<{
+    text: string;
+    startTime: number;
+    endTime: number;
+    lines: TimedSubtitleText[];
+  }>;
 } {
   const primary = sortSubtitleLines(input.tracks?.primary ?? []);
   const secondary = sortSubtitleLines(input.tracks?.secondary ?? []);
@@ -200,6 +205,7 @@ export function buildReviewTranslationContext(input: {
     lineTranslations: assignLineTranslations(primary, secondary)
       .filter(({ line }) => nearClip(line))
       .map(({ line, translationLines }) => ({
+        text: line.text,
         startTime: line.startTime,
         endTime: line.endTime,
         lines: translationLines.map(toPlainLine),

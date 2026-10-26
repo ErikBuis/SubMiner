@@ -134,15 +134,20 @@ export function buildMediaTimingReviewTranslation(options: {
   // translation main's full-track grouping assigned them; a line main did not cover falls
   // back to the secondary line it overlaps most.
   const addedTranslation = (line: MediaTimingReviewContextLine): MediaTimingReviewContextLine[] => {
-    const assigned = options.lineTranslations?.find(
-      (entry) =>
-        Math.abs(entry.startTime - line.startTime) < 0.001 &&
-        Math.abs(entry.endTime - line.endTime) < 0.001,
-    );
+    // Two speakers can share one interval; their text tells them apart.
+    const own = compactText(line.text);
+    const timed =
+      options.lineTranslations?.filter(
+        (entry) =>
+          Math.abs(entry.startTime - line.startTime) < 0.001 &&
+          Math.abs(entry.endTime - line.endTime) < 0.001,
+      ) ?? [];
+    const assigned =
+      timed.find((entry) => entry.text !== undefined && compactText(entry.text) === own) ??
+      timed[0];
     const best = assigned ? null : findBestOverlappingLine(options.translationLines, line);
     const candidates = assigned?.lines ?? (best ? [best] : []);
     // A secondary track in the primary language is no translation, as in main.
-    const own = compactText(line.text);
     return candidates.filter((candidate) => compactText(candidate.text) !== own);
   };
   const before = selection.previous.flatMap(addedTranslation);
@@ -1195,7 +1200,8 @@ export function createMediaTimingReviewModal(
       nextCount = 0;
       updateSelection(payload.selectionStartTime, payload.selectionEndTime);
       renderSentence();
-      setTranslation(payload.card?.translation?.text ?? '', false);
+      // Reset is about timing: a translation the user edited stays.
+      if (!translationEdited) setTranslation(payload.card?.translation?.text ?? '', false);
     });
     ctx.dom.mediaTimingReviewTranslation.addEventListener('input', () => {
       if (translationEdited) return;

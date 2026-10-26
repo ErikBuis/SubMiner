@@ -259,6 +259,34 @@ test('an added line takes the translation the full-track grouping assigned it', 
   );
 });
 
+test('added co-timed lines each take their own assigned translation', () => {
+  const go = { text: "- Let's go.", startTime: 16, endTime: 17 };
+  const wait = { text: '- Wait.', startTime: 16, endTime: 17 };
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      previousLines: [],
+      nextLines: [
+        { text: '－行くぞ', startTime: 16, endTime: 17 },
+        { text: '－待って', startTime: 16, endTime: 17 },
+      ],
+      text: '今',
+      originalStartTime: 10,
+      originalEndTime: 14,
+      previousCount: 0,
+      nextCount: 2,
+      initialTranslation: 'Now',
+      initialTranslationLines: [{ text: 'Now', startTime: 10, endTime: 14 }],
+      translationLines: [{ text: 'Now', startTime: 10, endTime: 14 }, go, wait],
+      lineTranslations: [
+        { text: '－行くぞ', startTime: 16, endTime: 17, lines: [go] },
+        { text: '－待って', startTime: 16, endTime: 17, lines: [wait] },
+      ],
+      format: false,
+    }),
+    "Now - Let's go. - Wait.",
+  );
+});
+
 test('an on-screen translation stays when lines are added around it', () => {
   assert.equal(
     buildMediaTimingReviewTranslation({

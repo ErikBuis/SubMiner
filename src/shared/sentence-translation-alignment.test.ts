@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   alignSentenceTranslation,
+  assignLineTranslations,
   buildSentenceTranslationGroups,
   formatCardTranslation,
   joinSubtitleLineTexts,
@@ -332,4 +333,15 @@ test('widening reaches across a sign with its own translation', () => {
   assert.equal(aligned?.text, '前半 後半');
   assert.equal(aligned?.startTime, 0);
   assert.equal(aligned?.translation, 'First half, second half.');
+});
+
+test('assignLineTranslations gives co-timed speakers their own translations', () => {
+  const assigned = assignLineTranslations(
+    [line('－行くぞ', 1, 3), line('－待って', 1, 3), line('今日は', 4, 5), line('いい天気', 5, 6)],
+    [line("- Let's go.", 1, 3), line('- Wait.', 1, 3), line('Nice weather today.', 4, 6)],
+  );
+  assert.deepEqual(
+    assigned.map(({ translationLines }) => translationLines.map((entry) => entry.text)),
+    [["- Let's go."], ['- Wait.'], ['Nice weather today.'], ['Nice weather today.']],
+  );
 });

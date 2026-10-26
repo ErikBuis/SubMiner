@@ -331,10 +331,11 @@ export function assignLineTranslations(
   const primary = sortSubtitleLines(primaryLines);
   const secondary = sortSubtitleLines(secondaryLines);
   const groups = buildSentenceTranslationGroups(primary, secondary, minOverlapRatio);
-  return primary.map((line, index) => ({
-    line,
-    translationLines: collectGroupTranslationLines(primary, secondary, groups, [index]),
-  }));
+  const assigned = assignGroupTranslations(primary, secondary, groups);
+  return primary.map((line, index) => {
+    const translation = assigned.get(index);
+    return { line, translationLines: translation ? [translation] : [] };
+  });
 }
 
 /**
