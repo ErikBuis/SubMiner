@@ -120,7 +120,12 @@ export function createRestoreOverlayMpvSubtitlesHandler(deps: {
 
     const savedVisibility = deps.getSavedSubVisibility();
     if (!options.force && deps.shouldKeepSuppressedFromVisibleOverlayBinding()) {
-      deps.setMpvSubVisibility(deps.isOverlayContentReady?.() === false);
+      const overlayLoading = deps.isOverlayContentReady?.() === false;
+      // Showing mpv's subtitles before their visibility was captured would make the
+      // fallback look like the user's own setting; the next ensure call shows them.
+      if (!overlayLoading || savedVisibility !== null) {
+        deps.setMpvSubVisibility(overlayLoading);
+      }
       return;
     }
 
