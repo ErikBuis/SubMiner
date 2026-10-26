@@ -402,10 +402,12 @@ const TRAILING_COMMAS: Array<[string, string]> = [
 ];
 
 /** Subtitle lines often start lowercase because they continue the previous line. */
+/** Skips leading tags and opening quotes or brackets, but not a continuation's "...". */
 function capitalizeFirstLetter(text: string): string {
-  return text.replace(/^(\s*)(\p{Ll})/u, (_match, space: string, letter: string) => {
-    return space + letter.toUpperCase();
-  });
+  return text.replace(
+    /^((?:\s|<[^>]*>|["'“‘«(\[¿¡])*)(\p{Ll})/u,
+    (_match, prefix: string, letter: string) => prefix + letter.toUpperCase(),
+  );
 }
 
 /**

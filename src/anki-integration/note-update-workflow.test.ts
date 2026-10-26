@@ -872,3 +872,43 @@ test('NoteUpdateWorkflow translates the lines of the sentence, not of the clip',
   assert.equal(added.updates[0]?.fields.Sentence, '一 え？');
   assert.equal(added.updates[0]?.fields.SentenceTranslation, 'One. Huh?');
 });
+
+test('NoteUpdateWorkflow widens the word card sentence and formats its translation', async () => {
+  const harness = createWordCardTranslationHarness();
+  const reviewTexts: string[] = [];
+  harness.deps.captureSubtitleMediaContext = () => ({
+    source: 'overlay',
+    text: 'いい天気ですね',
+    startTime: 12.6,
+    endTime: 14,
+  });
+  harness.deps.getSubtitleTracksForTranslation = () => ({
+    primary: [
+      { text: '今日は', startTime: 11.2, endTime: 12.5 },
+      { text: 'いい天気ですね', startTime: 12.6, endTime: 14 },
+    ],
+    secondary: [{ text: 'nice weather today, huh,', startTime: 11.1, endTime: 14.1 }],
+  });
+  harness.deps.reviewMediaTiming = async (request) => {
+    reviewTexts.push(request.text);
+    return { action: 'use-original' };
+  };
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Sentence', wordCardTranslation: 'SentenceTranslation' },
+    media: { generateAudio: false, generateImage: false, maxMediaDuration: 30 },
+    behavior: { widenSentenceToTranslation: true, formatTranslation: true },
+  });
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(reviewTexts, ['今日は いい天気ですね']);
+  assert.deepEqual(harness.updates, [
+    {
+      noteId: 42,
+      fields: {
+        Sentence: '今日は いい天気ですね',
+        SentenceTranslation: 'Nice weather today, huh.',
+      },
+    },
+  ]);
+});

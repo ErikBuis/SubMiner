@@ -311,10 +311,11 @@ test('widening respects the maximum sentence length', () => {
 
 test('formatCardTranslation capitalizes and closes a comma-ended line', () => {
   assert.equal(formatCardTranslation('lost in that thought,'), 'Lost in that thought.');
-  assert.equal(formatCardTranslation('"so what,"'), '"so what."');
-  assert.equal(formatCardTranslation('<i>wait,</i>'), '<i>wait.</i>');
+  assert.equal(formatCardTranslation('"so what,"'), '"So what."');
+  assert.equal(formatCardTranslation('<i>wait,</i>'), '<i>Wait.</i>');
   assert.equal(formatCardTranslation('two\nlines'), 'Two lines');
   assert.equal(formatCardTranslation('Already fine!'), 'Already fine!');
+  assert.equal(formatCardTranslation('...and then,'), '...and then.');
   assert.equal(formatCardTranslation('   '), '');
 });
 
