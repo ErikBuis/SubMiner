@@ -23,6 +23,7 @@ import {
   type RemoteMediaWindowSource,
 } from '../../core/services/remote-media-window-cache';
 import type { MediaInput, MediaInputOptions } from '../../media-input';
+import { stripSpeakerLabels } from '../../shared/subtitle-speaker-labels';
 
 const INITIAL_TIMELINE_MARGIN_SECONDS = 2;
 const REVIEW_DECISION_TIMEOUT_MS = 5 * 60_000;
@@ -226,6 +227,14 @@ function isValidMediaTimingRange(
   );
 }
 
+function cleanContextLines(
+  lines: MediaTimingReviewContextLine[] | undefined,
+  strip: boolean | undefined,
+): MediaTimingReviewContextLine[] {
+  if (!lines) return [];
+  return strip ? lines.map((line) => ({ ...line, text: stripSpeakerLabels(line.text) })) : lines;
+}
+
 export function buildMediaTimingReviewPayload(
   request: MediaTimingReviewRequest,
   options: {
@@ -259,8 +268,8 @@ export function buildMediaTimingReviewPayload(
     reviewId: options.reviewId,
     kind: request.kind,
     text: request.text,
-    previousLines: options.contextLines?.previous ?? [],
-    nextLines: options.contextLines?.next ?? [],
+    previousLines: cleanContextLines(options.contextLines?.previous, request.stripSpeakerLabels),
+    nextLines: cleanContextLines(options.contextLines?.next, request.stripSpeakerLabels),
     ...(request.noteId !== undefined ? { noteId: request.noteId } : {}),
     originalStartTime: request.startTime,
     originalEndTime: request.endTime,

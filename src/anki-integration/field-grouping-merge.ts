@@ -1,5 +1,6 @@
 import { AnkiConnectConfig } from '../types/anki';
 import { getConfiguredWordFieldName } from '../anki-field-config';
+import { cleanSentenceText } from '../shared/subtitle-speaker-labels';
 
 interface FieldGroupingMergeMedia {
   audioField?: string;
@@ -118,7 +119,7 @@ export class FieldGroupingMergeCollaborator {
     ) {
       const deleteFields = this.deps.extractFields(deleteNoteInfo.fields);
       sourceFields[config.fields?.sentence] = this.deps.processSentence(
-        this.deps.getCurrentSubtitleText()!,
+        cleanSentenceText(this.deps.getCurrentSubtitleText()!, config.behavior),
         deleteFields,
       );
     }
