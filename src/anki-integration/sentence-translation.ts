@@ -9,6 +9,7 @@ import {
   sortSubtitleLines,
   type TimedSubtitleText,
 } from '../shared/sentence-translation-alignment';
+import { decodeCharacterReferences } from '../shared/subtitle-markup';
 
 /** Parsed primary and secondary subtitle tracks, in the same timeline as the mined range. */
 export interface SubtitleTracksForTranslation {
@@ -164,40 +165,15 @@ export function buildReviewTranslationContext(input: {
   };
 }
 
-const NAMED_CHARACTER_REFERENCES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: ' ',
-  hellip: '…',
-  mdash: '—',
-  ndash: '–',
-  lsquo: '‘',
-  rsquo: '’',
-  ldquo: '“',
-  rdquo: '”',
-};
-
-/** Numeric references and the named ones Anki's editor writes; anything else stays as is. */
-function decodeCharacterReference(reference: string, body: string): string {
-  if (body.startsWith('#')) {
-    const hex = body[1] === 'x' || body[1] === 'X';
-    const codePoint = Number.parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
-    return codePoint > 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : reference;
-  }
-  return NAMED_CHARACTER_REFERENCES[body.toLowerCase()] ?? reference;
-}
-
 /** Plain-text rendering of an Anki field for display: one line per block or list item. */
 export function ankiFieldHtmlToPlainText(html: string): string {
-  return html
-    .replace(/\[sound:[^\]]+\]/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(?:li|div|p|tr|h[1-6])>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, decodeCharacterReference)
+  return decodeCharacterReferences(
+    html
+      .replace(/\[sound:[^\]]+\]/gi, '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(?:li|div|p|tr|h[1-6])>/gi, '\n')
+      .replace(/<[^>]+>/g, ''),
+  )
     .split('\n')
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean)

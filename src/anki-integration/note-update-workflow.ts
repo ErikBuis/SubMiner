@@ -196,6 +196,8 @@ export class NoteUpdateWorkflow {
       format: boolean;
       /** The field's current value, which the card keeps when nothing replaces it. */
       existing: string;
+      /** The secondary line on screen for a primary line. */
+      liveTranslation: (primaryText: string) => string | undefined;
     },
   ): Pick<MediaTimingReviewCardPreview, 'translation'> {
     const timedTranslation = resolveTimedSentenceTranslation({
@@ -208,7 +210,7 @@ export class NoteUpdateWorkflow {
       timedTranslation?.translation ??
         (options.tracks && options.tracks.secondary.length > 0
           ? ''
-          : (this.deps.getLiveSecondarySubtitleFor?.(context.text) ?? '')),
+          : (options.liveTranslation(context.text) ?? '')),
     );
     const reviewContext = buildReviewTranslationContext({ ...context, tracks: options.tracks });
     return {
@@ -310,6 +312,15 @@ export class NoteUpdateWorkflow {
       let tracks: Promise<SubtitleTracksForTranslation | null> | undefined;
       const getTracks = () =>
         (tracks ??= Promise.resolve(this.deps.getSubtitleTracksForTranslation?.() ?? null));
+      // Read once: playback moves on while the review is open, and the card must get the
+      // translation the review showed.
+      const liveTranslations = new Map<string, string | undefined>();
+      const getLiveTranslation = (primaryText: string) => {
+        if (!liveTranslations.has(primaryText)) {
+          liveTranslations.set(primaryText, this.deps.getLiveSecondarySubtitleFor?.(primaryText));
+        }
+        return liveTranslations.get(primaryText);
+      };
 
       let widenedSentenceText: string | undefined;
       if (mediaTimingContext && config.behavior?.widenSentenceToTranslation) {
@@ -354,6 +365,7 @@ export class NoteUpdateWorkflow {
                       tracks: await getTracks(),
                       format: formatTranslation,
                       existing: noteInfo.fields[translationFieldName]?.value ?? '',
+                      liveTranslation: getLiveTranslation,
                     })
                   : {}),
               },
@@ -424,7 +436,7 @@ export class NoteUpdateWorkflow {
           timedTranslation?.translation ??
           (parsedTracks && parsedTracks.secondary.length > 0
             ? undefined
-            : this.deps.getLiveSecondarySubtitleFor?.(minedText));
+            : getLiveTranslation(minedText));
         if (translation && formatTranslation) {
           translation = formatCardTranslation(translation);
         }

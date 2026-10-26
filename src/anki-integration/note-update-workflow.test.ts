@@ -807,6 +807,26 @@ test('NoteUpdateWorkflow falls back to the on-screen translation of the mined li
   assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'Lots of vegetables.');
 });
 
+test('NoteUpdateWorkflow saves the on-screen translation the review showed', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => null;
+  // Playback moves on while the review is open: the line is gone from the screen after.
+  let reviewed = false;
+  harness.deps.getLiveSecondarySubtitleFor = () =>
+    reviewed ? undefined : 'Lots of <i>vegetables</i>.';
+  const shown: Array<string | undefined> = [];
+  harness.deps.reviewMediaTiming = async (request) => {
+    shown.push(request.card?.translation?.text);
+    reviewed = true;
+    return { action: 'use-original' };
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(shown, ['Lots of vegetables.']);
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'Lots of <i>vegetables</i>.');
+});
+
 test('NoteUpdateWorkflow keeps the translation of a line whose clip the review trimmed', async () => {
   const harness = createWordCardTranslationHarness();
   harness.deps.reviewMediaTiming = async () => ({

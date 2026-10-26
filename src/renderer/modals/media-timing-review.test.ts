@@ -309,6 +309,28 @@ test('an added line whose secondary cue is part of its own text adds no translat
   );
 });
 
+test('an added line whose secondary cue only differs in markup adds no translation', () => {
+  assert.equal(
+    buildMediaTimingReviewTranslation({
+      previousLines: [],
+      nextLines: [{ text: 'トム&amp;ジェリー', startTime: 16, endTime: 18 }],
+      text: '今',
+      originalStartTime: 10,
+      originalEndTime: 14,
+      previousCount: 0,
+      nextCount: 1,
+      initialTranslation: 'Now',
+      initialTranslationLines: [{ text: 'Now', startTime: 10, endTime: 14 }],
+      translationLines: [
+        { text: 'Now', startTime: 10, endTime: 14 },
+        { text: 'トム&ジェリー', startTime: 16, endTime: 18 },
+      ],
+      format: false,
+    }),
+    'Now',
+  );
+});
+
 test('an on-screen translation stays when lines are added around it', () => {
   assert.equal(
     buildMediaTimingReviewTranslation({

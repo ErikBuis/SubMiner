@@ -8,6 +8,8 @@
  * one moment therefore both cuts sentences short and pulls in unrelated lines.
  */
 
+import { decodeCharacterReferences } from './subtitle-markup';
+
 export interface TimedSubtitleText {
   text: string;
   startTime: number;
@@ -360,12 +362,15 @@ export function isSourceLanguageText(
   translationLines: readonly string[],
   minedText: string,
 ): boolean {
+  // Cue markup (`<i>`, `&amp;`) differs between tracks and is not language.
+  const comparable = (text: string) =>
+    compactText(decodeCharacterReferences(text.replace(/<[^>]+>/g, '')));
   const lines = translationLines
     .flatMap((text) => text.split(/\r?\n|\\N/))
-    .map(compactText)
+    .map(comparable)
     .filter(Boolean);
   const candidate = lines.join('');
-  const mined = compactText(minedText);
+  const mined = comparable(minedText);
   if (!mined) return false;
   if (mined.includes(candidate)) return true;
   if (!candidate.includes(mined)) return false;
