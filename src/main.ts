@@ -2253,6 +2253,10 @@ const subtitlePrefetchInitController = createSubtitlePrefetchInitController({
   },
   hasCachedTokenization: (text) => subtitleProcessingController.hasCachedSubtitle(text),
   getCacheGeneration: () => subtitleProcessingController.getCacheGeneration(),
+  // The on-screen line goes first: at startup prefetch and the visible line otherwise
+  // start their scans together the moment warmup ends, and compete for Yomitan.
+  waitForTokenizer: () => startTokenizationWarmups(),
+  isForegroundBusy: () => subtitleProcessingController.isProcessing(),
   logInfo: (message) => logger.info(message),
   logWarn: (message) => logger.warn(message),
   onParsedSubtitleCuesChanged: (cues, sourceKey) => {

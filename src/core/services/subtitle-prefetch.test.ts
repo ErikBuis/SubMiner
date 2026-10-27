@@ -362,3 +362,72 @@ test('prefetch service drops an in-flight result after cache invalidation', asyn
 
   assert.deepEqual(cachedTexts, []);
 });
+
+test('prefetch service starts no cue while the on-screen line is being tokenized', async () => {
+  const cues = makeCues(5);
+  const tokenized: string[] = [];
+  let foregroundBusy = true;
+
+  const service = createSubtitlePrefetchService({
+    cues,
+    tokenizeSubtitle: async (text) => {
+      tokenized.push(text);
+      return { text, tokens: [] };
+    },
+    preCacheTokenization: () => {},
+    isForegroundBusy: () => foregroundBusy,
+  });
+
+  service.start(0);
+  for (let i = 0; i < 5; i += 1) {
+    await flushMicrotasks();
+  }
+  assert.deepEqual(tokenized, []);
+
+  foregroundBusy = false;
+  for (let i = 0; i < 30 && tokenized.length < cues.length; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 15));
+  }
+  service.stop();
+  assert.equal(tokenized.length, cues.length);
+});
+
+test('prefetch service waits for the tokenizer and then yields to the on-screen line', async () => {
+  const cues = makeCues(3);
+  const tokenized: string[] = [];
+  let foregroundBusy = false;
+  let releaseTokenizer!: () => void;
+  const tokenizerReady = new Promise<void>((resolve) => {
+    releaseTokenizer = resolve;
+  });
+
+  const service = createSubtitlePrefetchService({
+    cues,
+    tokenizeSubtitle: async (text) => {
+      tokenized.push(text);
+      return { text, tokens: [] };
+    },
+    preCacheTokenization: () => {},
+    waitForTokenizer: () => tokenizerReady,
+    isForegroundBusy: () => foregroundBusy,
+  });
+
+  service.start(0);
+  await flushMicrotasks();
+  assert.deepEqual(tokenized, []);
+
+  // The on-screen line asks for tokenization while warmup is still running.
+  foregroundBusy = true;
+  releaseTokenizer();
+  for (let i = 0; i < 5; i += 1) {
+    await flushMicrotasks();
+  }
+  assert.deepEqual(tokenized, []);
+
+  foregroundBusy = false;
+  for (let i = 0; i < 30 && tokenized.length < cues.length; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 15));
+  }
+  service.stop();
+  assert.deepEqual(tokenized, ['line-0', 'line-1', 'line-2']);
+});

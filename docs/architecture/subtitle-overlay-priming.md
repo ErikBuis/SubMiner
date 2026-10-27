@@ -82,6 +82,10 @@ coming and prefetching would otherwise idle for the rest of the cue.
   autoplay prime, and the prefetch priority window all ask for the current line at once; separate
   runs would compete for Yomitan and delay the one the overlay waits on. A run started before a
   tokenization cache invalidation is not shared with later callers.
+- Prefetch starts no cue while the controller is processing the on-screen line
+  (`isForegroundBusy`), and waits for the startup tokenization warmup before its first cue
+  (`waitForTokenizer`). Without that, prefetch and the on-screen line both start their scans the
+  moment warmup ends. A prefetch scan already running when a new line arrives still finishes.
 - The app's own `--start` keeps the mpv connection it opened during startup instead of
   reconnecting (a second-instance `--start`, or a changed socket path, still reconnects). A
   reconnect resets subtitle, prefetch, and autoplay state, so the startup work would run twice.

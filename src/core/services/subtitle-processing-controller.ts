@@ -45,6 +45,8 @@ export interface SubtitleProcessingController {
   invalidateTokenizationCache: () => void;
   /** Incremented by invalidateTokenizationCache; lets async writers detect stale results. */
   getCacheGeneration: () => number;
+  /** True while a run for the current line is in flight. */
+  isProcessing: () => boolean;
   preCacheTokenization: (text: string, data: SubtitleData) => void;
   consumeCachedSubtitle: (text: string) => SubtitleData | null;
   hasCachedSubtitle: (text: string) => boolean;
@@ -256,6 +258,7 @@ export function createSubtitleProcessingController(
       cacheGeneration += 1;
     },
     getCacheGeneration: () => cacheGeneration,
+    isProcessing: () => processing,
     preCacheTokenization: (text: string, data: SubtitleData) => {
       setCachedTokenization(text, data);
     },
