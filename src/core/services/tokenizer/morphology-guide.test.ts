@@ -226,6 +226,23 @@ test('the guide splits an adjective glued onto a dependent noun (いいん as �
   ]);
 });
 
+test('the guide keeps an expression that runs past the nominalizer', async () => {
+  const words: FakeWord[] = [
+    ['言う', '言う', 'いう', ['v5']],
+    ['言うのも何だが', '言うのも何だが', 'いうのもなんだが', []],
+  ];
+  const guideMorphemes = morphemes([
+    '言う\t動詞,自立,*,*,五段・ワ行促音便,基本形,言う,イウ,イウ',
+    'の\t名詞,非自立,一般,*,*,*,の,ノ,ノ',
+    'も\t助詞,係助詞,*,*,*,*,も,モ,モ',
+    '何\t名詞,代名詞,一般,*,*,*,何,ナン,ナン',
+    'だ\t助動詞,*,*,*,特殊・ダ,基本形,だ,ダ,ダ',
+    'が\t助詞,接続助詞,*,*,*,*,が,ガ,ガ',
+  ]);
+
+  assert.deepEqual(await scanSurfaces('言うのも何だが', words, guideMorphemes), ['言うのも何だが']);
+});
+
 test('the guide keeps a dictionary verb that spans several morphemes', async () => {
   const words: FakeWord[] = [['読んでる', '読む', 'よむ', ['v5']]];
   const guideMorphemes = morphemes([

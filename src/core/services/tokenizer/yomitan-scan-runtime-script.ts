@@ -510,12 +510,14 @@ ${YOMITAN_SCANNING_HELPERS}
       }
       // A verb or adjective followed by the nominalizer ん/の (いい+ん, 来る+の)
       // that the dictionary reads as one unrelated noun (いいん as 医院).
-      // Other dependent nouns stay glued: 言うとおり is a real expression.
+      // Other dependent nouns stay glued: 言うとおり is a real expression, and
+      // so is a match running past the nominalizer (言うのも何だが).
       function gluesInflectableOntoDependentNoun(position, end, wordClasses) {
+        if (hasWordClassPrefix(wordClasses, "exp")) { return false; }
         const covered = guideWords.filter((word) => word.start < end && word.end > position);
         const first = covered[0];
         const second = covered[1];
-        if (!first || !second || first.start !== position) { return false; }
+        if (!first || !second || first.start !== position || second.end !== end) { return false; }
         if (second.pos1 !== "名詞" || second.pos2 !== "非自立") { return false; }
         const nominalizer = text.substring(second.start, second.end);
         if (nominalizer !== "ん" && nominalizer !== "の") { return false; }
