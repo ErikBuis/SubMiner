@@ -624,6 +624,7 @@ import {
   type SubtitlePrefetchService,
 } from './core/services/subtitle-prefetch';
 import { createSubtitlePrefetchInitController } from './main/runtime/subtitle-prefetch-init';
+import { createSingleFlightSubtitleTokenizer } from './main/runtime/subtitle-tokenization-single-flight';
 import {
   createCachedInternalSubtitleTrackExtractor,
   loadSubtitleSourceText,
@@ -5259,7 +5260,10 @@ signalAutoplayReadyFromWarmTokenization = createAutoplayTokenizationWarmRelease(
   signalAutoplayReady: () => signalCurrentSubtitleAutoplayReady(),
   warn: (message, error) => logger.warn(message, error),
 });
-tokenizeSubtitleDeferred = tokenizeSubtitle;
+tokenizeSubtitleDeferred = createSingleFlightSubtitleTokenizer({
+  tokenize: tokenizeSubtitle,
+  getCacheGeneration: () => subtitleProcessingController.getCacheGeneration(),
+});
 
 const aniSkipRuntime = createAniSkipRuntime({
   getAniSkipConfig: () => ({
