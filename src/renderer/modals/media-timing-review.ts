@@ -743,6 +743,36 @@ export function createMediaTimingReviewModal(
     if (timelineChanged) queueWaveformLoad(120);
   }
 
+  /**
+   * Restores the mined clip and timeline view for the lines now on the card. Added lines,
+   * the translation and the screenshot stay as they are.
+   */
+  function resetTiming(): void {
+    if (!payload || resolveInFlight) return;
+    const mediaEnd = payload.mediaDuration ?? Number.POSITIVE_INFINITY;
+    const linesAdded = previousCount > 0 || nextCount > 0;
+    const lines = currentLineSelection();
+    const start = linesAdded
+      ? Math.max(0, lines.rangeStart - startPadSeconds)
+      : payload.selectionStartTime;
+    const end = linesAdded
+      ? Math.min(mediaEnd, lines.rangeEnd + endPadSeconds)
+      : payload.selectionEndTime;
+    const nextTimelineStart =
+      start < payload.timelineStartTime
+        ? Math.max(0, start - LINE_REVEAL_MARGIN_SECONDS)
+        : payload.timelineStartTime;
+    const nextTimelineEnd =
+      end > payload.timelineEndTime
+        ? Math.min(mediaEnd, end + LINE_REVEAL_MARGIN_SECONDS)
+        : payload.timelineEndTime;
+    const timelineChanged = nextTimelineStart !== timelineStart || nextTimelineEnd !== timelineEnd;
+    timelineStart = nextTimelineStart;
+    timelineEnd = nextTimelineEnd;
+    updateSelection(start, end);
+    if (timelineChanged) queueWaveformLoad(120);
+  }
+
   function updateSelection(nextStart: number, nextEnd: number): void {
     if (!payload) return;
     const mediaEnd = payload.mediaDuration ?? Number.POSITIVE_INFINITY;
@@ -1195,15 +1225,7 @@ export function createMediaTimingReviewModal(
       updateSelection(selectionStart, selectionEnd + FINE_ADJUST_SECONDS),
     );
     ctx.dom.mediaTimingReviewPlay.addEventListener('click', () => void togglePreview());
-    ctx.dom.mediaTimingReviewReset.addEventListener('click', () => {
-      if (!payload) return;
-      previousCount = 0;
-      nextCount = 0;
-      updateSelection(payload.selectionStartTime, payload.selectionEndTime);
-      renderSentence();
-      // Reset is about timing: a translation the user edited stays.
-      if (!translationEdited) setTranslation(payload.card?.translation?.text ?? '', false);
-    });
+    ctx.dom.mediaTimingReviewReset.addEventListener('click', () => resetTiming());
     ctx.dom.mediaTimingReviewTranslation.addEventListener('input', () => {
       if (translationEdited) return;
       translationEdited = true;
