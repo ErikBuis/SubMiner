@@ -13,6 +13,14 @@ export interface SubtitlePrefetchServiceDeps {
    * result counts as fresh.
    */
   getCacheGeneration?: () => number;
+  /**
+   * Resolves once the tokenizer can run (startup warmup). Prefetch waits for it before
+   * picking a cue, so it re-checks `isForegroundBusy` after warmup instead of queueing a
+   * scan that starts together with the on-screen line's.
+   */
+  waitForTokenizer?: () => Promise<void>;
+  /** True while the on-screen line is being tokenized; prefetch starts no cue meanwhile. */
+  isForegroundBusy?: () => boolean;
   priorityWindowSize?: number;
 }
 
@@ -77,7 +85,9 @@ export function createSubtitlePrefetchService(
       }
 
       // Wait while paused
-      while (paused && !stopped && runId === currentRunId) {
+      await deps.waitForTokenizer?.().catch(() => {});
+
+      while ((paused || deps.isForegroundBusy?.()) && !stopped && runId === currentRunId) {
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
 

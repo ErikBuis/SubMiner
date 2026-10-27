@@ -624,6 +624,7 @@ import {
   type SubtitlePrefetchService,
 } from './core/services/subtitle-prefetch';
 import { createSubtitlePrefetchInitController } from './main/runtime/subtitle-prefetch-init';
+import { createSingleFlightSubtitleTokenizer } from './main/runtime/subtitle-tokenization-single-flight';
 import {
   createCachedInternalSubtitleTrackExtractor,
   loadSubtitleSourceText,
@@ -2252,6 +2253,10 @@ const subtitlePrefetchInitController = createSubtitlePrefetchInitController({
   },
   hasCachedTokenization: (text) => subtitleProcessingController.hasCachedSubtitle(text),
   getCacheGeneration: () => subtitleProcessingController.getCacheGeneration(),
+  // The on-screen line goes first: at startup prefetch and the visible line otherwise
+  // start their scans together the moment warmup ends, and compete for Yomitan.
+  waitForTokenizer: () => startTokenizationWarmups(),
+  isForegroundBusy: () => subtitleProcessingController.isProcessing(),
   logInfo: (message) => logger.info(message),
   logWarn: (message) => logger.warn(message),
   onParsedSubtitleCuesChanged: (cues, sourceKey) => {
@@ -5259,7 +5264,10 @@ signalAutoplayReadyFromWarmTokenization = createAutoplayTokenizationWarmRelease(
   signalAutoplayReady: () => signalCurrentSubtitleAutoplayReady(),
   warn: (message, error) => logger.warn(message, error),
 });
-tokenizeSubtitleDeferred = tokenizeSubtitle;
+tokenizeSubtitleDeferred = createSingleFlightSubtitleTokenizer({
+  tokenize: tokenizeSubtitle,
+  getCacheGeneration: () => subtitleProcessingController.getCacheGeneration(),
+});
 
 const aniSkipRuntime = createAniSkipRuntime({
   getAniSkipConfig: () => ({

@@ -3,7 +3,7 @@
 # Subtitle Overlay Priming
 
 Status: active
-Last verified: 2026-08-19
+Last verified: 2026-10-27
 Owner: Kyle Yasuda
 Read when: debugging subtitle state or blank Linux/X11 overlay windows when the visible overlay is shown or recreated
 
@@ -76,6 +76,19 @@ coming and prefetching would otherwise idle for the rest of the cue.
   stack, preserving dialogue or signs that overlap a lyric.
 - A tokenization cache miss emits the plain cue synchronously. Tokenization remains serialized so
   live work does not contend for Yomitan state.
+- Callers that request the same line while its tokenization is still running share that run
+  (`createSingleFlightSubtitleTokenizer` in
+  `src/main/runtime/subtitle-tokenization-single-flight.ts`). At startup the live line, the
+  autoplay prime, and the prefetch priority window all ask for the current line at once; separate
+  runs would compete for Yomitan and delay the one the overlay waits on. A run started before a
+  tokenization cache invalidation is not shared with later callers.
+- Prefetch starts no cue while the controller is processing the on-screen line
+  (`isForegroundBusy`), and waits for the startup tokenization warmup before its first cue
+  (`waitForTokenizer`). Without that, prefetch and the on-screen line both start their scans the
+  moment warmup ends. A prefetch scan already running when a new line arrives still finishes.
+- The app's own `--start` keeps the mpv connection it opened during startup instead of
+  reconnecting (a second-instance `--start`, or a changed socket path, still reconnects). A
+  reconnect resets subtitle, prefetch, and autoplay state, so the startup work would run twice.
 - The initial `time-pos`, explicit renderer seeks, and later seek-like jumps reprocess mpv's
   current raw `sub-text` after the new playback time is stored. Explicit intent matters because
   adjacent subtitle jumps can be shorter than the general seek-distance threshold. This corrects
