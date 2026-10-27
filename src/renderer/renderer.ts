@@ -62,6 +62,7 @@ import { createRendererState } from './state.js';
 import { createModalRegistry, type ModalDescriptor } from './modal-registry.js';
 import { createSubtitleRenderer } from './subtitle-render.js';
 import { isLookupPopupOpen, registerYomitanLookupListener } from './yomitan-popup.js';
+import { createStaleLookupPopupCloser } from './stale-lookup-popup.js';
 import {
   createRendererRecoveryController,
   registerRendererGlobalErrorHandlers,
@@ -336,6 +337,16 @@ const keyboardHandlers = createKeyboardHandlers(ctx, {
   getPlaybackPaused: () => window.electronAPI.getPlaybackPaused(),
   toggleSubtitleSidebarModal: () => {
     void subtitleSidebarModal.toggleSubtitleSidebarModal();
+  },
+});
+
+const staleLookupPopupCloser = createStaleLookupPopupCloser({
+  isKeyboardDrivenModeEnabled: () => ctx.state.keyboardDrivenModeEnabled,
+  isLookupPopupOpen: () => isLookupPopupOpen(ctx.state, document),
+  getPlaybackPaused: () => window.electronAPI.getPlaybackPaused(),
+  releasePopupPause: mouseHandlers.releasePopupPause,
+  closeLookupPopup: () => {
+    keyboardHandlers.closeLookupWindow();
   },
 });
 
@@ -828,6 +839,7 @@ async function init(): Promise<void> {
     initialSubtitle = await window.electronAPI.getCurrentSubtitleRaw();
   }
   lastSubtitlePreview = truncateForErrorLog(getSubtitleTextForPreview(initialSubtitle));
+  void staleLookupPopupCloser.handleSubtitleText(getSubtitleTextForPreview(initialSubtitle));
   keyboardHandlers.handleSubtitleContentUpdated();
   subtitleRenderer.renderSubtitle(initialSubtitle);
   positioning.applyYPercent(positioning.getCurrentYPercent());
@@ -836,6 +848,7 @@ async function init(): Promise<void> {
   window.electronAPI.onSubtitle((data: SubtitleData) => {
     runGuarded('subtitle:update', () => {
       lastSubtitlePreview = truncateForErrorLog(getSubtitleTextForPreview(data));
+      void staleLookupPopupCloser.handleSubtitleText(getSubtitleTextForPreview(data));
       keyboardHandlers.handleSubtitleContentUpdated();
       subtitleRenderer.renderSubtitle(data);
       positioning.applyYPercent(positioning.getCurrentYPercent());
