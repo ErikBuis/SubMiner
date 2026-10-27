@@ -8,7 +8,7 @@ import {
   isYomitanPopupIframe,
   isYomitanPopupVisible,
   registerDictionaryPopupVisibilityListener,
-  shieldYomitanHoverScan,
+  shieldYomitanScan,
 } from './yomitan-popup.js';
 
 type FakeStyle = Pick<CSSStyleDeclaration, 'visibility' | 'display' | 'opacity'>;
@@ -160,42 +160,57 @@ test('isYomitanPopupVisible falls back to querySelector when querySelectorAll is
   assert.equal(isYomitanPopupVisible(root), true);
 });
 
-test('hover scan shield stops idle pointer hover inside the container before the scanner', () => {
+test('scan shield keeps hover and primary presses inside the container from the scanner', () => {
   const root = new EventTarget();
-  const inside = { nodeType: 1 };
+  const captured = { nodeType: 1, hasPointerCapture: () => true };
+  const inside = { nodeType: 1, hasPointerCapture: () => false };
   const outside = { nodeType: 1 };
-  const container = { contains: (node: unknown) => node === inside } as unknown as Node;
+  const container = {
+    contains: (node: unknown) => node === inside || node === captured,
+  } as unknown as Node;
   let active = true;
   const scanned: string[] = [];
-  const dispose = shieldYomitanHoverScan(container, () => active, root);
+  const pressed: unknown[] = [];
+  const dispose = shieldYomitanScan(
+    container,
+    () => active,
+    (event) => pressed.push(event.target),
+    root,
+  );
   // Registered after the shield, like Yomitan's scanner hooking up once its options load.
-  for (const type of ['pointerover', 'pointermove']) {
-    root.addEventListener(type, (event) => scanned.push(`${type}:${String(event.target)}`), true);
+  for (const type of ['pointerover', 'pointermove', 'pointerdown', 'mousedown']) {
+    root.addEventListener(type, () => scanned.push(type), true);
   }
 
-  const fire = (type: string, origin: unknown, buttons = 0) => {
+  const fire = (type: string, origin: unknown, button = 0) => {
     const event = new Event(type);
-    Object.defineProperty(event, 'buttons', { value: buttons });
+    Object.defineProperty(event, 'button', { value: button });
+    Object.defineProperty(event, 'pointerId', { value: 1 });
     Object.defineProperty(event, 'target', { value: origin });
     root.dispatchEvent(event);
   };
 
-  fire('pointermove', inside);
-  fire('pointerover', inside);
-  assert.deepEqual(scanned, [], 'idle hover inside the container is not scanned');
+  for (const type of ['pointerover', 'pointermove', 'pointerdown', 'mousedown']) {
+    fire(type, inside);
+  }
+  assert.deepEqual(scanned, [], 'hover and presses inside the container are not scanned');
+  assert.deepEqual(pressed, [inside], 'the pointerdown is handed to onPress once');
 
-  fire('pointermove', inside, 1);
-  assert.equal(scanned.length, 1, 'drags still reach other listeners');
+  fire('pointermove', captured);
+  assert.deepEqual(scanned, ['pointermove'], 'a captured drag keeps reaching other listeners');
+
+  fire('pointerdown', inside, 2);
+  assert.equal(scanned.length, 2, 'secondary buttons are not scan presses');
 
   fire('pointermove', outside);
-  assert.equal(scanned.length, 2, 'hover outside the container is untouched');
+  assert.equal(scanned.length, 3, 'events outside the container are untouched');
 
   active = false;
   fire('pointermove', inside);
-  assert.equal(scanned.length, 3, 'an inactive shield lets everything through');
+  assert.equal(scanned.length, 4, 'an inactive shield lets everything through');
 
   active = true;
   dispose();
   fire('pointermove', inside);
-  assert.equal(scanned.length, 4, 'disposing removes the shield');
+  assert.equal(scanned.length, 5, 'disposing removes the shield');
 });

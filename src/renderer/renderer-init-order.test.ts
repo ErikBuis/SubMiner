@@ -100,7 +100,7 @@ test('renderer restores subtitle sidebar open state only on visible overlay laye
   assert.ok(sidebarModalIndex < sidebarRestoreIndex);
 });
 
-test('renderer shields the review dialog from Yomitan hover scans before init awaits anything', () => {
+test('renderer shields the review dialog from Yomitan hover scans and presses before init awaits anything', () => {
   const shieldIndex = indexOfRequired('mediaTimingReviewModal.shieldYomitanHover();');
   const initIndex = indexOfRequired('async function init(): Promise<void> {');
 

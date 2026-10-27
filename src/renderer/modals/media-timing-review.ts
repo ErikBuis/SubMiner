@@ -7,7 +7,7 @@ import type {
 } from '../../types/anki';
 import type { ModalStateReader, RendererContext } from '../context';
 import { createModalFocusGuard } from './modal-focus-guard';
-import { shieldYomitanHoverScan } from '../yomitan-popup.js';
+import { shieldYomitanScan } from '../yomitan-popup.js';
 
 const MINIMUM_CLIP_SECONDS = 0.1;
 const FINE_ADJUST_SECONDS = 0.1;
@@ -971,9 +971,17 @@ export function createMediaTimingReviewModal(
    * registered ahead of Yomitan's scanner, which hooks up after its own async setup.
    */
   function shieldYomitanHover(): () => void {
-    return shieldYomitanHoverScan(
+    return shieldYomitanScan(
       ctx.dom.mediaTimingReviewModal,
       () => ctx.state.mediaTimingReviewModalOpen,
+      // The shield swallows presses, so run what the dialog's own pointerdown listeners do.
+      (event) => {
+        focus.requestOverlayFocus();
+        focus.enforceModalFocus();
+        if (ctx.dom.mediaTimingReviewSelectionTrack.contains(event.target as Node)) {
+          beginDrag(event);
+        }
+      },
     );
   }
 
@@ -1001,7 +1009,6 @@ export function createMediaTimingReviewModal(
       if (!resolveInFlight) framePicker.reset();
     });
     const track = ctx.dom.mediaTimingReviewSelectionTrack;
-    track.addEventListener('pointerdown', beginDrag);
     track.addEventListener('pointermove', (event) => {
       if (drag?.pointerId === event.pointerId) applyDrag(event.clientX);
     });

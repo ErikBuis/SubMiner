@@ -60,23 +60,33 @@ export function registerYomitanLookupListener(
 }
 
 /**
- * Keeps Yomitan's hover scan out of `container`. Yomitan scans from capture
- * listeners on the window, so hover events are stopped before they reach it.
- * Events with a button held pass: Yomitan skips them and drags depend on them.
- * Register before Yomitan hooks its listeners; the first listener wins.
+ * Keeps Yomitan's text scan out of `container`. Yomitan scans from capture
+ * listeners on the window, so hover and primary-button press events inside the
+ * container are stopped before they reach it. The press also stops every other
+ * window-level listener, so `onPress` gets the pointerdown instead and must do
+ * whatever the container needs from it. A pointer captured by its target (a
+ * drag in progress) keeps moving normally. Register before Yomitan hooks its
+ * listeners; the first listener wins.
  */
-export function shieldYomitanHoverScan(
+export function shieldYomitanScan(
   container: Pick<Node, 'contains'>,
   isActive: () => boolean,
+  onPress: (event: PointerEvent) => void,
   target: EventTarget = window,
 ): () => void {
   const handler = (event: Event): void => {
-    if (!isActive() || (event as PointerEvent).buttons !== 0) return;
-    const eventTarget = event.target as Node | null;
+    if (!isActive()) return;
+    const eventTarget = event.target as (Node & Partial<Element>) | null;
     if (typeof eventTarget?.nodeType !== 'number' || !container.contains(eventTarget)) return;
+    if (event.type === 'pointerover' || event.type === 'pointermove') {
+      if (eventTarget.hasPointerCapture?.((event as PointerEvent).pointerId)) return;
+    } else if ((event as MouseEvent).button !== 0) {
+      return;
+    }
     event.stopImmediatePropagation();
+    if (event.type === 'pointerdown') onPress(event as PointerEvent);
   };
-  const events = ['pointerover', 'pointermove'];
+  const events = ['pointerover', 'pointermove', 'pointerdown', 'mousedown'];
   for (const type of events) target.addEventListener(type, handler, true);
   return () => {
     for (const type of events) target.removeEventListener(type, handler, true);
