@@ -38,6 +38,7 @@ import { tickWindowsOverlayPointerInteraction } from './windows-overlay-pointer-
 export interface VisibleOverlayInteractionRuntimeDeps {
   overlayManager: {
     getMainWindow: () => BrowserWindow | null;
+    getModalWindow: () => BrowserWindow | null;
     getVisibleOverlayVisible: () => boolean;
   };
   overlayContentMeasurementStore: {
@@ -294,6 +295,11 @@ export function createVisibleOverlayInteractionRuntime(deps: VisibleOverlayInter
   }
 
   function bindVisibleOverlayOwner(): void {
+    // A dialog left open while the tracker switches to another mpv window must follow it.
+    const modalWindow = overlayManager.getModalWindow();
+    if (modalWindow && !modalWindow.isDestroyed() && modalWindow.isVisible()) {
+      bindWindowsModalWindowAboveMpv(modalWindow);
+    }
     const mainWindow = overlayManager.getMainWindow();
     if (!mainWindow || mainWindow.isDestroyed()) return;
     if (process.platform === 'linux') {
@@ -328,6 +334,17 @@ export function createVisibleOverlayInteractionRuntime(deps: VisibleOverlayInter
     if (!setWindowsOverlayOwner(overlayHwnd, mpvResult.hwnd)) {
       logger.warn('Failed to set overlay owner via koffi');
     }
+  }
+
+  function bindWindowsModalWindowAboveMpv(window: BrowserWindow): boolean {
+    if (process.platform !== 'win32' || window.isDestroyed()) {
+      return false;
+    }
+    const targetWindowHwnd = resolveWindowsOverlayBindTargetHandle(deps.getMpvSocketPath());
+    if (targetWindowHwnd === null) {
+      return false;
+    }
+    return bindWindowsOverlayAboveMpv(getWindowsNativeWindowHandleNumber(window), targetWindowHwnd);
   }
 
   function releaseVisibleOverlayOwner(): void {
@@ -841,6 +858,7 @@ export function createVisibleOverlayInteractionRuntime(deps: VisibleOverlayInter
     clearVisibleOverlayX11OwnerBinding,
     createOverlayWindowTracker,
     bindVisibleOverlayOwner,
+    bindWindowsModalWindowAboveMpv,
     releaseVisibleOverlayOwner,
     startOverlayWindowTrackerForCurrentSocket,
     retargetOverlayWindowTrackerForMpvSocket,

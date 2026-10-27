@@ -89,6 +89,71 @@ test('sendToActiveOverlayWindow targets modal window with full geometry and trac
   assert.deepEqual(modal.sent, [['runtime-options:open']]);
 });
 
+test('Windows modal window stacks above mpv instead of staying topmost', () => {
+  const modal = new FakeOverlayWindow();
+  const bound: unknown[] = [];
+  const h = createHarness({
+    modal,
+    platform: 'win32',
+    options: {
+      bindModalWindowAboveMpv: (window) => {
+        bound.push(window);
+        return true;
+      },
+    },
+  });
+
+  h.runtime.sendToActiveOverlayWindow('runtime-options:open', undefined, {
+    restoreOnModalClose: 'runtime-options',
+  });
+  h.runtime.notifyOverlayModalOpened('runtime-options');
+  h.runtime.notifyOverlayModalOpened('runtime-options');
+
+  // Elevation repeats on an already-owned modal; none may touch the topmost state directly,
+  // since demoting an owned window also demotes an mpv running with --ontop.
+  assert.ok(bound.length >= 2);
+  assert.ok(bound.every((window) => window === modal));
+  assert.deepEqual(modal.alwaysOnTopCalls, []);
+});
+
+test('Windows modal window stays topmost when mpv cannot be bound', () => {
+  const modal = new FakeOverlayWindow();
+  const h = createHarness({
+    modal,
+    platform: 'win32',
+    options: { bindModalWindowAboveMpv: () => false },
+  });
+
+  h.runtime.sendToActiveOverlayWindow('runtime-options:open', undefined, {
+    restoreOnModalClose: 'runtime-options',
+  });
+  h.runtime.notifyOverlayModalOpened('runtime-options');
+
+  assert.equal(modal.alwaysOnTopCalls.at(-1), 'top:true:screen-saver:3');
+});
+
+test('non-Windows modal window ignores the mpv binding', () => {
+  const modal = new FakeOverlayWindow();
+  let bindCalls = 0;
+  const h = createHarness({
+    modal,
+    options: {
+      bindModalWindowAboveMpv: () => {
+        bindCalls += 1;
+        return true;
+      },
+    },
+  });
+
+  h.runtime.sendToActiveOverlayWindow('runtime-options:open', undefined, {
+    restoreOnModalClose: 'runtime-options',
+  });
+  h.runtime.notifyOverlayModalOpened('runtime-options');
+
+  assert.equal(bindCalls, 0);
+  assert.deepEqual(modal.alwaysOnTopCalls, ['top:true:screen-saver:3']);
+});
+
 test('sendToActiveOverlayWindow creates modal window lazily when absent', () => {
   const modal = new FakeOverlayWindow();
   const h = createHarness({ createModal: () => modal });
