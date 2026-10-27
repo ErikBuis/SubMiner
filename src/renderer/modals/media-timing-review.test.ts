@@ -455,3 +455,49 @@ test('review translation shifts keep a translation taken from the screen in the 
   assert.equal(preview.canRemovePrevious, true);
   assert.equal(preview.canAddNext, false);
 });
+
+test('review translation shifts can drop a line added at the other end', () => {
+  const lineA = { text: 'A', startTime: 8, endTime: 10 };
+  const lineB = { text: 'B', startTime: 10, endTime: 12 };
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'A',
+    initialTranslationLines: [lineA],
+    translationLines: [lineA, lineB],
+    format: false,
+    translationPreviousShift: -1,
+    translationNextShift: 1,
+  });
+  assert.equal(preview.text, 'B');
+  assert.equal(preview.previousShift, -1);
+  assert.equal(preview.nextShift, 1);
+  assert.equal(preview.canRemovePrevious, false);
+});
+
+test('review translation shifts grow a screen translation from the lines before it', () => {
+  // Sorted by start, the long cue comes first although it ends after the clip.
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'From the screen',
+    initialTranslationLines: [],
+    translationLines: [
+      { text: 'Sign', startTime: 0, endTime: 30 },
+      { text: 'Before', startTime: 6, endTime: 8 },
+    ],
+    format: false,
+    translationPreviousShift: 1,
+  });
+  assert.equal(preview.text, 'Before From the screen');
+});
