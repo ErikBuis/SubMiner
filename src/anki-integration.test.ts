@@ -367,6 +367,18 @@ test('AnkiIntegration hands the review a sentence without speaker labels', async
   }
 });
 
+test('AnkiIntegration drops speaker labels from kept sentence furigana', () => {
+  const integration = createIntegration({
+    fields: { word: 'Expression', sentence: 'Sentence' },
+    behavior: { highlightWord: false },
+  });
+
+  assert.equal(
+    internalsOf(integration).processSentenceFurigana('（ひとり）スマホに 届[とど]くのは', {}),
+    'スマホに 届[とど]くのは',
+  );
+});
+
 // --- Proxy, field grouping, notifications -----------------------------------
 
 test('AnkiIntegration reports an occupied proxy address through its notification seam', async () => {
