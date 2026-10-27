@@ -2931,6 +2931,7 @@ const overlayVisibilityRuntime = createOverlayVisibilityRuntimeService(
 const visibleOverlayInteractionRuntime = createVisibleOverlayInteractionRuntime({
   overlayManager: {
     getMainWindow: () => overlayManager.getMainWindow(),
+    getModalWindow: () => overlayManager.getModalWindow(),
     getVisibleOverlayVisible: () => overlayManager.getVisibleOverlayVisible(),
   },
   overlayContentMeasurementStore: {

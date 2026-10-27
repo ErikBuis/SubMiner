@@ -38,6 +38,7 @@ import { tickWindowsOverlayPointerInteraction } from './windows-overlay-pointer-
 export interface VisibleOverlayInteractionRuntimeDeps {
   overlayManager: {
     getMainWindow: () => BrowserWindow | null;
+    getModalWindow: () => BrowserWindow | null;
     getVisibleOverlayVisible: () => boolean;
   };
   overlayContentMeasurementStore: {
@@ -294,6 +295,11 @@ export function createVisibleOverlayInteractionRuntime(deps: VisibleOverlayInter
   }
 
   function bindVisibleOverlayOwner(): void {
+    // A dialog left open while the tracker switches to another mpv window must follow it.
+    const modalWindow = overlayManager.getModalWindow();
+    if (modalWindow && !modalWindow.isDestroyed() && modalWindow.isVisible()) {
+      bindWindowsModalWindowAboveMpv(modalWindow);
+    }
     const mainWindow = overlayManager.getMainWindow();
     if (!mainWindow || mainWindow.isDestroyed()) return;
     if (process.platform === 'linux') {
