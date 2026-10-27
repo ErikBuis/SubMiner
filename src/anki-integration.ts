@@ -81,6 +81,7 @@ import type {
   PendingYoutubeMediaQueueReadyOptions,
 } from './anki-integration/pending-youtube-media-queue';
 import { resolveMpvVolumeScale } from './anki-integration/mpv-volume';
+import type { SubtitleTracksForTranslation } from './anki-integration/sentence-translation';
 
 const log = createLogger('anki').child('integration');
 
@@ -247,6 +248,9 @@ export class AnkiIntegration {
     | null = null;
   private mediaTimingReviewCallback:
     | ((request: MediaTimingReviewRequest) => Promise<MediaTimingReviewDecision>)
+    | null = null;
+  private subtitleTracksForTranslationProvider:
+    | (() => Promise<SubtitleTracksForTranslation | null> | SubtitleTracksForTranslation | null)
     | null = null;
   private noteIdRedirects = new Map<number, number>();
   private trackedDuplicateNoteIds = new Map<number, number[]>();
@@ -500,6 +504,7 @@ export class AnkiIntegration {
   private createCardCreationService(): CardCreationService {
     return new CardCreationService({
       getConfig: () => this.config,
+      getSubtitleTracksForTranslation: () => this.subtitleTracksForTranslationProvider?.() ?? null,
       getAiConfig: () => this.aiConfig,
       getTimingTracker: () => this.timingTracker,
       getMpvClient: () => this.mpvClient,
@@ -1790,6 +1795,14 @@ export class AnkiIntegration {
 
   setSentenceFuriganaGenerator(callback: typeof this.generateSentenceFuriganaCallback): void {
     this.generateSentenceFuriganaCallback = callback;
+  }
+
+  setSubtitleTracksForTranslationProvider(
+    provider:
+      | (() => Promise<SubtitleTracksForTranslation | null> | SubtitleTracksForTranslation | null)
+      | null,
+  ): void {
+    this.subtitleTracksForTranslationProvider = provider;
   }
 
   setMediaTimingReviewCallback(

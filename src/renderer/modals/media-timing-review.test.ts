@@ -104,6 +104,22 @@ test('line selection combines adjacent lines around the mined one and tracks the
   assert.equal(expanded.rangeEnd, 11);
 });
 
+test('line selection ends at the latest added cue, not the last one', () => {
+  const selection = buildMediaTimingLineSelection({
+    previousLines: [],
+    nextLines: [
+      { text: '長い', startTime: 2, endTime: 10 },
+      { text: '短い', startTime: 3, endTime: 4 },
+    ],
+    text: '今',
+    originalStartTime: 0,
+    originalEndTime: 1,
+    previousCount: 0,
+    nextCount: 2,
+  });
+  assert.equal(selection.rangeEnd, 10);
+});
+
 test('preview request guard blocks overlap and invalidates stale responses', () => {
   const guard = createMediaTimingPreviewRequestGuard();
   const first = guard.begin();

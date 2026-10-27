@@ -294,7 +294,15 @@ function parseMediaTimingReviewResolveRequest(
       (typeof decisionRecord.screenshotTime === 'number' &&
         Number.isFinite(decisionRecord.screenshotTime))) &&
     (decisionRecord.text === undefined ||
-      (typeof decisionRecord.text === 'string' && decisionRecord.text.trim().length > 0))
+      (typeof decisionRecord.text === 'string' && decisionRecord.text.trim().length > 0)) &&
+    ((decisionRecord.sentenceStartTime === undefined &&
+      decisionRecord.sentenceEndTime === undefined) ||
+      (decisionRecord.text !== undefined &&
+        typeof decisionRecord.sentenceStartTime === 'number' &&
+        typeof decisionRecord.sentenceEndTime === 'number' &&
+        Number.isFinite(decisionRecord.sentenceStartTime) &&
+        Number.isFinite(decisionRecord.sentenceEndTime) &&
+        decisionRecord.sentenceEndTime > decisionRecord.sentenceStartTime))
   ) {
     return {
       reviewId: record.reviewId,
@@ -306,6 +314,12 @@ function parseMediaTimingReviewResolveRequest(
           ? {}
           : { screenshotTime: decisionRecord.screenshotTime as number }),
         ...(decisionRecord.text === undefined ? {} : { text: decisionRecord.text }),
+        ...(decisionRecord.sentenceStartTime === undefined
+          ? {}
+          : {
+              sentenceStartTime: decisionRecord.sentenceStartTime as number,
+              sentenceEndTime: decisionRecord.sentenceEndTime as number,
+            }),
       },
     };
   }

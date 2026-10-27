@@ -568,7 +568,10 @@ import {
   createRefreshSubtitlePrefetchFromActiveTrackHandler,
   createResolveActiveSubtitleSidebarSourceHandler,
 } from './main/runtime/subtitle-prefetch-runtime';
-import { createSecondarySubtitleTrackController } from './main/runtime/secondary-subtitle-track';
+import {
+  createSecondarySubtitleTrackController,
+  selectAlignableSubtitleCues,
+} from './main/runtime/secondary-subtitle-track';
 import {
   createCreateAnilistSetupWindowHandler,
   createCreateConfigSettingsWindowHandler,
@@ -5409,6 +5412,22 @@ function initializeOverlayRuntime(): void {
   appState.ankiIntegration?.setSubtitleMiningContextConsumer(consumePendingSubtitleMiningContext);
   appState.ankiIntegration?.setMediaTimingReviewCallback(mediaTimingReviewRuntime.requestReview);
   appState.ankiIntegration?.setSentenceFuriganaGenerator(generateMiningSentenceFurigana);
+  appState.ankiIntegration?.setSubtitleTracksForTranslationProvider(async () => {
+    // Primary cues keep their file timestamps, like the rest of the mining code, so the
+    // secondary track is moved onto the primary track's timeline rather than playback's.
+    const client = appState.mpvClient;
+    const primaryDelay = client?.connected
+      ? Number(await client.requestProperty('sub-delay').catch(() => 0))
+      : 0;
+    const secondary = secondarySubtitleTrackController.getTimelineCues(
+      Number.isFinite(primaryDelay) ? primaryDelay : 0,
+    );
+    if (!secondary) return null;
+    return {
+      primary: selectAlignableSubtitleCues(appState.activeParsedSubtitleCues),
+      secondary: selectAlignableSubtitleCues(secondary),
+    };
+  });
   syncOverlayMpvSubtitleSuppression();
 }
 

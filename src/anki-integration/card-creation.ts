@@ -25,6 +25,10 @@ import { clampMediaEndTime } from './media-duration';
 import { resolveWordCardKind } from './note-field-utils';
 import type { PendingYoutubeMediaUpdate } from './pending-youtube-media';
 import { resolveMpvVolumeScale } from './mpv-volume';
+import {
+  resolveTimedSentenceTranslation,
+  type SubtitleTracksForTranslation,
+} from './sentence-translation';
 
 const log = createLogger('anki').child('integration.card-creation');
 
@@ -102,6 +106,11 @@ interface CardCreationMediaGenerator {
 
 interface CardCreationDeps {
   getConfig: () => AnkiConnectConfig;
+  /** Parsed subtitle tracks for picking the translation by timing; null when not parsed. */
+  getSubtitleTracksForTranslation?: () =>
+    | Promise<SubtitleTracksForTranslation | null>
+    | SubtitleTracksForTranslation
+    | null;
   getAiConfig: () => AiConfig;
   getTimingTracker: () => SubtitleTimingTracker;
   getMpvClient: () => MpvClient;
@@ -600,6 +609,9 @@ export class CardCreationService {
     }
 
     const maxMediaDuration = this.deps.getConfig().media?.maxMediaDuration ?? 30;
+    // The cap limits the media only; the translation still covers every line of the sentence.
+    const subtitleStartTime = startTime;
+    const subtitleEndTime = endTime;
     const cappedEndTime = clampMediaEndTime(startTime, endTime, maxMediaDuration);
     if (cappedEndTime !== endTime) {
       log.warn(
@@ -624,11 +636,33 @@ export class CardCreationService {
         }
         const skipMedia = timingDecision.action === 'skip-media';
         const exactReviewedRange = timingDecision.action === 'confirm';
+        let sentenceStartTime = subtitleStartTime;
+        let sentenceEndTime = subtitleEndTime;
         if (timingDecision.action === 'confirm') {
           startTime = timingDecision.startTime;
           endTime = timingDecision.endTime;
           sentence = timingDecision.text?.trim() || sentence;
+          // Lines the review added widen the sentence; the clip bounds are padded or
+          // trimmed audio and say nothing about which lines the card covers.
+          if (
+            timingDecision.sentenceStartTime !== undefined &&
+            timingDecision.sentenceEndTime !== undefined
+          ) {
+            sentenceStartTime = Math.min(sentenceStartTime, timingDecision.sentenceStartTime);
+            sentenceEndTime = Math.max(sentenceEndTime, timingDecision.sentenceEndTime);
+          }
         }
+        const tracks = (await this.deps.getSubtitleTracksForTranslation?.()) ?? null;
+        const timedTranslation = resolveTimedSentenceTranslation({
+          text: sentence,
+          startTime: sentenceStartTime,
+          endTime: sentenceEndTime,
+          tracks,
+        });
+        // With a parsed secondary track, no match means no translation: the line on screen
+        // then belongs to another sentence. It only stands in when the tracks are unavailable.
+        if (timedTranslation) secondarySubText = timedTranslation.translation;
+        else if (tracks && tracks.secondary.length > 0) secondarySubText = undefined;
 
         const config = this.deps.getConfig();
         const generateAudio = !skipMedia && shouldGenerateAudio(config);
