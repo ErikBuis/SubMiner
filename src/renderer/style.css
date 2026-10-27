@@ -1422,7 +1422,7 @@ body:focus-visible,
 }
 
 .media-timing-review-editor {
-  padding: 14px 20px 18px;
+  padding: 14px 20px 0;
 }
 
 .media-timing-frame-picker {
@@ -1430,7 +1430,7 @@ body:focus-visible,
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
   align-items: center;
-  margin: 0 0 16px;
+  margin: 10px 0 0;
   padding: 12px;
   border: 1px solid var(--ctp-surface1);
   border-radius: 10px;
@@ -1750,6 +1750,8 @@ body:focus-visible,
   --playhead-position: var(--selection-start);
 
   position: relative;
+  /* Keeps the handle and range layers below the sticky header and footer. */
+  isolation: isolate;
   height: 52px;
   margin: 8px 0 9px;
   overflow: hidden;
@@ -1991,9 +1993,13 @@ body:focus-visible,
 
 .media-timing-review-fine-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr auto 1fr;
   gap: 10px;
   margin-top: 10px;
+}
+
+.media-timing-review-fine-grid .media-timing-review-reset-button {
+  padding: 5px 12px;
 }
 
 .media-timing-review-fine-control {
@@ -2022,27 +2028,34 @@ body:focus-visible,
 }
 
 .media-timing-review-status {
-  min-height: 21px;
-  padding-top: 8px;
+  flex: 1;
+  min-width: 0;
   color: var(--ctp-teal);
   font-size: 11px;
   font-weight: 620;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .media-timing-review-status.is-error {
   color: var(--ctp-red);
 }
 
-.media-timing-review-footer,
-.media-timing-review-preview-actions {
-  display: flex;
-  align-items: center;
-  gap: 9px;
+/* Preview, export and the shortcuts stay in view however far the editor scrolls. */
+.media-timing-review-dock {
+  position: sticky;
+  z-index: 2;
+  bottom: 0;
+  margin: 14px -20px 0;
+  padding: 10px 20px 11px;
+  border-top: 1px solid var(--ctp-surface0);
+  background: var(--ctp-mantle);
 }
 
 .media-timing-review-footer {
-  justify-content: space-between;
-  padding-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .media-timing-review-play-button,
@@ -2058,8 +2071,8 @@ body:focus-visible,
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  border-color: var(--ctp-teal);
-  background: var(--ctp-teal);
+  border-color: var(--ctp-blue);
+  background: var(--ctp-blue);
   color: var(--ctp-crust);
 }
 
@@ -2084,8 +2097,8 @@ body:focus-visible,
 }
 
 .media-timing-review-confirm-button {
-  border-color: var(--ctp-blue);
-  background: var(--ctp-blue);
+  border-color: var(--ctp-green);
+  background: var(--ctp-green);
   color: var(--ctp-crust);
 }
 
@@ -2109,7 +2122,7 @@ body:focus-visible,
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
-  padding-top: 14px;
+  padding-top: 9px;
   color: var(--ctp-overlay1);
   font-size: 10px;
   font-weight: 650;
@@ -2130,6 +2143,22 @@ body:focus-visible,
   font-size: 9px;
   font-weight: 750;
   text-align: center;
+}
+
+.media-timing-review-hints .media-timing-review-arrow-key {
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+.media-timing-review-arrow-key svg {
+  width: 10px;
+  height: 10px;
+  vertical-align: -1px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .media-timing-review-cancel-step {
@@ -2208,14 +2237,30 @@ body:focus-visible,
     grid-template-columns: 1fr;
   }
 
-  .media-timing-review-footer {
-    align-items: stretch;
-    flex-direction: column;
+  .media-timing-review-dock {
+    margin-right: -15px;
+    margin-left: -15px;
+    padding-right: 15px;
+    padding-left: 15px;
   }
 
-  .media-timing-review-preview-actions > *,
+  .media-timing-review-footer {
+    flex-wrap: wrap;
+  }
+
+  .media-timing-review-status {
+    flex-basis: 100%;
+    order: -1;
+  }
+
+  .media-timing-review-status:empty {
+    display: none;
+  }
+
+  .media-timing-review-play-button,
   .media-timing-review-confirm-button {
     flex: 1;
+    justify-content: center;
   }
 }
 
