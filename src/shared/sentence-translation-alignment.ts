@@ -79,6 +79,12 @@ function latestEnd(lines: readonly TimedSubtitleText[]): number {
   return Math.max(...lines.map((line) => line.endTime));
 }
 
+/** A line that only describes a sound, such as （ドアが開く音）. */
+function isSoundCue(text: string): boolean {
+  const plain = text.replace(/\{[^}]*\}|<[^>]*>/g, '').replace(/\s+/gu, '');
+  return /^[（(][^（）()]*[）)]$/u.test(plain);
+}
+
 /**
  * Partitions the sorted primary lines into sentences. Matching each primary line to its
  * best-overlapping secondary event on its own is unstable when secondary events overlap,
@@ -123,9 +129,14 @@ export function buildSentenceTranslationGroups(
     };
     const nested = (a: number, b: number) =>
       overlapSeconds(primary[a]!, primary[b]!) >= 0.5 * duration(primary[a]!);
-    const members = candidates.filter(
+    // A sound cue such as （テレビ番組の音声） is no dialogue. Claimed next to dialogue it
+    // stretches the event's span, so a background line could win a dialogue line from the
+    // translation of its sentence. It is claimed only when the event covers nothing else.
+    const dialogue = candidates.filter((index) => !isSoundCue(primary[index]!.text));
+    const claimed = dialogue.length > 0 ? dialogue : candidates;
+    const members = claimed.filter(
       (member) =>
-        !candidates.some(
+        !claimed.some(
           (other) =>
             other !== member &&
             (nested(member, other) || nested(other, member)) &&
