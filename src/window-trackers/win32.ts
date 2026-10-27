@@ -1,6 +1,9 @@
 import { execFile } from 'node:child_process';
 import koffi from 'koffi';
 import { matchesMpvSocketPathInCommandLine } from './mpv-socket-match';
+import { createLogger } from '../logger';
+
+const log = createLogger('tracker').child('win32');
 
 const user32 = koffi.load('user32.dll');
 const dwmapi = koffi.load('dwmapi.dll');
@@ -207,6 +210,10 @@ type ProcessCommandLineCacheEntry =
 
 const COMMAND_LINE_RETRY_INITIAL_BACKOFF_MS = 2_000;
 const COMMAND_LINE_RETRY_MAX_BACKOFF_MS = 30_000;
+// The lookup runs in the background, so a slow one costs nothing but the wait. A cold
+// PowerShell plus CIM query can take seconds while SubMiner and mpv start up; a tight
+// timeout then failed every retry and the overlay never found its mpv window.
+const COMMAND_LINE_QUERY_TIMEOUT_MS = 15_000;
 // A process command line never changes, so a resolved entry only has to expire to survive
 // Windows PID reuse (a dead mpv's PID handed to a new instance, whose stale socket path would
 // otherwise match the wrong window forever). Longer than the process-name TTL because each
@@ -219,6 +226,7 @@ function queryProcessCommandLine(
   pid: number,
   onResult: (commandLine: string | null) => void,
 ): void {
+  const startedAtMs = Date.now();
   execFile(
     'powershell.exe',
     [
@@ -232,10 +240,20 @@ function queryProcessCommandLine(
     {
       encoding: 'utf8',
       windowsHide: true,
-      timeout: 1500,
+      timeout: COMMAND_LINE_QUERY_TIMEOUT_MS,
     },
     (error, stdout) => {
       const output = error ? '' : stdout.trim();
+      const elapsedMs = Date.now() - startedAtMs;
+      if (output.length > 0) {
+        log.debug('Resolved mpv process command line', { pid, elapsedMs });
+      } else {
+        log.warn('mpv process command line lookup failed', {
+          pid,
+          elapsedMs,
+          error: error?.message ?? 'empty output',
+        });
+      }
       onResult(output.length > 0 ? output : null);
     },
   );
