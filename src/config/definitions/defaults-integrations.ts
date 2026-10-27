@@ -77,6 +77,8 @@ export const INTEGRATIONS_DEFAULT_CONFIG: Pick<
       highlightWord: true,
       notificationType: 'overlay',
       autoUpdateNewCards: true,
+      widenSentenceToTranslation: false,
+      formatTranslation: false,
     },
     nPlusOne: {
       enabled: false,

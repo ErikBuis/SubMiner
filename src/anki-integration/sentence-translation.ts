@@ -118,3 +118,40 @@ export function resolveTimedSentenceTranslation(input: {
     })),
   };
 }
+
+/**
+ * Translators often give one secondary line to a sentence the primary track splits over
+ * several lines. Widens the mined range to every primary line that secondary line covers,
+ * as long as the result stays within `maxSentenceSeconds` (0: no cap). Null when there is
+ * nothing to widen.
+ */
+export function widenSentenceToTranslation(input: {
+  /** The captured sentence; mined lines it lacks (a sign) are not widened from. */
+  text?: string;
+  startTime: number;
+  endTime: number;
+  tracks: SubtitleTracksForTranslation | null;
+  maxSentenceSeconds: number;
+}): { text: string; startTime: number; endTime: number } | null {
+  const aligned = alignSentenceTranslation({
+    primaryLines: input.tracks?.primary ?? [],
+    secondaryLines: input.tracks?.secondary ?? [],
+    startTime: input.startTime,
+    endTime: input.endTime,
+    sentenceText: input.text,
+    widenSentence: true,
+    maxSentenceSeconds: input.maxSentenceSeconds,
+  });
+  if (
+    !aligned ||
+    (aligned.startTime >= input.startTime - 0.001 && aligned.endTime <= input.endTime + 0.001)
+  ) {
+    return null;
+  }
+  const startTime = Math.min(aligned.startTime, input.startTime);
+  const endTime = Math.max(aligned.endTime, input.endTime);
+  if (input.maxSentenceSeconds > 0 && endTime - startTime > input.maxSentenceSeconds + 0.001) {
+    return null;
+  }
+  return { text: aligned.text, startTime, endTime };
+}

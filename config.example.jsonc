@@ -626,7 +626,9 @@
       "mediaInsertMode": "append", // Whether new media is appended after or prepended before existing field contents on update. Values: append | prepend
       "highlightWord": true, // Bold the mined word inside the sentence field on the saved Anki card. Values: true | false
       "notificationType": "overlay", // Notification surface used to announce mining and update outcomes. overlay shows notifications on the overlay, system uses OS notifications, both uses overlay and system. osd and osd-system are legacy config-file-only values. Values: overlay | system | both | none | osd | osd-system
-      "autoUpdateNewCards": true // Automatically update newly added cards. Values: true | false
+      "autoUpdateNewCards": true, // Automatically update newly added cards. Values: true | false
+      "widenSentenceToTranslation": false, // When one secondary subtitle line translates several primary lines, widen the card sentence and its media to all of them (up to media.maxMediaDuration). Needs parsed subtitle tracks. Values: true | false
+      "formatTranslation": false // Write card translations as one line that starts with a capital letter, adding " (...)" after a trailing comma. Values: true | false
     }, // Behavior setting.
     "nPlusOne": {
       "enabled": false, // Enable N+1 subtitle highlighting (highlights the one unknown word in a sentence). Requires known-word cache data. Values: true | false

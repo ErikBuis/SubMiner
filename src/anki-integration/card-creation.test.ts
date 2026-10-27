@@ -622,3 +622,77 @@ test('createSentenceCard leaves a line inside the clip padding untranslated', as
   assert.equal(addedFields[0]?.Sentence, '一');
   assert.equal(addedFields[0]?.Translation, 'One.');
 });
+
+test('createSentenceCard widens to the translated sentence and formats its translation', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const reviewRanges: Array<{ text: string; startTime: number; endTime: number }> = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () =>
+        createAnkiConfig({
+          fields: { translation: 'Translation' },
+          behavior: { widenSentenceToTranslation: true, formatTranslation: true },
+        }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [
+          { text: '今日は', startTime: 11.2, endTime: 12.5 },
+          { text: 'いい天気ですね', startTime: 12.6, endTime: 14 },
+        ],
+        secondary: [{ text: 'nice weather today, huh,', startTime: 11.1, endTime: 14.1 }],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      reviewMediaTiming: async (request) => {
+        reviewRanges.push({
+          text: request.text,
+          startTime: request.startTime,
+          endTime: request.endTime,
+        });
+        return { action: 'use-original' };
+      },
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('いい天気ですね', 12.6, 14), true);
+  assert.deepEqual(reviewRanges, [{ text: '今日は いい天気ですね', startTime: 11.2, endTime: 14 }]);
+  assert.equal(addedFields[0]?.Sentence, '今日は いい天気ですね');
+  assert.equal(addedFields[0]?.Translation, 'Nice weather today, huh, (...)');
+});
+
+test('createSentenceCard widens across a sign without taking its translation', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () =>
+        createAnkiConfig({
+          fields: { translation: 'Translation' },
+          behavior: { widenSentenceToTranslation: true },
+        }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [
+          { text: '前半', startTime: 0, endTime: 1 },
+          { text: '看板', startTime: 1.5, endTime: 2.5 },
+          { text: '後半', startTime: 3, endTime: 4 },
+        ],
+        secondary: [
+          { text: 'First half, second half.', startTime: 0, endTime: 4.2 },
+          { text: 'SIGN', startTime: 1.5, endTime: 2.5 },
+        ],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('後半', 3, 4), true);
+  assert.equal(addedFields[0]?.Sentence, '前半 後半');
+  assert.equal(addedFields[0]?.Translation, 'First half, second half.');
+});

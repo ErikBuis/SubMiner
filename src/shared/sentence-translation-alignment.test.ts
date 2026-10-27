@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   alignSentenceTranslation,
   buildSentenceTranslationGroups,
+  formatCardTranslation,
   joinSubtitleLineTexts,
   type TimedSubtitleText,
 } from './sentence-translation-alignment';
@@ -305,4 +306,102 @@ test('a two-speaker cue whose first speaker wraps keeps both translations', () =
     endTime: 3,
   });
   assert.equal(aligned?.translation, '- Nice weather today. - Yeah.');
+});
+
+test('mining one line of a split sentence widens to the whole sentence', () => {
+  const primary = [line('今日は', 11.2, 12.5), line('いい天気ですね', 12.6, 14)];
+  const secondary = [line('Nice weather today, huh?', 11.1, 14.1)];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 12.6,
+    endTime: 14,
+    widenSentence: true,
+  });
+  assert.equal(aligned?.text, '今日は いい天気ですね');
+  assert.equal(aligned?.startTime, 11.2);
+  assert.equal(aligned?.endTime, 14);
+  assert.equal(aligned?.translation, 'Nice weather today, huh?');
+});
+
+test('widening respects the maximum sentence length', () => {
+  const primary = [line('一', 0, 10), line('二', 10, 20), line('三', 20, 30)];
+  const secondary = [line('One two three.', 0, 30)];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 10,
+    endTime: 20,
+    widenSentence: true,
+    maxSentenceSeconds: 25,
+  });
+  assert.equal(aligned?.text, '二');
+  assert.equal(aligned?.translation, 'One two three.');
+});
+
+test('formatCardTranslation capitalizes and marks a comma-ended line as continuing', () => {
+  assert.equal(formatCardTranslation('lost in that thought,'), 'Lost in that thought, (...)');
+  assert.equal(formatCardTranslation('"so what,"'), '"So what," (...)');
+  assert.equal(formatCardTranslation('<i>wait,</i>'), '<i>Wait,</i> (...)');
+  assert.equal(formatCardTranslation('それで、'), 'それで、(...)');
+  assert.equal(formatCardTranslation('two\nlines'), 'Two lines');
+  assert.equal(formatCardTranslation('Already fine!'), 'Already fine!');
+  assert.equal(formatCardTranslation('...and then,'), '...and then, (...)');
+  assert.equal(formatCardTranslation('   '), '');
+});
+
+test('widening reaches across a sign with its own translation', () => {
+  const primary = [line('前半', 0, 1), line('看板', 1.5, 2.5), line('後半', 3, 4)];
+  const secondary = [line('First half, second half.', 0, 4.2), line('SIGN', 1.5, 2.5)];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 3,
+    endTime: 4,
+    widenSentence: true,
+  });
+  assert.equal(aligned?.text, '前半 後半');
+  assert.equal(aligned?.startTime, 0);
+  assert.equal(aligned?.translation, 'First half, second half.');
+});
+
+test('widening keeps out a mined-range line the card sentence left out', () => {
+  // One translation covers the whole sentence and a sign inside it.
+  const primary = [
+    line('前半', 0, 1),
+    line('看板', 1.5, 2.5),
+    line('中盤', 3, 4),
+    line('後半', 4, 6),
+  ];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: [line('The whole sentence.', 0, 6)],
+    startTime: 0,
+    endTime: 4,
+    sentenceText: '前半 中盤',
+    widenSentence: true,
+  });
+  assert.equal(aligned?.text, '前半 中盤 後半');
+});
+
+test('widening follows the mined speaker, not another speaker sharing the interval', () => {
+  const primary = [line('Aの一', 0, 2), line('Bの台詞', 0, 2), line('Aの二', 2, 4)];
+  const secondary = [line('A says this.', 0, 4), line('B says that.', 0, 4)];
+  const plain = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 0,
+    endTime: 2,
+    sentenceText: 'Bの台詞',
+  });
+  const widened = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 0,
+    endTime: 2,
+    sentenceText: 'Bの台詞',
+    widenSentence: true,
+  });
+  assert.equal(widened?.text, plain?.text);
+  assert.equal(widened?.translation, plain?.translation);
 });

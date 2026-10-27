@@ -365,14 +365,16 @@ Creates and updates Anki cards with sentence, audio, and screenshot. Needs the [
 
 **Behavior**
 
-| Key                                       | Default     | What it does                                                             |
-| ----------------------------------------- | ----------- | ------------------------------------------------------------------------ |
-| `ankiConnect.behavior.autoUpdateNewCards` | `true`      | Fill new cards automatically. When off, use the manual shortcuts         |
-| `ankiConnect.behavior.overwriteAudio`     | `true`      | Replace existing audio. When off, add alongside it                       |
-| `ankiConnect.behavior.overwriteImage`     | `true`      | Replace existing images. When off, add alongside them                    |
-| `ankiConnect.behavior.mediaInsertMode`    | `"append"`  | `append` or `prepend` when not overwriting                               |
-| `ankiConnect.behavior.highlightWord`      | `true`      | Bold the mined word in the sentence field                                |
-| `ankiConnect.behavior.notificationType`   | `"overlay"` | Where mining and status messages go: `overlay`, `system`, `both`, `none` |
+| Key                                               | Default     | What it does                                                                                                                          |
+| ------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `ankiConnect.behavior.autoUpdateNewCards`         | `true`      | Fill new cards automatically. When off, use the manual shortcuts                                                                      |
+| `ankiConnect.behavior.overwriteAudio`             | `true`      | Replace existing audio. When off, add alongside it                                                                                    |
+| `ankiConnect.behavior.overwriteImage`             | `true`      | Replace existing images. When off, add alongside them                                                                                 |
+| `ankiConnect.behavior.mediaInsertMode`            | `"append"`  | `append` or `prepend` when not overwriting                                                                                            |
+| `ankiConnect.behavior.highlightWord`              | `true`      | Bold the mined word in the sentence field                                                                                             |
+| `ankiConnect.behavior.notificationType`           | `"overlay"` | Where mining and status messages go: `overlay`, `system`, `both`, `none`                                                              |
+| `ankiConnect.behavior.widenSentenceToTranslation` | `false`     | Widen the card sentence to all primary lines its translation covers (see [Anki integration](/anki-integration#sentence-translations)) |
+| `ankiConnect.behavior.formatTranslation`          | `false`     | Capitalize card translations and add ` (...)` after a trailing comma                                                                  |
 
 **Known words and N+1**
 
