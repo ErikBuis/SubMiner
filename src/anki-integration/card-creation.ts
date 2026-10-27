@@ -6,6 +6,7 @@ import {
 import {
   AnkiConnectConfig,
   type CardKind,
+  type MediaTimingReviewCardPreview,
   type MediaTimingReviewDecision,
   type MediaTimingReviewRequest,
   type WordCardKind,
@@ -188,6 +189,23 @@ export class CardCreationService {
       options.remoteCacheMode = 'required';
     }
     return options;
+  }
+
+  /** The word and meaning of the note an audio card is made from, shown in its review. */
+  private getAudioCardReview(
+    noteInfo: CardCreationNoteInfo,
+    expressionText: string,
+  ): MediaTimingReviewCardPreview | undefined {
+    const word = ankiFieldHtmlToPlainText(expressionText).trim();
+    const definitionField = this.deps.getConfig().fields?.definition;
+    const meaningField = definitionField
+      ? this.deps.resolveConfiguredFieldName(noteInfo, definitionField)
+      : null;
+    const meaning = meaningField
+      ? ankiFieldHtmlToPlainText(noteInfo.fields[meaningField]?.value ?? '').trim()
+      : '';
+    if (!word && !meaning) return undefined;
+    return { ...(word ? { word } : {}), ...(meaning ? { meaning } : {}) };
   }
 
   private getConfiguredAnkiTags(): string[] {
@@ -491,6 +509,7 @@ export class CardCreationService {
               startTime,
               endTime,
               noteId,
+              card: this.getAudioCardReview(noteInfo, expressionText),
             })
           : ({ action: 'use-original' } as const);
         if (timingDecision.action === 'discard') {

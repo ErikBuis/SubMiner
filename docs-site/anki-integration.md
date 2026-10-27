@@ -140,7 +140,7 @@ Media settings apply to the next card without a restart.
 
 ### Review media timing
 
-With `media.reviewTiming` on, SubMiner pauses before making media for word, sentence, and audio cards and opens a review dialog. You can also toggle it for the current session with **Review Media Timing** in the runtime options palette (`Ctrl/Cmd+Shift+O`). Clipboard updates and stats-dashboard mining skip the review.
+With `media.reviewTiming` on, SubMiner pauses before making media for word, sentence, and audio cards and opens a review dialog. All three card types share it; audio cards also show the word and meaning of the note they are made from. You can also toggle it for the current session with **Review Media Timing** in the runtime options palette (`Ctrl/Cmd+Shift+O`). Clipboard updates and stats-dashboard mining skip the review.
 
 Playback stays paused while the dialog is open, even if the popup or hover that paused it goes away. When the dialog closes, playback resumes if it was playing before, or if the popup closed in the meantime. A popup that is still open keeps it paused.
 
