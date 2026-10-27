@@ -16,7 +16,7 @@ import {
 } from '../../shared/sentence-translation-alignment';
 import {
   parseBracketFurigana,
-  sliceFuriganaForLine,
+  annotateLineWithFurigana,
   type FuriganaSegment,
 } from '../../shared/furigana-markup';
 
@@ -643,7 +643,7 @@ export function createMediaTimingReviewModal(
           index === selection.currentLineIndex
             ? 'media-timing-review-line is-current'
             : 'media-timing-review-line';
-        const segments = furigana ? sliceFuriganaForLine(furigana, text) : null;
+        const segments = furigana ? annotateLineWithFurigana(furigana, text) : null;
         if (segments) setFuriganaText(line, segments);
         else line.textContent = text;
         return line;
