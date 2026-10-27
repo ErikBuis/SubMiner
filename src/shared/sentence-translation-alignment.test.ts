@@ -57,6 +57,36 @@ test('an overlapping unrelated secondary line (background TV) is left out', () =
   assert.equal(aligned?.translation, 'I put lots of vegetables in it.');
 });
 
+test('sound cues do not pull a dialogue line into a background line', () => {
+  // Bocchi the Rock! ep. 1 at 00:34: two sound cues stretch the TV line over the dialogue,
+  // whose sentence continues on the next line under the narration's translation.
+  const primary = [
+    line('（テレビ番組の音声）', 33.764, 34.681),
+    line('（スマホの通知音）', 34.765, 35.39),
+    line('（ひとり）スマホに届くのは', 35.474, 36.808),
+    line('親からのメッセージか\nクーポンのお知らせだけ', 37.392, 41.146),
+  ];
+  const narration = line(
+    '<i>The only messages she receives\nare from either her parents or advertisers.</i>',
+    35.35,
+    40.94,
+  );
+  const secondary = [line("{\\an8}And here, we'll stir-fry it a bit.", 33.72, 36.85), narration];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 35.474,
+    endTime: 36.808,
+  });
+  assert.equal(aligned?.translation, narration.text.replace('\n', ' '));
+  // A sound cue still takes an event that covers nothing else.
+  const laugh = buildSentenceTranslationGroups(
+    [line('（笑い声）', 50, 51)],
+    [line('(laughs)', 50, 51)],
+  );
+  assert.equal(laugh[0]!.secondary?.text, '(laughs)');
+});
+
 test('a line no secondary event claims takes the event it overlaps most', () => {
   const primary = [line('長い台詞', 0, 10)];
   const secondary = [line('Short.', 0, 2), line('Longer bit.', 2, 6)];
