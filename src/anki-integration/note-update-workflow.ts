@@ -38,6 +38,7 @@ export interface NoteUpdateWorkflowDeps {
     fields?: {
       word?: string;
       sentence?: string;
+      sentenceFurigana?: string;
       audio?: string;
       image?: string;
       miscInfo?: string;
@@ -191,10 +192,14 @@ export class NoteUpdateWorkflow {
   }
 
   /** The note's sentence furigana as plain text, so the review can show readings on hover. */
-  private getReviewSentenceFurigana(noteInfo: NoteUpdateWorkflowNoteInfo): {
-    sentenceFurigana?: string;
-  } {
-    const fieldName = this.deps.resolveConfiguredFieldName(noteInfo, 'SentenceFurigana');
+  private getReviewSentenceFurigana(
+    noteInfo: NoteUpdateWorkflowNoteInfo,
+    configuredField: string | undefined,
+  ): { sentenceFurigana?: string } {
+    const fieldName = this.deps.resolveConfiguredFieldName(
+      noteInfo,
+      configuredField || 'SentenceFurigana',
+    );
     // Notes written as HTML ruby read the same as bracket furigana once flattened to it.
     const sentenceFurigana = fieldName
       ? ankiFieldHtmlToPlainText(
@@ -392,7 +397,7 @@ export class NoteUpdateWorkflow {
               noteId,
               card: {
                 ...(hasExpressionText ? { word: ankiFieldHtmlToPlainText(expressionText) } : {}),
-                ...this.getReviewSentenceFurigana(noteInfo),
+                ...this.getReviewSentenceFurigana(noteInfo, config.fields?.sentenceFurigana),
                 ...this.getReviewMeaning(noteInfo, config.fields?.definition),
                 ...reviewTranslation,
               },
