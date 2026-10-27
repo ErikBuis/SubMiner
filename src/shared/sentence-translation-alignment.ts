@@ -80,7 +80,7 @@ function latestEnd(lines: readonly TimedSubtitleText[]): number {
 }
 
 /** A line that only describes a sound, such as （ドアが開く音）. */
-function isSoundCue(text: string): boolean {
+export function isSoundCue(text: string): boolean {
   const plain = text.replace(/\{[^}]*\}|<[^>]*>/g, '').replace(/\s+/gu, '');
   return /^[（(][^（）()]*[）)]$/u.test(plain);
 }
