@@ -608,6 +608,58 @@ test('discarding an audio-card timing review deletes the note before evicting it
   assert.deepEqual(statusMessages, ['Card deleted.']);
 });
 
+test('the audio-card timing review shows the word and meaning of the note', async () => {
+  const requests: unknown[] = [];
+  const { service } = createManualUpdateService({
+    getConfig: () =>
+      ({
+        deck: 'Mining',
+        fields: {
+          word: 'Expression',
+          sentence: 'Sentence',
+          audio: 'ExpressionAudio',
+          definition: 'MainDefinition',
+        },
+        media: { generateAudio: false, generateImage: false, maxMediaDuration: 30 },
+        behavior: {},
+      }) as never,
+    getMpvClient: () =>
+      ({
+        currentVideoPath: '/video.mp4',
+        currentSubText: '字幕',
+        currentSubStart: 4,
+        currentSubEnd: 6,
+        currentTimePos: 5,
+      }) as never,
+    client: {
+      addNote: async () => 0,
+      addTags: async () => undefined,
+      notesInfo: async () => [
+        {
+          noteId: 42,
+          fields: {
+            Expression: { value: '単語' },
+            MainDefinition: { value: '<ol><li>word</li></ol>' },
+          },
+        },
+      ],
+      updateNoteFields: async () => undefined,
+      storeMediaFile: async () => undefined,
+      findNotes: async () => [42],
+      retrieveMediaFile: async () => '',
+      deleteNotes: async () => undefined,
+    },
+    reviewMediaTiming: async (request) => {
+      requests.push(request.card);
+      return { action: 'skip-media' };
+    },
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.deepEqual(requests, [{ word: '単語', meaning: 'word' }]);
+});
+
 test('keeping an audio card without media skips generation and preserves the note', async () => {
   let generatedAudio = false;
   let deleted = false;
