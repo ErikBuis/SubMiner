@@ -162,7 +162,7 @@ During preview, the yellow cursor follows the audio player's position through th
 
 The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. `Enter` in the translation still exports the card, and line breaks are written as spaces. Your edit is kept when you choose to keep the original timing or skip media.
 
-Play selection, Export card and the key hints stay at the bottom of the dialog, so they never scroll away. The exported range is used as is, with no extra padding. Added lines go into the sentence field. Reset timing, next to the 0.1 s buttons, restores the mined clip and timeline view for the lines on the card. Added lines, the translation and the screenshot stay as they are.
+Play selection, Export card and the key hints stay at the bottom of the dialog, so they never scroll away. The exported range is used as is, with no extra padding. Added lines go into the sentence field. Reset timing, next to the 0.1 s buttons, restores the mined clip and timeline view for the lines on the card. Added lines, the translation and the screenshot stay as they are. Reset all, next to Cancel, undoes every change and returns the review to how it opened.
 
 When you cancel, you can go back to editing, keep the original timing, create the card without media, or discard it. Discard deletes the Yomitan note or audio card, and skips creation for a sentence card.
 

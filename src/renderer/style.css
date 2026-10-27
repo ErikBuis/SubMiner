@@ -1385,6 +1385,12 @@ body:focus-visible,
   background: var(--ctp-mantle);
 }
 
+.media-timing-review-header-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
 .media-timing-review-heading {
   display: flex;
   flex-wrap: wrap;
