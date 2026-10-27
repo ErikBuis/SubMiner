@@ -539,6 +539,14 @@ ${YOMITAN_SCANNING_HELPERS}
           matchedLength: word.end - word.start
         };
       }
+      // A lookup the guide may throw away: one that gave up only there must not
+      // escalate the whole line to the unguided parseText fallback.
+      async function probeTokenAt(position, windowLength) {
+        const exhaustedBefore = blindRetryBudgetExhausted;
+        const probe = await resolveTokenAt(position, windowLength);
+        if (!probe.token) { blindRetryBudgetExhausted = exhaustedBefore; }
+        return probe;
+      }
       async function applyMorphologyGuide(position, attempt) {
         if (!guideWords || !attempt.token || attempt.token.isNameMatch) { return attempt; }
         let current = attempt;
@@ -563,7 +571,7 @@ ${YOMITAN_SCANNING_HELPERS}
             // split a longer dictionary word.
             const nextStart = lastGuideBoundaryInside(position, end);
             if (nextStart > position) {
-              const next = await resolveTokenAt(nextStart, scanLength);
+              const next = await probeTokenAt(nextStart, scanLength);
               const nextEnd = nextStart + next.matchedLength;
               if (
                 next.token &&
@@ -578,7 +586,7 @@ ${YOMITAN_SCANNING_HELPERS}
             cap = guideWords.find((word) => word.start === position).end;
           }
           if (cap <= position) { break; }
-          const retry = await resolveTokenAt(position, cap - position);
+          const retry = await probeTokenAt(position, cap - position);
           if (!retry.token) { break; }
           current = retry;
         }

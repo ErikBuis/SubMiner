@@ -9,6 +9,7 @@ import {
 } from './morphology-guide';
 import { requestYomitanScanTokens } from './yomitan-parser-runtime';
 import {
+  countTermsFindLookups,
   createBackendDeps,
   SUBMINER_TEST_CHARACTER_DICTIONARY,
   termEntry,
@@ -99,29 +100,31 @@ test('a dictionary that fails to load leaves the plain scan in charge', async ()
 // text starts with: [surface, headword, reading, wordClasses].
 type FakeWord = [string, string, string, string[]];
 
+function findLongestWord(words: FakeWord[], text: string) {
+  const match = words
+    .filter(([surface]) => text.startsWith(surface))
+    .sort((left, right) => right[0].length - left[0].length)[0];
+  if (!match) {
+    return null;
+  }
+  const [surface, term, reading, wordClasses] = match;
+  return termsFound(surface.length, {
+    headwords: [
+      {
+        term,
+        reading,
+        wordClasses,
+        sources: [{ originalText: surface, isPrimary: true, matchType: 'exact' }],
+      },
+    ],
+    definitions: [{ dictionary: 'JMdict' }],
+  });
+}
+
 function createWordDeps(words: FakeWord[]) {
   return createBackendDeps({
     dictionaries: ['JMdict'],
-    termsFind: (text) => {
-      const match = words
-        .filter(([surface]) => text.startsWith(surface))
-        .sort((left, right) => right[0].length - left[0].length)[0];
-      if (!match) {
-        return null;
-      }
-      const [surface, term, reading, wordClasses] = match;
-      return termsFound(surface.length, {
-        headwords: [
-          {
-            term,
-            reading,
-            wordClasses,
-            sources: [{ originalText: surface, isPrimary: true, matchType: 'exact' }],
-          },
-        ],
-        definitions: [{ dictionary: 'JMdict' }],
-      });
-    },
+    termsFind: (text) => findLongestWord(words, text),
   });
 }
 
@@ -167,6 +170,44 @@ test('the guide stops a longest match from cutting into the next word', async ()
     'メッセージ',
     'か',
   ]);
+});
+
+test('a guide lookup that finds nothing does not send the line to the unguided fallback', async () => {
+  const lookups: string[] = [];
+  const parsedTexts: string[] = [];
+  const words = MESSAGE_WORDS.filter(([surface]) => surface !== 'メッセージ');
+  const result = await requestYomitanScanTokens(
+    'のメッセージか',
+    createBackendDeps({
+      dictionaries: ['JMdict'],
+      lookups,
+      // Probing at メ only reports a match it cannot use, at every window.
+      termsFind: (text) => {
+        if (text.startsWith('メ')) {
+          return termsFound(
+            text.length,
+            termEntry('ミスマッチ', 'みすまっち', { originalText: 'ZZZ' }),
+          );
+        }
+        return findLongestWord(words, text);
+      },
+      actions: {
+        parseText: (params) => {
+          parsedTexts.push((params as { text: string }).text);
+          return [];
+        },
+      },
+    }),
+    { error: () => undefined },
+    { morphologyGuide: buildMorphologyGuide('のメッセージか', MESSAGE_MORPHEMES) },
+  );
+
+  assert.ok(countTermsFindLookups(lookups, 'メ') > 0);
+  assert.deepEqual(parsedTexts, []);
+  assert.deepEqual(
+    (result ?? []).map((token) => token.surface),
+    ['のメッセ', 'ー', 'ジか'],
+  );
 });
 
 test('the guide splits an adjective glued onto a dependent noun (いいん as 医院)', async () => {
