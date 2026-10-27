@@ -79,6 +79,12 @@ function latestEnd(lines: readonly TimedSubtitleText[]): number {
   return Math.max(...lines.map((line) => line.endTime));
 }
 
+/** A line that only describes a sound, such as （ドアが開く音）. */
+function isSoundCue(text: string): boolean {
+  const plain = text.replace(/\{[^}]*\}|<[^>]*>/g, '').replace(/\s+/gu, '');
+  return /^[（(][^（）()]*[）)]$/u.test(plain);
+}
+
 /**
  * Partitions the sorted primary lines into sentences. Matching each primary line to its
  * best-overlapping secondary event on its own is unstable when secondary events overlap,
@@ -123,9 +129,14 @@ export function buildSentenceTranslationGroups(
     };
     const nested = (a: number, b: number) =>
       overlapSeconds(primary[a]!, primary[b]!) >= 0.5 * duration(primary[a]!);
-    const members = candidates.filter(
+    // A sound cue such as （テレビ番組の音声） is no dialogue. Claimed next to dialogue it
+    // stretches the event's span, so a background line could win a dialogue line from the
+    // translation of its sentence. It is claimed only when the event covers nothing else.
+    const dialogue = candidates.filter((index) => !isSoundCue(primary[index]!.text));
+    const claimed = dialogue.length > 0 ? dialogue : candidates;
+    const members = claimed.filter(
       (member) =>
-        !candidates.some(
+        !claimed.some(
           (other) =>
             other !== member &&
             (nested(member, other) || nested(other, member)) &&
@@ -482,11 +493,8 @@ export function alignSentenceTranslation(options: {
 }
 
 const TRAILING_CLOSERS = ['"', "'", ')', ']', '”', '’', '）', '」', '』'];
-const TRAILING_COMMAS: Array<[string, string]> = [
-  [',', '.'],
-  ['、', '。'],
-  ['，', '。'],
-];
+const TRAILING_COMMAS = [',', '、', '，'];
+const CONTINUATION_MARK = '(...)';
 
 /** Subtitle lines often start lowercase because they continue the previous line. */
 /** Skips leading tags and opening quotes or brackets, but not a continuation's "...". */
@@ -499,10 +507,10 @@ function capitalizeFirstLetter(text: string): string {
 
 /**
  * A line cut off mid-sentence ends in a comma ("Lost in that thought,"). On a card it
- * stands alone, so the trailing comma becomes a full stop. Closing quotes, brackets and
- * HTML tags after the comma stay where they are.
+ * stands alone, so it gets a "(...)" to show the sentence goes on: "Lost in that thought,
+ * (...)". Closing quotes, brackets and HTML tags after the comma stay before the mark.
  */
-function closeSentence(text: string): string {
+function markContinuation(text: string): string {
   let body = text;
   let tail = '';
   for (;;) {
@@ -514,12 +522,11 @@ function closeSentence(text: string): string {
     tail = piece + tail;
     body = body.slice(0, body.length - piece.length);
   }
-  for (const [comma, stop] of TRAILING_COMMAS) {
-    if (body.endsWith(comma)) {
-      return body.slice(0, body.length - comma.length) + stop + tail;
-    }
-  }
-  return text;
+  const comma = TRAILING_COMMAS.find((candidate) => body.endsWith(candidate));
+  if (!comma) return text;
+  // Full-width commas sit flush against the mark, like other CJK punctuation.
+  const separator = comma === ',' ? ' ' : '';
+  return text.trimEnd() + separator + CONTINUATION_MARK;
 }
 
 /**
@@ -529,5 +536,5 @@ function closeSentence(text: string): string {
 export function formatCardTranslation(text: string): string {
   const singleLine = text.replace(/\s+/g, ' ').trim();
   if (!singleLine) return '';
-  return closeSentence(capitalizeFirstLetter(singleLine));
+  return markContinuation(capitalizeFirstLetter(singleLine));
 }

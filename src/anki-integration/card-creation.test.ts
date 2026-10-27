@@ -661,7 +661,7 @@ test('createSentenceCard widens to the translated sentence and formats its trans
   assert.equal(await service.createSentenceCard('いい天気ですね', 12.6, 14), true);
   assert.deepEqual(reviewRanges, [{ text: '今日は いい天気ですね', startTime: 11.2, endTime: 14 }]);
   assert.equal(addedFields[0]?.Sentence, '今日は いい天気ですね');
-  assert.equal(addedFields[0]?.Translation, 'Nice weather today, huh.');
+  assert.equal(addedFields[0]?.Translation, 'Nice weather today, huh, (...)');
 });
 
 test('createSentenceCard widens across a sign without taking its translation', async () => {

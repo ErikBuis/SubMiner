@@ -193,7 +193,7 @@ export function buildIntegrationConfigOptionRegistry(
       kind: 'boolean',
       defaultValue: defaultConfig.ankiConnect.behavior.formatTranslation,
       description:
-        'Write card translations as one line that starts with a capital letter, turning a trailing comma into a period.',
+        'Write card translations as one line that starts with a capital letter, adding " (...)" after a trailing comma.',
     },
     {
       path: 'ankiConnect.behavior.notificationType',

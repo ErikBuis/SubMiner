@@ -195,7 +195,7 @@ test('review translation follows added lines until the card is back to its own l
   );
   assert.equal(
     buildMediaTimingReviewTranslation({ ...base, previousCount: 0, nextCount: 1 }),
-    'The mined line and after.',
+    'The mined line and after, (...)',
   );
   assert.equal(
     buildMediaTimingReviewTranslation({ ...base, previousCount: 1, nextCount: 1, format: false }),
