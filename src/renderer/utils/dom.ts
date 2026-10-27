@@ -72,6 +72,11 @@ export type RendererDom = {
   mediaTimingReviewPrevRemove: HTMLButtonElement;
   mediaTimingReviewNextAdd: HTMLButtonElement;
   mediaTimingReviewNextRemove: HTMLButtonElement;
+  mediaTimingReviewTranslationLineControls: HTMLDivElement;
+  mediaTimingReviewTranslationPrevAdd: HTMLButtonElement;
+  mediaTimingReviewTranslationPrevRemove: HTMLButtonElement;
+  mediaTimingReviewTranslationNextAdd: HTMLButtonElement;
+  mediaTimingReviewTranslationNextRemove: HTMLButtonElement;
   mediaTimingReviewStartValue: HTMLElement;
   mediaTimingReviewEndValue: HTMLElement;
   mediaTimingReviewDuration: HTMLElement;
@@ -313,6 +318,21 @@ export function resolveRendererDom(): RendererDom {
     mediaTimingReviewNextAdd: getRequiredElement<HTMLButtonElement>('mediaTimingReviewNextAdd'),
     mediaTimingReviewNextRemove: getRequiredElement<HTMLButtonElement>(
       'mediaTimingReviewNextRemove',
+    ),
+    mediaTimingReviewTranslationLineControls: getRequiredElement<HTMLDivElement>(
+      'mediaTimingReviewTranslationLineControls',
+    ),
+    mediaTimingReviewTranslationPrevAdd: getRequiredElement<HTMLButtonElement>(
+      'mediaTimingReviewTranslationPrevAdd',
+    ),
+    mediaTimingReviewTranslationPrevRemove: getRequiredElement<HTMLButtonElement>(
+      'mediaTimingReviewTranslationPrevRemove',
+    ),
+    mediaTimingReviewTranslationNextAdd: getRequiredElement<HTMLButtonElement>(
+      'mediaTimingReviewTranslationNextAdd',
+    ),
+    mediaTimingReviewTranslationNextRemove: getRequiredElement<HTMLButtonElement>(
+      'mediaTimingReviewTranslationNextRemove',
     ),
     mediaTimingReviewStartValue: getRequiredElement<HTMLElement>('mediaTimingReviewStartValue'),
     mediaTimingReviewEndValue: getRequiredElement<HTMLElement>('mediaTimingReviewEndValue'),
