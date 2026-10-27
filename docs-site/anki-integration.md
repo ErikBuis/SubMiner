@@ -164,7 +164,7 @@ The dialog also shows what else the card gets: the word and the meaning from `fi
 
 Play selection, Export card and the key hints stay at the bottom of the dialog, so they never scroll away. The exported range is used as is, with no extra padding. Added lines go into the sentence field. Reset timing, next to the 0.1 s buttons, restores the original timing and removes added lines.
 
-Tick Without media, next to Export card, to export the sentence and translation with no audio or image. When you cancel, you can go back to editing or delete the card. Delete removes the Yomitan note or audio card, and skips creation for a sentence card. To keep the mined timing, use Reset timing and export.
+Tick Without media, next to Export card, to export the sentence and translation with no audio or image. When you cancel, you can go back to editing or drop the card: a new word card is deleted, a sentence card is not created, and an audio card leaves the earlier note unchanged. To keep the mined timing, use Reset timing and export.
 
 ### Update behavior
 

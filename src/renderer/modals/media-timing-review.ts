@@ -879,18 +879,28 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewCancel.classList.remove('hidden');
   }
 
+  /** An audio card is made from a note mined earlier, so cancelling leaves that note alone. */
+  function discardChoice(review: MediaTimingReviewOpenPayload): { label: string; message: string } {
+    if (review.kind === 'audio') {
+      return {
+        label: 'Leave card unchanged',
+        message: 'Keep editing, or leave this card as it was.',
+      };
+    }
+    return review.noteId !== undefined
+      ? { label: 'Delete card', message: 'Keep editing, or delete this card.' }
+      : { label: "Don't create card", message: 'Keep editing, or do not create this card.' };
+  }
+
   function requestCancel(): void {
     if (!ctx.state.mediaTimingReviewModalOpen || !payload || resolveInFlight) return;
     stopPreview();
     ctx.dom.mediaTimingReviewEditor.classList.add('hidden');
     ctx.dom.mediaTimingReviewCancel.classList.add('hidden');
     ctx.dom.mediaTimingReviewCancelStep.classList.remove('hidden');
-    ctx.dom.mediaTimingReviewCancelMessage.textContent =
-      payload.noteId !== undefined
-        ? 'Keep editing, or delete this card.'
-        : 'Keep editing, or do not create this card.';
-    ctx.dom.mediaTimingReviewDiscard.textContent =
-      payload.noteId !== undefined ? 'Delete card' : "Don't create card";
+    const discard = discardChoice(payload);
+    ctx.dom.mediaTimingReviewCancelMessage.textContent = discard.message;
+    ctx.dom.mediaTimingReviewDiscard.textContent = discard.label;
     ctx.dom.mediaTimingReviewCancelBack.focus();
   }
 
@@ -1051,8 +1061,7 @@ export function createMediaTimingReviewModal(
           ? 'Audio card'
           : 'Sentence card';
     ctx.dom.mediaTimingReviewKind.dataset.kind = nextPayload.kind;
-    ctx.dom.mediaTimingReviewDiscard.textContent =
-      nextPayload.noteId !== undefined ? 'Delete card' : "Don't create card";
+    ctx.dom.mediaTimingReviewDiscard.textContent = discardChoice(nextPayload).label;
     renderCard();
     setTranslation(nextPayload.card?.translation?.text ?? '', false);
     setStatus('');

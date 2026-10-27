@@ -160,7 +160,6 @@ interface CardCreationDeps {
   };
   getFallbackDurationSeconds: () => number;
   appendKnownWordsFromNoteInfo: (noteInfo: CardCreationNoteInfo) => void;
-  removeKnownWordNote: (noteId: number) => void;
   isUpdateInProgress: () => boolean;
   setUpdateInProgress: (value: boolean) => void;
   trackLastAddedNoteId?: (noteId: number) => void;
@@ -493,10 +492,9 @@ export class CardCreationService {
               noteId,
             })
           : ({ action: 'use-original' } as const);
+        // The note was mined before this review, so cancelling leaves it as it was.
         if (timingDecision.action === 'discard') {
-          await this.deps.client.deleteNotes([noteId]);
-          this.deps.removeKnownWordNote(noteId);
-          this.deps.showStatusNotification('Card deleted.');
+          this.deps.showStatusNotification('Card left unchanged.');
           return;
         }
         const skipMedia =
