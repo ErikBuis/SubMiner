@@ -5179,7 +5179,9 @@ const {
       },
       isTexthookerOnlyMode: () => appState.texthookerOnlyMode,
       ensureYomitanExtensionLoaded: () => {
-        if (configService.getConfig().subtitleStyle.morphologyGuidedSplitting) {
+        // Low-power mode leaves the analyzer to load on the first subtitle.
+        const config = configService.getConfig();
+        if (config.subtitleStyle.morphologyGuidedSplitting && !config.startupWarmups.lowPowerMode) {
           morphologyGuideRuntime.warmup();
         }
         return ensureYomitanExtensionLoaded().then(() => {});
