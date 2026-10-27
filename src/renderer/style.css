@@ -1577,8 +1577,6 @@ body:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 3px;
-  max-height: 108px;
-  overflow: auto;
   margin: 0 0 12px;
   padding: 8px 14px;
   border-left: 3px solid var(--ctp-mauve);
@@ -1651,7 +1649,10 @@ body:focus-visible,
   font: inherit;
   font-size: 14px;
   line-height: 1.4;
-  resize: vertical;
+  /* Grows with its text; the dialog scrolls instead of the field. */
+  field-sizing: content;
+  overflow: hidden;
+  resize: none;
 }
 
 .media-timing-review-translation-input:focus {
