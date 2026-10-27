@@ -8,7 +8,12 @@ import {
   kuromojiTokenToMorpheme,
 } from './morphology-guide';
 import { requestYomitanScanTokens } from './yomitan-parser-runtime';
-import { createBackendDeps, termsFound } from './yomitan-scan-test-harness';
+import {
+  createBackendDeps,
+  SUBMINER_TEST_CHARACTER_DICTIONARY,
+  termEntry,
+  termsFound,
+} from './yomitan-scan-test-harness';
 
 function morphemes(lines: string[]): Token[] {
   return lines.map((line) => parseMecabLine(line)).filter((token): token is Token => !!token);
@@ -217,6 +222,8 @@ test('a grammar word the match only partly covers is taken whole (でした, not
       ['でした', 'です'],
     ],
   );
+  // Classified as grammar even without MeCab enrichment downstream.
+  assert.deepEqual(result?.[1]?.wordClasses, ['aux']);
 });
 
 test('a wave dash between kana is read as a stretched sound', async () => {
@@ -240,4 +247,48 @@ test('a wave dash between kana is read as a stretched sound', async () => {
     'か～くれんぼ',
     'する',
   ]);
+});
+
+test('a character name stays whole when the guide widens the token before it', async () => {
+  // タカ is a reserved name; the dictionary only matches でし, and the guide
+  // would widen that to the grammar word でした, which cuts into the name.
+  const result = await requestYomitanScanTokens(
+    'でしタカ',
+    createBackendDeps({
+      dictionaries: ['JMdict', SUBMINER_TEST_CHARACTER_DICTIONARY],
+      termsFind: (text) => {
+        const words: Array<[string, string, string, string]> = [
+          ['タカ', 'タカ', 'たか', SUBMINER_TEST_CHARACTER_DICTIONARY],
+          ['でし', '弟子', 'でし', 'JMdict'],
+          ['で', 'で', 'で', 'JMdict'],
+        ];
+        const match = words.find(([surface]) => text.startsWith(surface));
+        if (!match) {
+          return null;
+        }
+        const [surface, term, reading, dictionary] = match;
+        return termsFound(
+          surface.length,
+          termEntry(term, reading, { originalText: surface, dictionary }),
+        );
+      },
+    }),
+    { error: () => undefined },
+    {
+      includeNameMatchMetadata: true,
+      morphologyGuide: buildMorphologyGuide(
+        'でしタカ',
+        morphemes([
+          'でした\t助動詞,*,*,*,特殊・デス,連用形,です,デシタ,デシタ',
+          'カ\t名詞,一般,*,*,*,*,カ,カ,カ',
+        ]),
+      ),
+    },
+  );
+
+  assert.deepEqual(
+    result?.map((token) => token.surface),
+    ['でし', 'タカ'],
+  );
+  assert.equal(result?.[1]?.isNameMatch, true);
 });

@@ -532,7 +532,9 @@ ${YOMITAN_SCANNING_HELPERS}
             headword: word.headword || surface,
             startPos: word.start,
             endPos: word.end,
-            isNameMatch: false
+            isNameMatch: false,
+            // Keeps the analyzer's class when MeCab is not there to enrich it.
+            wordClasses: [word.pos1 === "助詞" ? "prt" : "aux"]
           },
           matchedLength: word.end - word.start
         };
@@ -657,15 +659,17 @@ ${YOMITAN_SCANNING_HELPERS}
         // 真) is the better reading, so the reservation yields rather than
         // splitting the word. Only a match that ends inside a name span gets
         // re-run against a window capped at that span.
+        // The guide and the wave-dash reading can move the token's end, so
+        // they run before the name check sees where it ends.
         let attempt = await resolveTokenAt(i, scanLength);
+        attempt = await applyWaveDashElongation(i, attempt);
+        attempt = await applyMorphologyGuide(i, attempt);
         if (attempt.token) {
           const splitNameToken = findSplitNameToken(nameIndex, attempt.token.endPos);
           if (splitNameToken) {
             attempt = await resolveTokenAt(i, splitNameToken.startPos - i);
           }
         }
-        attempt = await applyWaveDashElongation(i, attempt);
-        attempt = await applyMorphologyGuide(i, attempt);
         if (attempt.token) {
           flushUnparsedRun(unparsedRunStart, i);
           unparsedRunStart = null;
