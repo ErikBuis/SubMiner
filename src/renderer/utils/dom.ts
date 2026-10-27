@@ -57,6 +57,15 @@ export type RendererDom = {
   mediaTimingReviewModal: HTMLDivElement;
   mediaTimingReviewKind: HTMLDivElement;
   mediaTimingReviewText: HTMLElement;
+  mediaTimingReviewTitle: HTMLElement;
+  mediaTimingReviewCard: HTMLDivElement;
+  mediaTimingReviewWordRow: HTMLDivElement;
+  mediaTimingReviewWord: HTMLElement;
+  mediaTimingReviewMeaningRow: HTMLDivElement;
+  mediaTimingReviewMeaning: HTMLElement;
+  mediaTimingReviewTranslationRow: HTMLDivElement;
+  mediaTimingReviewTranslationState: HTMLElement;
+  mediaTimingReviewTranslation: HTMLTextAreaElement;
   mediaTimingReviewLineCount: HTMLElement;
   mediaTimingReviewLineControls: HTMLDivElement;
   mediaTimingReviewPrevAdd: HTMLButtonElement;
@@ -278,6 +287,21 @@ export function resolveRendererDom(): RendererDom {
     mediaTimingReviewModal: getRequiredElement<HTMLDivElement>('mediaTimingReviewModal'),
     mediaTimingReviewKind: getRequiredElement<HTMLDivElement>('mediaTimingReviewKind'),
     mediaTimingReviewText: getRequiredElement<HTMLElement>('mediaTimingReviewText'),
+    mediaTimingReviewTitle: getRequiredElement<HTMLElement>('mediaTimingReviewTitle'),
+    mediaTimingReviewCard: getRequiredElement<HTMLDivElement>('mediaTimingReviewCard'),
+    mediaTimingReviewWordRow: getRequiredElement<HTMLDivElement>('mediaTimingReviewWordRow'),
+    mediaTimingReviewWord: getRequiredElement<HTMLElement>('mediaTimingReviewWord'),
+    mediaTimingReviewMeaningRow: getRequiredElement<HTMLDivElement>('mediaTimingReviewMeaningRow'),
+    mediaTimingReviewMeaning: getRequiredElement<HTMLElement>('mediaTimingReviewMeaning'),
+    mediaTimingReviewTranslationRow: getRequiredElement<HTMLDivElement>(
+      'mediaTimingReviewTranslationRow',
+    ),
+    mediaTimingReviewTranslationState: getRequiredElement<HTMLElement>(
+      'mediaTimingReviewTranslationState',
+    ),
+    mediaTimingReviewTranslation: getRequiredElement<HTMLTextAreaElement>(
+      'mediaTimingReviewTranslation',
+    ),
     mediaTimingReviewLineCount: getRequiredElement<HTMLElement>('mediaTimingReviewLineCount'),
     mediaTimingReviewLineControls: getRequiredElement<HTMLDivElement>(
       'mediaTimingReviewLineControls',

@@ -3,6 +3,7 @@ import { getPreferredWordValueFromExtractedFields } from '../anki-field-config';
 import type { SubtitleMiningContext } from '../types/subtitle';
 import type {
   CardKind,
+  MediaTimingReviewCardPreview,
   MediaTimingReviewDecision,
   MediaTimingReviewRequest,
   WordCardKind,
@@ -10,7 +11,11 @@ import type {
 import { resolveWordCardKind } from './note-field-utils';
 import { STATS_MINING_TAG } from '../shared/anki-source';
 import {
+  ankiFieldHtmlToPlainText,
+  plainTextToAnkiFieldHtml,
+  buildReviewTranslationContext,
   resolveTimedSentenceTranslation,
+  toReviewLine,
   widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
 } from './sentence-translation';
@@ -37,6 +42,7 @@ export interface NoteUpdateWorkflowDeps {
       image?: string;
       miscInfo?: string;
       wordCardTranslation?: string;
+      definition?: string;
     };
     media?: {
       generateAudio?: boolean;
@@ -135,6 +141,8 @@ export interface NoteUpdateWorkflowDeps {
   reviewMediaTiming?: (
     request: Omit<MediaTimingReviewRequest, 'audioPadding' | 'maxMediaDuration'>,
   ) => Promise<MediaTimingReviewDecision>;
+  /** Whether `reviewMediaTiming` opens a review; false skips preparing its preview. */
+  isMediaTimingReviewEnabled?: () => boolean;
 }
 
 function normalizeSubtitleContextText(text: string): string {
@@ -167,6 +175,59 @@ function subtitleContextMatchesSentence(contextText: string, noteSentence: strin
 
 export class NoteUpdateWorkflow {
   constructor(private readonly deps: NoteUpdateWorkflowDeps) {}
+
+  /** The definition field as plain text, so the review shows what the card explains. */
+  private getReviewMeaning(
+    noteInfo: NoteUpdateWorkflowNoteInfo,
+    definitionField: string | undefined,
+  ): { meaning?: string } {
+    const fieldName = definitionField
+      ? this.deps.resolveConfiguredFieldName(noteInfo, definitionField)
+      : null;
+    const meaning = fieldName
+      ? ankiFieldHtmlToPlainText(noteInfo.fields[fieldName]?.value ?? '')
+      : '';
+    return meaning ? { meaning } : {};
+  }
+
+  /** The translation the card would get, so the review can show, follow and edit it. */
+  private buildReviewTranslation(
+    context: { text: string; startTime: number; endTime: number },
+    options: {
+      tracks: SubtitleTracksForTranslation | null;
+      format: boolean;
+      /** The field's current value, which the card keeps when nothing replaces it. */
+      existing: string;
+      /** The secondary line on screen for a primary line. */
+      liveTranslation: (primaryText: string) => string | undefined;
+    },
+  ): Pick<MediaTimingReviewCardPreview, 'translation'> {
+    const timedTranslation = resolveTimedSentenceTranslation({
+      ...context,
+      tracks: options.tracks,
+    });
+    // The line on screen only stands in when there is no parsed secondary track.
+    const cue =
+      timedTranslation?.translation ??
+      (options.tracks && options.tracks.secondary.length > 0
+        ? ''
+        : (options.liveTranslation(context.text) ?? ''));
+    // Formatted as the card saves it, then decoded: the review edits plain text.
+    const text = cue
+      ? ankiFieldHtmlToPlainText(options.format ? formatCardTranslation(cue) : cue)
+      : '';
+    const reviewContext = buildReviewTranslationContext({ ...context, tracks: options.tracks });
+    return {
+      translation: {
+        text: text || ankiFieldHtmlToPlainText(options.existing),
+        lines: reviewContext.lines,
+        currentLines: (timedTranslation?.translationLines ?? []).map(toReviewLine),
+        lineTranslations: reviewContext.lineTranslations,
+        format: options.format,
+        ...(text ? {} : { fromField: true }),
+      },
+    };
+  }
 
   private consumeMatchingSubtitleMiningContext(
     fields: Record<string, string>,
@@ -251,6 +312,15 @@ export class NoteUpdateWorkflow {
       let tracks: Promise<SubtitleTracksForTranslation | null> | undefined;
       const getTracks = () =>
         (tracks ??= Promise.resolve(this.deps.getSubtitleTracksForTranslation?.() ?? null));
+      // Read once: playback moves on while the review is open, and the card must get the
+      // translation the review showed.
+      const liveTranslations = new Map<string, string | undefined>();
+      const getLiveTranslation = (primaryText: string) => {
+        if (!liveTranslations.has(primaryText)) {
+          liveTranslations.set(primaryText, this.deps.getLiveSecondarySubtitleFor?.(primaryText));
+        }
+        return liveTranslations.get(primaryText);
+      };
 
       let widenedSentenceText: string | undefined;
       if (mediaTimingContext && config.behavior?.widenSentenceToTranslation) {
@@ -272,17 +342,48 @@ export class NoteUpdateWorkflow {
       let sentenceRange = mediaTimingContext
         ? { startTime: mediaTimingContext.startTime, endTime: mediaTimingContext.endTime }
         : null;
+      const translationFieldName = config.fields?.wordCardTranslation
+        ? this.deps.resolveConfiguredFieldName(noteInfo, config.fields.wordCardTranslation)
+        : null;
+      const formatTranslation = config.behavior?.formatTranslation === true;
+      let reviewedTranslation: string | undefined;
+      let keepTranslationField = false;
 
       if (mediaTimingContext) {
-        const timingDecision = this.deps.reviewMediaTiming
-          ? await this.deps.reviewMediaTiming({
+        const reviewMediaTiming =
+          this.deps.isMediaTimingReviewEnabled?.() === false
+            ? undefined
+            : this.deps.reviewMediaTiming;
+        const reviewTranslation =
+          reviewMediaTiming && translationFieldName
+            ? this.buildReviewTranslation(mediaTimingContext, {
+                tracks: await getTracks(),
+                format: formatTranslation,
+                existing: noteInfo.fields[translationFieldName]?.value ?? '',
+                liveTranslation: getLiveTranslation,
+              })
+            : {};
+        const timingDecision = reviewMediaTiming
+          ? await reviewMediaTiming({
               kind: 'word',
               text: mediaTimingContext.text,
               startTime: mediaTimingContext.startTime,
               endTime: mediaTimingContext.endTime,
               noteId,
+              card: {
+                ...(hasExpressionText ? { word: ankiFieldHtmlToPlainText(expressionText) } : {}),
+                ...this.getReviewMeaning(noteInfo, config.fields?.definition),
+                ...reviewTranslation,
+              },
             })
           : ({ action: 'use-original' } as const);
+        if ('translation' in timingDecision && timingDecision.translation !== undefined) {
+          reviewedTranslation = plainTextToAnkiFieldHtml(timingDecision.translation);
+        } else if (reviewTranslation.translation?.fromField) {
+          // The review showed the field's own translation and nothing replaced it: keep it
+          // as is rather than resolving one the review never showed.
+          keepTranslationField = true;
+        }
         if (timingDecision.action === 'discard') {
           try {
             await this.deps.client.deleteNotes([noteId]);
@@ -325,13 +426,12 @@ export class NoteUpdateWorkflow {
 
       this.deps.appendKnownWordsFromNoteInfo(noteInfo);
 
-      const translationFieldName = config.fields?.wordCardTranslation
-        ? this.deps.resolveConfiguredFieldName(noteInfo, config.fields.wordCardTranslation)
-        : null;
-      let translatedText: string | undefined;
+      // A translation from the review belongs to the reviewed sentence.
+      let translatedText: string | undefined =
+        reviewedTranslation !== undefined ? mediaTimingContext?.text : undefined;
       let translation: string | undefined;
       const minedText = mediaTimingContext?.text ?? this.deps.getCurrentSubtitleText();
-      if (translationFieldName && minedText) {
+      if (translationFieldName && minedText && !keepTranslationField) {
         const parsedTracks = sentenceRange ? await getTracks() : null;
         const timedTranslation = sentenceRange
           ? resolveTimedSentenceTranslation({
@@ -346,8 +446,8 @@ export class NoteUpdateWorkflow {
           timedTranslation?.translation ??
           (parsedTracks && parsedTracks.secondary.length > 0
             ? undefined
-            : this.deps.getLiveSecondarySubtitleFor?.(minedText));
-        if (translation && config.behavior?.formatTranslation) {
+            : getLiveTranslation(minedText));
+        if (translation && formatTranslation) {
           translation = formatCardTranslation(translation);
         }
         if (translation) translatedText = minedText;
@@ -407,8 +507,10 @@ export class NoteUpdateWorkflow {
         }
       }
 
-      if (translationFieldName && translation) {
-        updatedFields[translationFieldName] = translation;
+      // A translation from the review is final, even when cleared.
+      const cardTranslation = reviewedTranslation ?? translation;
+      if (translationFieldName && (cardTranslation || reviewedTranslation !== undefined)) {
+        updatedFields[translationFieldName] = cardTranslation ?? '';
         updatePerformed = true;
       }
 

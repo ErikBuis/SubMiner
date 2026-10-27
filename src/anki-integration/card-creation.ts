@@ -26,7 +26,11 @@ import { resolveWordCardKind } from './note-field-utils';
 import type { PendingYoutubeMediaUpdate } from './pending-youtube-media';
 import { resolveMpvVolumeScale } from './mpv-volume';
 import {
+  ankiFieldHtmlToPlainText,
+  buildReviewTranslationContext,
+  plainTextToAnkiFieldHtml,
   resolveTimedSentenceTranslation,
+  toReviewLine,
   widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
 } from './sentence-translation';
@@ -166,6 +170,8 @@ interface CardCreationDeps {
   reviewMediaTiming?: (
     request: Omit<MediaTimingReviewRequest, 'audioPadding' | 'maxMediaDuration'>,
   ) => Promise<MediaTimingReviewDecision>;
+  /** Whether `reviewMediaTiming` opens a review; false skips preparing its preview. */
+  isMediaTimingReviewEnabled?: () => boolean;
 }
 
 export class CardCreationService {
@@ -642,18 +648,56 @@ export class CardCreationService {
           endTime = clampMediaEndTime(startTime, subtitleEndTime, maxMediaDuration);
         }
 
-        const timingDecision = this.deps.reviewMediaTiming
-          ? await this.deps.reviewMediaTiming({
+        const formatTranslation = behavior?.formatTranslation === true;
+        const reviewMediaTiming =
+          this.deps.isMediaTimingReviewEnabled?.() === false
+            ? undefined
+            : this.deps.reviewMediaTiming;
+        const reviewTranslation = reviewMediaTiming
+          ? resolveTimedSentenceTranslation({
+              text: sentence,
+              startTime,
+              endTime: subtitleEndTime,
+              tracks,
+            })
+          : null;
+        // The line on screen only stands in when there is no parsed secondary track.
+        const reviewTranslationCue =
+          reviewTranslation?.translation ??
+          (tracks && tracks.secondary.length > 0 ? '' : (secondarySubText ?? ''));
+        // Formatted as the card saves it, then decoded: the review edits plain text.
+        const reviewTranslationText = ankiFieldHtmlToPlainText(
+          formatTranslation ? formatCardTranslation(reviewTranslationCue) : reviewTranslationCue,
+        );
+        const reviewContext = reviewMediaTiming
+          ? buildReviewTranslationContext({ startTime, endTime: subtitleEndTime, tracks })
+          : null;
+        const timingDecision = reviewMediaTiming
+          ? await reviewMediaTiming({
               kind: 'sentence',
               text: sentence,
               startTime,
               endTime,
+              card: {
+                translation: {
+                  text: reviewTranslationText,
+                  lines: reviewContext?.lines ?? [],
+                  currentLines: (reviewTranslation?.translationLines ?? []).map(toReviewLine),
+                  lineTranslations: reviewContext?.lineTranslations ?? [],
+                  format: formatTranslation,
+                },
+              },
             })
           : ({ action: 'use-original' } as const);
         if (timingDecision.action === 'discard') {
           this.deps.showStatusNotification('Card creation cancelled.');
           return false;
         }
+        // A translation from the review is final, even when cleared: no AI fallback.
+        const typedTranslation =
+          'translation' in timingDecision ? timingDecision.translation?.trim() : undefined;
+        const reviewedTranslation =
+          typedTranslation === undefined ? undefined : plainTextToAnkiFieldHtml(typedTranslation);
         const skipMedia = timingDecision.action === 'skip-media';
         const exactReviewedRange = timingDecision.action === 'confirm';
         let sentenceStartTime = subtitleStartTime;
@@ -721,21 +765,19 @@ export class CardCreationService {
             ? ankiAiConfig.enabled === true
             : ankiAiConfig === true;
 
-        const automaticBackText = await resolveSentenceBackText(
-          {
-            sentence,
-            secondarySubText,
-            aiEnabled: ankiAiEnabled,
-            aiConfig: this.deps.getAiConfig(),
-          },
-          {
-            logWarning: (message: string) => log.warn(message),
-          },
-        );
         const backText =
-          behavior?.formatTranslation === true
-            ? formatCardTranslation(automaticBackText)
-            : automaticBackText;
+          reviewedTranslation ??
+          (await resolveSentenceBackText(
+            {
+              sentence,
+              secondarySubText,
+              aiEnabled: ankiAiEnabled,
+              aiConfig: this.deps.getAiConfig(),
+            },
+            {
+              logWarning: (message: string) => log.warn(message),
+            },
+          ).then((text) => (formatTranslation ? formatCardTranslation(text) : text)));
         if (backText) {
           fields[translationField] = backText;
         }

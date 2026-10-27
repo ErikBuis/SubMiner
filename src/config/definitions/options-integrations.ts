@@ -122,6 +122,13 @@ export function buildIntegrationConfigOptionRegistry(
         'Card field that word cards mined from the dictionary popup fill with the secondary subtitle translating the mined sentence (for example SentenceTranslation in Kiku). Empty: word cards get no translation.',
     },
     {
+      path: 'ankiConnect.fields.definition',
+      kind: 'string',
+      defaultValue: defaultConfig.ankiConnect.fields.definition,
+      description:
+        'Card field holding the dictionary definition. Only read, to show the meaning in the media timing review.',
+    },
+    {
       path: 'ankiConnect.ai.enabled',
       kind: 'boolean',
       defaultValue: defaultConfig.ankiConnect.ai.enabled,

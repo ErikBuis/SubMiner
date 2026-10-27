@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { ankiFieldHtmlToPlainText } from './sentence-translation';
 
 import { CardCreationService } from './card-creation';
 import {
@@ -695,4 +696,135 @@ test('createSentenceCard widens across a sign without taking its translation', a
   assert.equal(await service.createSentenceCard('後半', 3, 4), true);
   assert.equal(addedFields[0]?.Sentence, '前半 後半');
   assert.equal(addedFields[0]?.Translation, 'First half, second half.');
+});
+
+test('createSentenceCard review decodes cue markup in the translation', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const reviewRequests: Array<{
+    card?: { translation?: { text: string; lines: Array<{ text: string }> } };
+  }> = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () => createAnkiConfig({ fields: { translation: 'Translation' } }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [{ text: '今日は', startTime: 1, endTime: 2 }],
+        secondary: [{ text: '<i>Tom &amp; Jerry.</i>', startTime: 1, endTime: 2 }],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      reviewMediaTiming: async (request) => {
+        reviewRequests.push(request);
+        return { action: 'use-original' };
+      },
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(reviewRequests[0]?.card?.translation?.text, 'Tom & Jerry.');
+  assert.equal(reviewRequests[0]?.card?.translation?.lines[0]?.text, 'Tom & Jerry.');
+  assert.equal(addedFields[0]?.Translation, '<i>Tom &amp; Jerry.</i>');
+});
+
+test('createSentenceCard review previews the formatted translation the card saves', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const shown: Array<string | undefined> = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () =>
+        createAnkiConfig({
+          fields: { translation: 'Translation' },
+          behavior: { formatTranslation: true },
+        }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [{ text: '今日は', startTime: 1, endTime: 2 }],
+        secondary: [{ text: '&quot;hello,&quot;', startTime: 1, endTime: 2 }],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      reviewMediaTiming: async (request) => {
+        shown.push(request.card?.translation?.text);
+        return { action: 'use-original' };
+      },
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(shown[0], ankiFieldHtmlToPlainText(addedFields[0]?.Translation ?? ''));
+});
+
+test('createSentenceCard prepares no review preview while the review is off', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () => createAnkiConfig({ fields: { translation: 'Translation' } }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [{ text: '今日は', startTime: 1, endTime: 2 }],
+        secondary: [{ text: 'Today.', startTime: 1, endTime: 2 }],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      isMediaTimingReviewEnabled: () => false,
+      reviewMediaTiming: async () => {
+        throw new Error('review must not open');
+      },
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(addedFields[0]?.Translation, 'Today.');
+});
+
+test('createSentenceCard previews the translation in the review and saves the edited one', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const reviewRequests: Array<{ card?: { translation?: { text: string } } }> = [];
+  let reviewedTranslation: string | undefined;
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () => createAnkiConfig({ fields: { translation: 'Translation' } }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [{ text: '今日は', startTime: 1, endTime: 2 }],
+        secondary: [{ text: 'Today.', startTime: 1, endTime: 2 }],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      reviewMediaTiming: async (request) => {
+        reviewRequests.push(request);
+        return reviewedTranslation === undefined
+          ? { action: 'use-original' }
+          : { action: 'use-original', translation: reviewedTranslation };
+      },
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(reviewRequests[0]?.card?.translation?.text, 'Today.');
+  assert.equal(addedFields[0]?.Translation, 'Today.');
+
+  reviewedTranslation = 'Edited.';
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(addedFields[1]?.Translation, 'Edited.');
+
+  reviewedTranslation = '';
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(addedFields[2]?.Translation, undefined);
+  // Typed text is plain text, so it is escaped for the HTML field.
+  reviewedTranslation = 'Type <name> & go.';
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(addedFields[3]?.Translation, 'Type &lt;name&gt; &amp; go.');
 });

@@ -244,6 +244,16 @@
           </div>
 
           <div id="mediaTimingReviewEditor" class="media-timing-review-editor">
+            <div id="mediaTimingReviewCard" class="media-timing-review-card hidden">
+              <div id="mediaTimingReviewWordRow" class="media-timing-review-card-row">
+                <span class="media-timing-review-sentence-label">Word</span>
+                <div id="mediaTimingReviewWord" class="media-timing-review-word"></div>
+              </div>
+              <div id="mediaTimingReviewMeaningRow" class="media-timing-review-card-row">
+                <span class="media-timing-review-sentence-label">Meaning</span>
+                <div id="mediaTimingReviewMeaning" class="media-timing-review-meaning"></div>
+              </div>
+            </div>
             <div class="media-timing-review-sentence-header">
               <div class="media-timing-review-sentence-heading">
                 <span class="media-timing-review-sentence-label">Sentence on card</span>
@@ -296,6 +306,36 @@
               </div>
             </div>
             <blockquote id="mediaTimingReviewText" class="media-timing-review-text"></blockquote>
+
+            <div
+              id="mediaTimingReviewTranslationRow"
+              class="media-timing-review-translation hidden"
+            >
+              <div class="media-timing-review-sentence-header">
+                <div class="media-timing-review-sentence-heading">
+                  <label
+                    for="mediaTimingReviewTranslation"
+                    class="media-timing-review-sentence-label"
+                  >
+                    Translation
+                  </label>
+                  <span
+                    id="mediaTimingReviewTranslationState"
+                    class="media-timing-review-line-count"
+                    title="Follows the added or removed lines until you edit it"
+                  >
+                    auto
+                  </span>
+                </div>
+              </div>
+              <textarea
+                id="mediaTimingReviewTranslation"
+                class="media-timing-review-translation-input"
+                rows="2"
+                spellcheck="true"
+                aria-label="Translation on card"
+              ></textarea>
+            </div>
 
             <div id="mediaTimingReviewFramePicker" class="media-timing-frame-picker hidden">
               <div class="media-timing-frame-image-shell">

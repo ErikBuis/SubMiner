@@ -239,6 +239,7 @@ export interface ResolvedConfig {
       sentence: string;
       miscInfo: string;
       wordCardTranslation: string;
+      definition: string;
       translation: string;
     };
     ai: AiFeatureConfig & {

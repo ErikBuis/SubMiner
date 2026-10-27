@@ -268,6 +268,8 @@ function parseMediaTimingReviewFrameRequest(
   };
 }
 
+const MAX_REVIEW_TRANSLATION_LENGTH = 10_000;
+
 function parseMediaTimingReviewResolveRequest(
   payload: unknown,
 ): MediaTimingReviewResolveRequest | null {
@@ -277,12 +279,22 @@ function parseMediaTimingReviewResolveRequest(
   const decision = record.decision;
   if (!decision || typeof decision !== 'object') return null;
   const decisionRecord = decision as Record<string, unknown>;
+  const translation = decisionRecord.translation;
   if (
-    decisionRecord.action === 'use-original' ||
-    decisionRecord.action === 'skip-media' ||
-    decisionRecord.action === 'discard'
+    translation !== undefined &&
+    (typeof translation !== 'string' || translation.length > MAX_REVIEW_TRANSLATION_LENGTH)
   ) {
+    return null;
+  }
+  const translationPart = translation === undefined ? {} : { translation };
+  if (decisionRecord.action === 'discard') {
     return { reviewId: record.reviewId, decision: { action: decisionRecord.action } };
+  }
+  if (decisionRecord.action === 'use-original' || decisionRecord.action === 'skip-media') {
+    return {
+      reviewId: record.reviewId,
+      decision: { action: decisionRecord.action, ...translationPart },
+    };
   }
   if (
     decisionRecord.action === 'confirm' &&
@@ -320,6 +332,7 @@ function parseMediaTimingReviewResolveRequest(
               sentenceStartTime: decisionRecord.sentenceStartTime as number,
               sentenceEndTime: decisionRecord.sentenceEndTime as number,
             }),
+        ...translationPart,
       },
     };
   }

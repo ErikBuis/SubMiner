@@ -8,6 +8,8 @@
  * one moment therefore both cuts sentences short and pulls in unrelated lines.
  */
 
+import { decodeCharacterReferences, stripSubtitleTags } from './subtitle-markup';
+
 export interface TimedSubtitleText {
   text: string;
   startTime: number;
@@ -31,6 +33,11 @@ export interface AlignedSentenceTranslation {
   translationLines: TimedSubtitleText[];
   translation: string;
 }
+
+/** Primary lines the media timing review offers on each side of the clip. */
+export const REVIEW_CONTEXT_LINE_LIMIT = 12;
+/** Tolerance when deciding whether a primary line lies before or after the clip. */
+export const REVIEW_CONTEXT_EPSILON_SECONDS = 0.05;
 
 /** Fraction of a primary line that must fall inside a secondary event to join its sentence. */
 export const DEFAULT_SENTENCE_GROUP_MIN_OVERLAP = 0.6;
@@ -323,6 +330,86 @@ export function collectGroupTranslationLines(
 
 function compactText(text: string): string {
   return text.normalize('NFKC').replace(/\s+/gu, '');
+}
+
+/** Writing systems, with the Japanese scripts as one. */
+const SCRIPT_FAMILIES: Array<[string, RegExp]> = [
+  ['cjk', /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/gu],
+  ['hangul', /\p{Script=Hangul}/gu],
+  ['cyrillic', /\p{Script=Cyrillic}/gu],
+  ['greek', /\p{Script=Greek}/gu],
+  ['thai', /\p{Script=Thai}/gu],
+  ['arabic', /\p{Script=Arabic}/gu],
+  ['latin', /\p{Script=Latin}/gu],
+];
+
+/**
+ * The writing system a text is mostly in. Latin only wins without any other script, since
+ * Latin letters in other languages are loanwords and acronyms ("DNAって何？").
+ */
+function mainScriptFamily(text: string): string | null {
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [family, pattern] of SCRIPT_FAMILIES) {
+    const count = text.match(pattern)?.length ?? 0;
+    if (family === 'latin' ? best === null && count > 0 : count > bestCount) {
+      best = family;
+      bestCount = count;
+    }
+  }
+  // Letters of a script not listed here (Hebrew, Devanagari, ...) are still a language.
+  if (best === null && /\p{L}/u.test(text)) return 'other';
+  return best;
+}
+
+/**
+ * A secondary track in the primary language is no translation: its cue is part of the
+ * mined text (cut differently), or holds the mined text plus more of the same language.
+ * A bilingual cue that adds a line in another script still translates, also when only
+ * part of its source line was mined. Scripts stand in for languages, so a cue pairing two
+ * languages of one script (Japanese and Chinese) cannot be told apart from one language.
+ */
+export function isSourceLanguageText(
+  translationLines: readonly string[],
+  minedText: string,
+): boolean {
+  // Cue markup (`<i>`, `&amp;`) differs between tracks and is not language.
+  const comparable = (text: string) =>
+    compactText(decodeCharacterReferences(stripSubtitleTags(text)));
+  const lines = translationLines
+    .flatMap((text) => text.split(/\r?\n|\\N/))
+    .map(comparable)
+    .filter(Boolean);
+  const candidate = lines.join('');
+  const mined = comparable(minedText);
+  if (!mined) return false;
+  // Cues each part of the mined text, also when their pieces are not adjacent there.
+  if (lines.every((line) => mined.includes(line))) return true;
+  if (!candidate.includes(mined)) return false;
+  const minedFamily = mainScriptFamily(mined);
+  // Whole lines are compared: what is left of a line after cutting the mined text out can
+  // look foreign ("DNA" of "DNAって何？") while the line is not.
+  return !lines.some((line) => {
+    if (mined.includes(line)) return false;
+    const family = mainScriptFamily(line);
+    return family !== null && family !== minedFamily;
+  });
+}
+
+/**
+ * The secondary lines each primary line translates to when the whole track is grouped,
+ * so a review that adds neighbouring lines picks the same translations main would.
+ */
+export function assignLineTranslations(
+  primaryLines: readonly TimedSubtitleText[],
+  secondaryLines: readonly TimedSubtitleText[],
+  minOverlapRatio = DEFAULT_SENTENCE_GROUP_MIN_OVERLAP,
+): Array<{ line: TimedSubtitleText; translationLines: TimedSubtitleText[] }> {
+  const primary = sortSubtitleLines(primaryLines);
+  const secondary = sortSubtitleLines(secondaryLines);
+  const groups = buildSentenceTranslationGroups(primary, secondary, minOverlapRatio);
+  const assigned = assignGroupTranslations(primary, secondary, groups);
+  return primary.map((line, index) => ({ line, translationLines: assigned.get(index) ?? [] }));
 }
 
 /**

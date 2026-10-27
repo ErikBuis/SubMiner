@@ -338,6 +338,7 @@ Creates and updates Anki cards with sentence, audio, and screenshot. Needs the [
 | `ankiConnect.fields.sentence`            | `"Sentence"`           | Sentence field                                                                                                                 |
 | `ankiConnect.fields.miscInfo`            | `"MiscInfo"`           | Metadata field. `null` disables                                                                                                |
 | `ankiConnect.fields.wordCardTranslation` | `""`                   | Word card translation field (see [Anki integration](/anki-integration#field-mapping)). Empty: none                             |
+| `ankiConnect.fields.definition`          | `"MainDefinition"`     | Read only: the meaning shown in the timing review                                                                              |
 | `ankiConnect.metadata.pattern`           | `"[SubMiner] %f (%t)"` | MiscInfo template: `%f` filename, `%F` filename with extension, `%t` time, `%T` time with ms, `<br>` newline                   |
 
 **Media**

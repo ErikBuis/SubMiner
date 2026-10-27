@@ -584,7 +584,8 @@
       "sentence": "Sentence", // Card field that receives the source sentence text.
       "miscInfo": "MiscInfo", // Card field that receives the miscellaneous info pattern (see ankiConnect.metadata.pattern).
       "translation": "SelectionText", // Card field that receives the current selection or translated text.
-      "wordCardTranslation": "" // Card field that word cards mined from the dictionary popup fill with the secondary subtitle translating the mined sentence (for example SentenceTranslation in Kiku). Empty: word cards get no translation.
+      "wordCardTranslation": "", // Card field that word cards mined from the dictionary popup fill with the secondary subtitle translating the mined sentence (for example SentenceTranslation in Kiku). Empty: word cards get no translation.
+      "definition": "MainDefinition" // Card field holding the dictionary definition. Only read, to show the meaning in the media timing review.
     }, // Fields setting.
     "ai": {
       "enabled": false, // Enable AI provider usage for Anki translation/enrichment flows. Values: true | false
