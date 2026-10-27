@@ -501,3 +501,67 @@ test('review translation shifts grow a screen translation from the lines before 
   });
   assert.equal(preview.text, 'Before From the screen');
 });
+
+test('review translation buttons are available only when a press changes the lines', () => {
+  const lines = [
+    { text: 'Sign', startTime: 0, endTime: 30 },
+    { text: 'Before', startTime: 6, endTime: 8 },
+  ];
+  const base = {
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'From the screen',
+    initialTranslationLines: [],
+    translationLines: lines,
+    format: false,
+  };
+  // The long sign starts first but runs past the clip, so it is no earlier line.
+  const added = buildMediaTimingReviewTranslationPreview({ ...base, translationPreviousShift: 1 });
+  assert.equal(added.canAddPrevious, false);
+  assert.equal(added.canRemovePrevious, true);
+  assert.equal(
+    buildMediaTimingReviewTranslationPreview({ ...base, translationPreviousShift: 2 }).text,
+    'Before From the screen',
+  );
+});
+
+test('review translation buttons skip a background line no dialogue line has', () => {
+  // Bocchi the Rock! ep. 1 at 00:33: a TV line runs alongside the narration.
+  const own = {
+    text: 'With no club activity, she comes straight home.',
+    startTime: 30.3,
+    endTime: 33.72,
+  };
+  const tv = { text: "And here, we'll stir-fry it a bit.", startTime: 33.72, endTime: 36.85 };
+  const narration = { text: 'The only messages she receives…', startTime: 35.35, endTime: 40.94 };
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '部活も入らず 放課後は即帰宅',
+    originalStartTime: 30.343,
+    originalEndTime: 33.68,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: own.text,
+    initialTranslationLines: [own],
+    translationLines: [own, tv, narration],
+    lineTranslations: [
+      { text: '部活も入らず 放課後は即帰宅', startTime: 30.343, endTime: 33.68, lines: [own] },
+      { text: '（テレビ番組の音声）', startTime: 33.764, endTime: 34.681, lines: [tv] },
+      {
+        text: '（ひとり）スマホに届くのは',
+        startTime: 35.474,
+        endTime: 36.808,
+        lines: [narration],
+      },
+    ],
+    format: false,
+    translationNextShift: 1,
+  });
+  assert.equal(preview.text, `${own.text} ${narration.text}`);
+});

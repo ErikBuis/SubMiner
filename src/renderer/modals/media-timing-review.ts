@@ -11,6 +11,7 @@ import { createModalFocusGuard } from './modal-focus-guard';
 import {
   findBestOverlappingLine,
   isSourceLanguageText,
+  isSoundCue,
   formatCardTranslation,
   joinSubtitleLineTexts,
 } from '../../shared/sentence-translation-alignment';
@@ -110,44 +111,40 @@ function compactText(text: string): string {
 const lineMidpoint = (line: MediaTimingReviewContextLine): number =>
   (line.startTime + line.endTime) / 2;
 
-function indexOfLine(
-  lines: readonly MediaTimingReviewContextLine[],
-  line: MediaTimingReviewContextLine,
-): number {
-  const exact = lines.findIndex(
-    (candidate) =>
-      candidate.startTime === line.startTime &&
-      candidate.endTime === line.endTime &&
-      candidate.text === line.text,
-  );
-  if (exact >= 0) return exact;
-  const later = lines.findIndex((candidate) => candidate.startTime >= line.startTime);
-  return later >= 0 ? later : lines.length;
+const lineKey = (line: MediaTimingReviewContextLine): string =>
+  `${line.startTime}|${line.endTime}|${line.text}`;
+
+/** Chronological order, as `dedupeSortedLines` sorts. */
+function compareLines(a: MediaTimingReviewContextLine, b: MediaTimingReviewContextLine): number {
+  return a.startTime - b.startTime || a.endTime - b.endTime;
 }
 
 /**
  * Moves the edges of a run of secondary lines through the sorted lines around the clip: a
  * positive shift adds that many adjacent lines at that end, a negative one drops lines
  * from it while `keep` lines remain. Both ends add before either drops, so lines added at
- * one end can be dropped from the other. An empty run grows from the lines before
- * `anchors.start` or after `anchors.end`. Returns the shifts actually applied.
+ * one end can be dropped from the other. Added lines come from `pool`; an empty run grows
+ * from its lines before `anchors.start` or after `anchors.end`. Returns the shifts
+ * actually applied.
  */
 function shiftRun(
   run: MediaTimingReviewContextLine[],
-  all: readonly MediaTimingReviewContextLine[],
+  pool: readonly MediaTimingReviewContextLine[],
   previousShift: number,
   nextShift: number,
   anchors: { start: number; end: number },
   keep: number,
 ): { run: MediaTimingReviewContextLine[]; previousShift: number; nextShift: number } {
-  const earlier =
-    run.length > 0
-      ? all.slice(0, indexOfLine(all, run[0]!))
-      : all.filter((line) => lineMidpoint(line) < anchors.start);
-  const later =
-    run.length > 0
-      ? all.slice(indexOfLine(all, run[run.length - 1]!) + 1)
-      : all.filter((line) => lineMidpoint(line) > anchors.end);
+  const inRun = new Set(run.map(lineKey));
+  const outside = pool.filter((line) => !inRun.has(lineKey(line)));
+  const first = run[0];
+  const last = run[run.length - 1];
+  const earlier = first
+    ? outside.filter((line) => compareLines(line, first) < 0)
+    : outside.filter((line) => lineMidpoint(line) < anchors.start);
+  const later = last
+    ? outside.filter((line) => compareLines(line, last) > 0)
+    : outside.filter((line) => lineMidpoint(line) > anchors.end);
   const prepended =
     previousShift > 0 ? earlier.slice(Math.max(0, earlier.length - previousShift)) : [];
   const appended = nextShift > 0 ? later.slice(0, nextShift) : [];
@@ -231,28 +228,45 @@ export function buildMediaTimingReviewTranslationPreview(options: {
   const timedCore = options.initialTranslationLines.length > 0;
   // Timed lines form one run that keeps at least one line. A translation taken from the
   // screen has no timed lines behind it: its text stays, with runs before and after it.
-  const previousShift = options.translationPreviousShift ?? 0;
-  const nextShift = options.translationNextShift ?? 0;
   const anchors = { start: options.originalStartTime, end: options.originalEndTime };
   const keep = timedCore ? 1 : 0;
-  const leading = shiftRun(
-    timedCore
-      ? dedupeSortedLines([...before, ...options.initialTranslationLines, ...after])
-      : before,
-    all,
-    previousShift,
-    timedCore ? nextShift : 0,
-    anchors,
-    keep,
+  const core = timedCore
+    ? dedupeSortedLines([...before, ...options.initialTranslationLines, ...after])
+    : null;
+  // The buttons step through the lines the sentence grouping gives a dialogue line, so a
+  // background TV line or sign running alongside the dialogue is skipped.
+  const claimed = new Set(
+    (options.lineTranslations ?? [])
+      .filter((entry) => entry.text === undefined || !isSoundCue(entry.text))
+      .flatMap((entry) => entry.lines.map(lineKey)),
   );
-  const trailing = timedCore ? leading : shiftRun(after, all, 0, nextShift, anchors, keep);
+  const pool = claimed.size > 0 ? all.filter((line) => claimed.has(lineKey(line))) : all;
+  const resolve = (previousShift: number, nextShift: number) => {
+    const leading = shiftRun(
+      core ?? before,
+      pool,
+      previousShift,
+      core ? nextShift : 0,
+      anchors,
+      keep,
+    );
+    const trailing = core ? leading : shiftRun(after, pool, 0, nextShift, anchors, keep);
+    return { leading, trailing };
+  };
+  const { leading, trailing } = resolve(
+    options.translationPreviousShift ?? 0,
+    options.translationNextShift ?? 0,
+  );
+  const previousShift = leading.previousShift;
+  const nextShift = trailing.nextShift;
+  // A button is available when one more press would change what it applies.
   const preview = {
-    previousShift: leading.previousShift,
-    nextShift: trailing.nextShift,
-    canAddPrevious: shiftRun(leading.run, all, 1, 0, anchors, keep).previousShift > 0,
-    canRemovePrevious: leading.run.length > keep,
-    canAddNext: shiftRun(trailing.run, all, 0, 1, anchors, keep).nextShift > 0,
-    canRemoveNext: trailing.run.length > keep,
+    previousShift,
+    nextShift,
+    canAddPrevious: resolve(previousShift + 1, nextShift).leading.previousShift > previousShift,
+    canRemovePrevious: resolve(previousShift - 1, nextShift).leading.previousShift < previousShift,
+    canAddNext: resolve(previousShift, nextShift + 1).trailing.nextShift > nextShift,
+    canRemoveNext: resolve(previousShift, nextShift - 1).trailing.nextShift < nextShift,
   };
   if (unchanged) return { text: options.initialTranslation, ...preview };
   if (all.length === 0) return { text: null, ...preview };
@@ -828,7 +842,9 @@ export function createMediaTimingReviewModal(
     const linesAdded = previousCount > 0 || nextCount > 0;
     const followedChange =
       includeFollowed && (value !== initialValue || (linesAdded && !initial.fromField));
-    return translationEdited || followedChange ? { translation: value } : {};
+    // Lines added or dropped with the translation's own buttons are an explicit choice too.
+    const adjusted = translationPreviousShift !== 0 || translationNextShift !== 0;
+    return translationEdited || adjusted || followedChange ? { translation: value } : {};
   }
 
   /**
@@ -1087,6 +1103,7 @@ export function createMediaTimingReviewModal(
       ctx.dom.mediaTimingReviewTranslation.disabled = false;
       renderSelection();
       renderSentence();
+      followTranslation();
     }
   }
 
