@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildMediaTimingReviewTranslation,
+  buildMediaTimingReviewTranslationPreview,
   buildMediaTimingLineSelection,
   buildMediaTimingWaveformPath,
   constrainMediaTimingSelection,
@@ -371,4 +372,196 @@ test('an added line whose secondary text is its own text adds no translation', (
     }),
     '',
   );
+});
+
+test('review translation shifts add and drop secondary lines at either end', () => {
+  const lines = [
+    { text: 'Two before,', startTime: 4, endTime: 6 },
+    { text: 'one before,', startTime: 6, endTime: 8 },
+    { text: 'the mined line', startTime: 8, endTime: 10 },
+    { text: 'and after.', startTime: 10, endTime: 12 },
+  ];
+  const base = {
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'The mined line',
+    initialTranslationLines: [lines[2]!],
+    translationLines: lines,
+    format: false,
+  };
+  const unchanged = buildMediaTimingReviewTranslationPreview(base);
+  assert.equal(unchanged.text, 'The mined line');
+  assert.deepEqual(
+    [
+      unchanged.canAddPrevious,
+      unchanged.canRemovePrevious,
+      unchanged.canAddNext,
+      unchanged.canRemoveNext,
+    ],
+    [true, false, true, false],
+  );
+
+  const widened = buildMediaTimingReviewTranslationPreview({
+    ...base,
+    translationPreviousShift: 5,
+    translationNextShift: 1,
+  });
+  assert.equal(widened.text, 'Two before, one before, the mined line and after.');
+  // Shifts past the available lines are clamped, so one press takes them back.
+  assert.equal(widened.previousShift, 2);
+  assert.equal(widened.canAddPrevious, false);
+  assert.equal(widened.canAddNext, false);
+
+  // Dropping lines keeps at least one.
+  const narrowed = buildMediaTimingReviewTranslationPreview({
+    ...base,
+    initialTranslationLines: [lines[1]!, lines[2]!],
+    translationPreviousShift: -1,
+    translationNextShift: -1,
+  });
+  assert.equal(narrowed.text, 'the mined line');
+  assert.equal(narrowed.previousShift, -1);
+  assert.equal(narrowed.nextShift, 0);
+  assert.equal(narrowed.canRemovePrevious, false);
+  assert.equal(narrowed.canRemoveNext, false);
+});
+
+test('review translation shifts keep a translation taken from the screen in the middle', () => {
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'From the screen',
+    initialTranslationLines: [],
+    translationLines: [
+      { text: 'Before', startTime: 6, endTime: 8 },
+      { text: 'overlapping', startTime: 8, endTime: 10 },
+      { text: 'after', startTime: 10, endTime: 12 },
+    ],
+    format: false,
+    translationPreviousShift: 1,
+    translationNextShift: 1,
+  });
+  assert.equal(preview.text, 'Before From the screen after');
+  assert.equal(preview.canRemovePrevious, true);
+  assert.equal(preview.canAddNext, false);
+});
+
+test('review translation shifts can drop a line added at the other end', () => {
+  const lineA = { text: 'A', startTime: 8, endTime: 10 };
+  const lineB = { text: 'B', startTime: 10, endTime: 12 };
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'A',
+    initialTranslationLines: [lineA],
+    translationLines: [lineA, lineB],
+    format: false,
+    translationPreviousShift: -1,
+    translationNextShift: 1,
+  });
+  assert.equal(preview.text, 'B');
+  assert.equal(preview.previousShift, -1);
+  assert.equal(preview.nextShift, 1);
+  assert.equal(preview.canRemovePrevious, false);
+});
+
+test('review translation shifts grow a screen translation from the lines before it', () => {
+  // Sorted by start, the long cue comes first although it ends after the clip.
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'From the screen',
+    initialTranslationLines: [],
+    translationLines: [
+      { text: 'Sign', startTime: 0, endTime: 30 },
+      { text: 'Before', startTime: 6, endTime: 8 },
+    ],
+    format: false,
+    translationPreviousShift: 1,
+  });
+  assert.equal(preview.text, 'Before From the screen');
+});
+
+test('review translation buttons are available only when a press changes the lines', () => {
+  const lines = [
+    { text: 'Sign', startTime: 0, endTime: 30 },
+    { text: 'Before', startTime: 6, endTime: 8 },
+  ];
+  const base = {
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'From the screen',
+    initialTranslationLines: [],
+    translationLines: lines,
+    format: false,
+  };
+  // The long sign starts first but runs past the clip, so it is no earlier line.
+  const added = buildMediaTimingReviewTranslationPreview({ ...base, translationPreviousShift: 1 });
+  assert.equal(added.canAddPrevious, false);
+  assert.equal(added.canRemovePrevious, true);
+  assert.equal(
+    buildMediaTimingReviewTranslationPreview({ ...base, translationPreviousShift: 2 }).text,
+    'Before From the screen',
+  );
+});
+
+test('review translation buttons skip a background line no dialogue line has', () => {
+  // Bocchi the Rock! ep. 1 at 00:33: a TV line runs alongside the narration.
+  const own = {
+    text: 'With no club activity, she comes straight home.',
+    startTime: 30.3,
+    endTime: 33.72,
+  };
+  const tv = { text: "And here, we'll stir-fry it a bit.", startTime: 33.72, endTime: 36.85 };
+  const narration = { text: 'The only messages she receives…', startTime: 35.35, endTime: 40.94 };
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '部活も入らず 放課後は即帰宅',
+    originalStartTime: 30.343,
+    originalEndTime: 33.68,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: own.text,
+    initialTranslationLines: [own],
+    translationLines: [own, tv, narration],
+    lineTranslations: [
+      { text: '部活も入らず 放課後は即帰宅', startTime: 30.343, endTime: 33.68, lines: [own] },
+      { text: '（テレビ番組の音声）', startTime: 33.764, endTime: 34.681, lines: [tv] },
+      {
+        text: '（ひとり）スマホに届くのは',
+        startTime: 35.474,
+        endTime: 36.808,
+        lines: [narration],
+      },
+    ],
+    format: false,
+    translationNextShift: 1,
+  });
+  assert.equal(preview.text, `${own.text} ${narration.text}`);
 });
