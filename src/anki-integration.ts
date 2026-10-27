@@ -81,6 +81,7 @@ import type {
   PendingYoutubeMediaQueueReadyOptions,
 } from './anki-integration/pending-youtube-media-queue';
 import { resolveMpvVolumeScale } from './anki-integration/mpv-volume';
+import { cleanSentenceFuriganaText, cleanSentenceText } from './shared/subtitle-speaker-labels';
 
 const log = createLogger('anki').child('integration');
 
@@ -982,9 +983,10 @@ export class AnkiIntegration {
   }
 
   private processSentenceFurigana(
-    sentenceFurigana: string,
+    rawSentenceFurigana: string,
     noteFields: Record<string, string>,
   ): string {
+    const sentenceFurigana = cleanSentenceFuriganaText(rawSentenceFurigana, this.config.behavior);
     if (this.config.behavior?.highlightWord === false) {
       return sentenceFurigana;
     }
@@ -1809,6 +1811,8 @@ export class AnkiIntegration {
     }
     return await this.mediaTimingReviewCallback({
       ...request,
+      text: cleanSentenceText(request.text, this.config.behavior),
+      stripSpeakerLabels: this.config.behavior?.stripSpeakerLabels !== false,
       audioPadding: Math.max(0, this.config.media.audioPadding ?? 0),
       maxMediaDuration: Math.max(0, this.config.media.maxMediaDuration ?? 30),
       screenshotEnabled:

@@ -371,6 +371,7 @@ Creates and updates Anki cards with sentence, audio, and screenshot. Needs the [
 | `ankiConnect.behavior.overwriteImage`     | `true`      | Replace existing images. When off, add alongside them                    |
 | `ankiConnect.behavior.mediaInsertMode`    | `"append"`  | `append` or `prepend` when not overwriting                               |
 | `ankiConnect.behavior.highlightWord`      | `true`      | Bold the mined word in the sentence field                                |
+| `ankiConnect.behavior.stripSpeakerLabels` | `true`      | Drop bracketed speaker names like `（ひとり）` from mined sentences      |
 | `ankiConnect.behavior.notificationType`   | `"overlay"` | Where mining and status messages go: `overlay`, `system`, `both`, `none` |
 
 **Known words and N+1**

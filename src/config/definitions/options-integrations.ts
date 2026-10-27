@@ -168,6 +168,13 @@ export function buildIntegrationConfigOptionRegistry(
       description: 'Bold the mined word inside the sentence field on the saved Anki card.',
     },
     {
+      path: 'ankiConnect.behavior.stripSpeakerLabels',
+      kind: 'boolean',
+      defaultValue: defaultConfig.ankiConnect.behavior.stripSpeakerLabels,
+      description:
+        'Remove speaker names and annotations in brackets at the start of a subtitle line, such as （ひとり）, from the sentence on the saved Anki card and in the review preview.',
+    },
+    {
       path: 'ankiConnect.behavior.notificationType',
       kind: 'enum',
       enumValues: NOTIFICATION_TYPE_VALUES,

@@ -1187,3 +1187,72 @@ test('waveform reports a stale review when the review ends during analysis', asy
   );
   await pendingDecision;
 });
+
+describe('buildMediaTimingReviewPayload speaker labels', () => {
+  const request = {
+    kind: 'word' as const,
+    text: '部活も入らず',
+    startTime: 10,
+    endTime: 12,
+    audioPadding: 0,
+    maxMediaDuration: 30,
+  };
+  const contextLines = {
+    previous: [{ text: '（園児）せんせー', startTime: 7, endTime: 9 }],
+    next: [{ text: '（ひとり）\n放課後は即帰宅', startTime: 13, endTime: 15 }],
+  };
+
+  test('strips labels from adjacent lines when requested', () => {
+    const payload = buildMediaTimingReviewPayload(
+      { ...request, stripSpeakerLabels: true },
+      { reviewId: 'review-labels', contextLines },
+    );
+
+    assert.deepEqual(
+      payload.previousLines.map((line) => line.text),
+      ['せんせー'],
+    );
+    assert.deepEqual(
+      payload.nextLines.map((line) => line.text),
+      ['放課後は即帰宅'],
+    );
+  });
+
+  test('drops adjacent cues that consist only of a label', () => {
+    const payload = buildMediaTimingReviewPayload(
+      { ...request, stripSpeakerLabels: true },
+      {
+        reviewId: 'review-labels',
+        contextLines: {
+          previous: [
+            { text: 'せんせー', startTime: 5, endTime: 6 },
+            { text: '（拍手）', startTime: 7, endTime: 9 },
+          ],
+          next: [
+            { text: '（歓声）', startTime: 13, endTime: 14 },
+            { text: 'ただいま', startTime: 14, endTime: 15 },
+          ],
+        },
+      },
+    );
+
+    assert.deepEqual(
+      payload.previousLines.map((line) => line.text),
+      ['せんせー'],
+    );
+    assert.deepEqual(
+      payload.nextLines.map((line) => line.text),
+      ['ただいま'],
+    );
+  });
+
+  test('keeps adjacent lines untouched otherwise', () => {
+    const payload = buildMediaTimingReviewPayload(request, {
+      reviewId: 'review-labels',
+      contextLines,
+    });
+
+    assert.equal(payload.previousLines[0]?.text, '（園児）せんせー');
+    assert.equal(payload.nextLines[0]?.text, '（ひとり）\n放課後は即帰宅');
+  });
+});

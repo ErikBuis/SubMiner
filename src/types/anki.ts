@@ -23,6 +23,8 @@ export interface MediaTimingReviewRequest {
   maxMediaDuration: number;
   /** Still screenshots only; animated images continue to follow the audio range. */
   screenshotEnabled?: boolean;
+  /** Strip leading speaker labels from the adjacent lines offered by the review. */
+  stripSpeakerLabels?: boolean;
 }
 
 /** A subtitle line adjacent to the mined one that the review can pull onto the card. */
@@ -208,6 +210,7 @@ export interface AnkiConnectConfig {
     overwriteImage?: boolean;
     mediaInsertMode?: 'append' | 'prepend';
     highlightWord?: boolean;
+    stripSpeakerLabels?: boolean;
     notificationType?: NotificationType;
     autoUpdateNewCards?: boolean;
   };
