@@ -53,6 +53,16 @@ test('classifyConfigHotReloadDiff separates hot and restart-required fields', ()
   assert.deepEqual(diff.restartRequiredFields, ['websocket.port']);
 });
 
+test('classifyConfigHotReloadDiff keeps the word splitting leaf so tokens are invalidated', () => {
+  const next = deepCloneConfig(DEFAULT_CONFIG);
+  next.subtitleStyle.morphologyGuidedSplitting =
+    !DEFAULT_CONFIG.subtitleStyle.morphologyGuidedSplitting;
+
+  const diff = classifyConfigHotReloadDiff(DEFAULT_CONFIG, next);
+  assert.deepEqual(diff.hotReloadFields, ['subtitleStyle.morphologyGuidedSplitting']);
+  assert.deepEqual(diff.restartRequiredFields, []);
+});
+
 test('classifyConfigHotReloadDiff treats safe nested config paths as hot-reloadable', () => {
   const prev = deepCloneConfig(DEFAULT_CONFIG);
   const next = deepCloneConfig(DEFAULT_CONFIG);

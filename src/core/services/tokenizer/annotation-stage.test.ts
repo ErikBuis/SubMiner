@@ -327,6 +327,26 @@ test('annotateTokens reading fallback still matches kana surfaces with complete 
   assert.equal(result[0]?.isKnown, true);
 });
 
+test('annotateTokens reading fallback matches a kana word stretched with a wave dash', () => {
+  const tokens = [
+    makeToken({
+      surface: 'か～くれんぼ',
+      headword: '隠れん坊',
+      reading: 'かくれんぼ',
+      endPos: 6,
+    }),
+  ];
+
+  const result = annotateTokens(
+    tokens,
+    makeDeps({
+      isKnownWord: (text) => text === 'かくれんぼ',
+    }),
+  );
+
+  assert.equal(result[0]?.isKnown, true);
+});
+
 test('annotateTokens excludes frequency for particle/bound_auxiliary and pos1 exclusions', () => {
   const tokens = [
     makeToken({

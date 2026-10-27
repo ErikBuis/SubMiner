@@ -46,7 +46,17 @@ const HOT_RELOAD_EXACT_OR_PREFIX_PATHS = [
   'ankiConnect.lapisKiku.wordCardKind',
 ] as const;
 
+// Leaves under a hot-reload root whose consumers need to see the exact field,
+// such as settings that change how subtitles are tokenized.
+const HOT_RELOAD_LEAF_PATHS = ['subtitleStyle.morphologyGuidedSplitting'] as const;
+
 export function getConfigHotReloadField(path: string): string | null {
+  for (const leafPath of HOT_RELOAD_LEAF_PATHS) {
+    if (pathStartsWith(path, leafPath)) {
+      return leafPath;
+    }
+  }
+
   for (const root of HOT_RELOAD_ROOTS) {
     if (pathStartsWith(path, root)) {
       return root;

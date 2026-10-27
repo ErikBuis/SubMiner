@@ -93,6 +93,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { MecabTokenizer } from './mecab-tokenizer';
+import { createKuromojiMorphologyGuideRuntime } from './core/services/tokenizer/morphology-guide';
 import type {
   JimakuApiResponse,
   KikuFieldGroupingChoice,
@@ -2847,6 +2848,9 @@ const characterDictionaryAutoSyncRuntime = createCharacterDictionaryAutoSyncRunt
   },
 });
 
+const morphologyGuideRuntime = createKuromojiMorphologyGuideRuntime({
+  logWarn: (message) => logger.warn(message),
+});
 const characterDictionaryImageLookup = createCharacterDictionaryImageLookup({
   userDataPath: USER_DATA_PATH,
   getCurrentMediaId: () => characterDictionaryAutoSyncRuntime.getCurrentMediaId(),
@@ -5125,6 +5129,10 @@ const {
       getFrequencyRank: (text) => appState.frequencyRankLookup(text),
       getYomitanGroupDebugEnabled: () => appState.overlayDebugVisualizationEnabled,
       getMecabTokenizer: () => appState.mecabTokenizer,
+      getMorphologyGuide: (text) =>
+        configService.getConfig().subtitleStyle.morphologyGuidedSplitting
+          ? morphologyGuideRuntime.buildGuide(text)
+          : Promise.resolve(null),
       onTokenizationReady: () => {
         currentMediaTokenizationGate.markReady(
           appState.currentMediaPath?.trim() || appState.mpvClient?.currentVideoPath?.trim() || null,
@@ -5170,7 +5178,14 @@ const {
         backgroundWarmupsStarted = started;
       },
       isTexthookerOnlyMode: () => appState.texthookerOnlyMode,
-      ensureYomitanExtensionLoaded: () => ensureYomitanExtensionLoaded().then(() => {}),
+      ensureYomitanExtensionLoaded: () => {
+        // Low-power mode leaves the analyzer to load on the first subtitle.
+        const config = configService.getConfig();
+        if (config.subtitleStyle.morphologyGuidedSplitting && !config.startupWarmups.lowPowerMode) {
+          morphologyGuideRuntime.warmup();
+        }
+        return ensureYomitanExtensionLoaded().then(() => {});
+      },
       shouldWarmupMecab: () => {
         const startupWarmups = configService.getConfig().startupWarmups;
         if (startupWarmups.lowPowerMode) {

@@ -97,6 +97,11 @@ export function createBuildTokenizerDepsMainHandler(deps: TokenizerMainDeps) {
     getFrequencyRank: (text: string) => deps.getFrequencyRank(text),
     getYomitanGroupDebugEnabled: () => deps.getYomitanGroupDebugEnabled(),
     getMecabTokenizer: () => deps.getMecabTokenizer(),
+    ...(deps.getMorphologyGuide
+      ? {
+          getMorphologyGuide: (text: string) => deps.getMorphologyGuide!(text),
+        }
+      : {}),
     onTokenizationReady: (text: string) => deps.onTokenizationReady?.(text),
   });
 }

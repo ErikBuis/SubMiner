@@ -27,6 +27,7 @@ import {
   normalizeKana,
   normalizePosTag,
   splitPosTag,
+  stripKanaStretchMarks,
 } from './token-classification';
 
 const JLPT_LEVEL_LOOKUP_CACHE_LIMIT = 2048;
@@ -528,9 +529,10 @@ export function stripSubtitleAnnotationMetadata(
 // 待ち合わせてる); matching those against known words produces false positives,
 // so the reading fallback requires a reading that plausibly covers the surface:
 // at least as many characters as the surface, with the surface's kana appearing
-// in order within the reading.
+// in order within the reading. A wave dash stretching a kana (か～くれんぼ,
+// read かくれんぼ) has no counterpart in the reading, so it is not counted.
 function isCompleteReadingForSurface(surface: string, reading: string): boolean {
-  const surfaceChars = [...normalizeKana(surface)];
+  const surfaceChars = [...stripKanaStretchMarks(normalizeKana(surface))];
   const readingChars = [...normalizeKana(reading)];
   if (readingChars.length < surfaceChars.length) {
     return false;
