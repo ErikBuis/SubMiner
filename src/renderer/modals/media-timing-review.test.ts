@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildMediaTimingReviewTranslation,
+  buildMediaTimingReviewTranslationPreview,
   buildMediaTimingLineSelection,
   buildMediaTimingWaveformPath,
   constrainMediaTimingSelection,
@@ -371,4 +372,86 @@ test('an added line whose secondary text is its own text adds no translation', (
     }),
     '',
   );
+});
+
+test('review translation shifts add and drop secondary lines at either end', () => {
+  const lines = [
+    { text: 'Two before,', startTime: 4, endTime: 6 },
+    { text: 'one before,', startTime: 6, endTime: 8 },
+    { text: 'the mined line', startTime: 8, endTime: 10 },
+    { text: 'and after.', startTime: 10, endTime: 12 },
+  ];
+  const base = {
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'The mined line',
+    initialTranslationLines: [lines[2]!],
+    translationLines: lines,
+    format: false,
+  };
+  const unchanged = buildMediaTimingReviewTranslationPreview(base);
+  assert.equal(unchanged.text, 'The mined line');
+  assert.deepEqual(
+    [
+      unchanged.canAddPrevious,
+      unchanged.canRemovePrevious,
+      unchanged.canAddNext,
+      unchanged.canRemoveNext,
+    ],
+    [true, false, true, false],
+  );
+
+  const widened = buildMediaTimingReviewTranslationPreview({
+    ...base,
+    translationPreviousShift: 5,
+    translationNextShift: 1,
+  });
+  assert.equal(widened.text, 'Two before, one before, the mined line and after.');
+  // Shifts past the available lines are clamped, so one press takes them back.
+  assert.equal(widened.previousShift, 2);
+  assert.equal(widened.canAddPrevious, false);
+  assert.equal(widened.canAddNext, false);
+
+  // Dropping lines keeps at least one.
+  const narrowed = buildMediaTimingReviewTranslationPreview({
+    ...base,
+    initialTranslationLines: [lines[1]!, lines[2]!],
+    translationPreviousShift: -1,
+    translationNextShift: -1,
+  });
+  assert.equal(narrowed.text, 'the mined line');
+  assert.equal(narrowed.previousShift, -1);
+  assert.equal(narrowed.nextShift, 0);
+  assert.equal(narrowed.canRemovePrevious, false);
+  assert.equal(narrowed.canRemoveNext, false);
+});
+
+test('review translation shifts keep a translation taken from the screen in the middle', () => {
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'From the screen',
+    initialTranslationLines: [],
+    translationLines: [
+      { text: 'Before', startTime: 6, endTime: 8 },
+      { text: 'overlapping', startTime: 8, endTime: 10 },
+      { text: 'after', startTime: 10, endTime: 12 },
+    ],
+    format: false,
+    translationPreviousShift: 1,
+    translationNextShift: 1,
+  });
+  assert.equal(preview.text, 'Before From the screen after');
+  assert.equal(preview.canRemovePrevious, true);
+  assert.equal(preview.canAddNext, false);
 });
