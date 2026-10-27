@@ -180,6 +180,7 @@ Controls how primary and secondary subtitles look and which annotations they sho
 | `subtitleStyle.nPlusOneColor`                    | `#c6a0f6`    | N+1 target word color                                                                                 |
 | `subtitleStyle.enableJlpt`                       | `false`      | Underline words by JLPT level                                                                         |
 | `subtitleStyle.jlptColors`                       | see example  | Underline colors for `N1` to `N5`                                                                     |
+| `subtitleStyle.morphologyGuidedSplitting`        | `true`       | Fix word boundaries with a bundled morphological analyzer ([details](/subtitle-annotations))          |
 | `subtitleStyle.nameMatchEnabled`                 | `false`      | Sync the character dictionary and color character names                                               |
 | `subtitleStyle.nameMatchImagesEnabled`           | `false`      | Show small character portraits next to matched names                                                  |
 | `subtitleStyle.nameMatchColor`                   | `#f5bde6`    | Character-name color                                                                                  |

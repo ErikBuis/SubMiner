@@ -4,6 +4,7 @@
 // script text (which is data, not executed here) does not dominate that file;
 // the helper bundle it embeds is composed in yomitan-scanning-helpers-script.ts
 // from the yomitan-*-script.ts fragments.
+import type { MorphologyGuide } from './morphology-guide';
 import { YOMITAN_SCANNING_HELPERS } from './yomitan-scanning-helpers-script';
 
 export { CHARACTER_DICTIONARY_TITLE_PREFIX } from './yomitan-scanning-helpers-script';
@@ -12,7 +13,7 @@ export type YomitanFrequencyMode = 'occurrence-based' | 'rank-based';
 
 // Bump whenever the install script below changes so already-loaded parser
 // windows re-install the new scan runtime instead of running the stale one.
-export const YOMITAN_SCAN_RUNTIME_VERSION = 13;
+export const YOMITAN_SCAN_RUNTIME_VERSION = 14;
 export const YOMITAN_SCAN_RUNTIME_MISSING_SENTINEL = '__subminer-yomitan-scan-runtime-missing__';
 
 export interface YomitanScanRequestParams {
@@ -30,6 +31,11 @@ export interface YomitanScanRequestParams {
    * or null to scan every Japanese position (see the pre-pass prefilter).
    */
   nameCandidateKey: string | null;
+  /**
+   * Word boundaries from a morphological analyzer, or null to keep the plain
+   * greedy longest-match walk (see applyMorphologyGuide below).
+   */
+  morphologyGuide?: MorphologyGuide | null;
 }
 
 // Installed once per parser window (and re-installed after in-page reloads):
@@ -131,7 +137,8 @@ export const YOMITAN_SCAN_RUNTIME_INSTALL_SCRIPT = String.raw`
         dictionaryPriorityByName,
         dictionaryFrequencyModeByName,
         cacheEpoch,
-        nameCandidateKey
+        nameCandidateKey,
+        morphologyGuide
       } = scanParams;
       if (cacheEpoch !== termsFindCacheEpoch) {
         termsFindCache.clear();
@@ -461,6 +468,166 @@ ${YOMITAN_SCANNING_HELPERS}
         }
         return null;
       }
+      // Morphology guide. The walk below takes the longest dictionary match at
+      // each position, which reads のメッセージ as のめす+ー+ジ and ヤツでした as
+      // ヤツデ+下. When the host passes the line's words from a morphological
+      // analyzer, a match that cuts into one of those words is retried with
+      // the window capped at the last word boundary inside it.
+      const guideWords = morphologyGuide && Array.isArray(morphologyGuide.words) ? morphologyGuide.words : null;
+      const guideBoundaries = new Set();
+      if (guideWords) {
+        for (const word of guideWords) {
+          guideBoundaries.add(word.start);
+          guideBoundaries.add(word.end);
+        }
+        for (const edge of morphologyGuide.morphemeEdges || []) { guideBoundaries.add(edge); }
+      }
+      function lastGuideBoundaryInside(start, end) {
+        let best = -1;
+        for (const boundary of guideBoundaries) {
+          if (boundary > start && boundary < end && boundary > best) { best = boundary; }
+        }
+        return best;
+      }
+      function isGrammarGuideWord(word) {
+        return word.pos1 === "助動詞" || word.pos1 === "助詞";
+      }
+      function guideWordContaining(offset) {
+        return guideWords.find((word) => word.start <= offset && word.end > offset);
+      }
+      // A particle right before the cut (の in のメッセ) or a grammar word right
+      // after it (でし in ヤツデ). Connective て/で stay out: they belong to the
+      // verb form before them (悩んで+いた).
+      function isSwallowedGrammarCut(cut) {
+        const before = guideWordContaining(cut - 1);
+        const after = guideWordContaining(cut);
+        const isGrammar = (word) => word && isGrammarGuideWord(word) && word.pos2 !== "接続助詞";
+        return isGrammar(before) || isGrammar(after);
+      }
+      function hasWordClassPrefix(wordClasses, prefix) {
+        return Array.isArray(wordClasses) &&
+          wordClasses.some((wordClass) => typeof wordClass === "string" && wordClass.startsWith(prefix));
+      }
+      // A verb or adjective followed by the nominalizer ん/の (いい+ん, 来る+の)
+      // that the dictionary reads as one unrelated noun (いいん as 医院).
+      // Other dependent nouns stay glued: 言うとおり is a real expression.
+      function gluesInflectableOntoDependentNoun(position, end, wordClasses) {
+        const covered = guideWords.filter((word) => word.start < end && word.end > position);
+        const first = covered[0];
+        const second = covered[1];
+        if (!first || !second || first.start !== position) { return false; }
+        if (second.pos1 !== "名詞" || second.pos2 !== "非自立") { return false; }
+        const nominalizer = text.substring(second.start, second.end);
+        if (nominalizer !== "ん" && nominalizer !== "の") { return false; }
+        if (first.pos1 === "動詞") { return !hasWordClassPrefix(wordClasses, "v"); }
+        if (first.pos1 === "形容詞") { return !hasWordClassPrefix(wordClasses, "adj"); }
+        return false;
+      }
+      function grammarWordToken(word) {
+        const surface = text.substring(word.start, word.end);
+        return {
+          token: {
+            surface,
+            reading: word.reading || "",
+            headword: word.headword || surface,
+            startPos: word.start,
+            endPos: word.end,
+            isNameMatch: false
+          },
+          matchedLength: word.end - word.start
+        };
+      }
+      async function applyMorphologyGuide(position, attempt) {
+        if (!guideWords || !attempt.token || attempt.token.isNameMatch) { return attempt; }
+        let current = attempt;
+        // Each retry shrinks the window, so a handful of rounds always settles.
+        for (let round = 0; round < 4 && current.token; round += 1) {
+          const end = position + current.matchedLength;
+          // A grammar word the match only partly covers (でし read as 弟子
+          // inside でした) is taken as the analyzer's word.
+          const wordHere = guideWords.find((word) => word.start === position);
+          if (wordHere && end < wordHere.end && isGrammarGuideWord(wordHere)) {
+            return grammarWordToken(wordHere);
+          }
+          let cap = -1;
+          if (!guideBoundaries.has(end)) {
+            // Only cut when the dictionary agrees on the word the match cut
+            // into (its own longest match there ends on a boundary at or past
+            // this one) and the cut looks like a real misreading: the match
+            // swallowed a particle or the start of a grammar word (の+メッセ,
+            // ヤツ+デ), or the word it cut into is at least as long as the
+            // match itself. The analyzer misreads kana spellings often enough
+            // (ひとり+ぼっ+ちの) that its boundary alone is not a reason to
+            // split a longer dictionary word.
+            const nextStart = lastGuideBoundaryInside(position, end);
+            if (nextStart > position) {
+              const next = await resolveTokenAt(nextStart, scanLength);
+              const nextEnd = nextStart + next.matchedLength;
+              if (
+                next.token &&
+                nextEnd >= end &&
+                guideBoundaries.has(nextEnd) &&
+                (isSwallowedGrammarCut(nextStart) || next.matchedLength >= current.matchedLength)
+              ) {
+                cap = nextStart;
+              }
+            }
+          } else if (gluesInflectableOntoDependentNoun(position, end, current.token.wordClasses)) {
+            cap = guideWords.find((word) => word.start === position).end;
+          }
+          if (cap <= position) { break; }
+          const retry = await resolveTokenAt(position, cap - position);
+          if (!retry.token) { break; }
+          current = retry;
+        }
+        return current;
+      }
+      // A wave dash between kana stretches a sound (か～くれんぼ, バイバ～イ).
+      // Yomitan only collapses repeated ー and small kana, so look the word up
+      // with those dashes removed and map the match back onto the line.
+      const WAVE_DASHES = new Set(["～", "〜"]);
+      async function applyWaveDashElongation(position, attempt) {
+        if (!guideWords) { return attempt; }
+        const chars = Array.from(text.substring(position, position + scanLength + 4));
+        let squeezed = "";
+        const lineLengthAfter = [0];
+        let lineLength = 0;
+        let removedDash = false;
+        for (let index = 0; index < chars.length; index += 1) {
+          const char = chars[index];
+          lineLength += char.length;
+          const isStretch =
+            WAVE_DASHES.has(char) &&
+            index > 0 &&
+            index + 1 < chars.length &&
+            isCodePointKana(chars[index - 1].codePointAt(0)) &&
+            isCodePointKana(chars[index + 1].codePointAt(0));
+          if (isStretch) {
+            removedDash = true;
+            continue;
+          }
+          squeezed += char;
+          lineLengthAfter[squeezed.length] = lineLength;
+        }
+        if (!removedDash) { return attempt; }
+        const result = await invoke("termsFind", { text: squeezed, details, optionsContext: { index: profileIndex } });
+        const dictionaryEntries = Array.isArray(result?.dictionaryEntries) ? result.dictionaryEntries : [];
+        const squeezedLength = typeof result?.originalTextLength === "number" ? result.originalTextLength : 0;
+        const matchedLength = squeezedLength > 0 ? lineLengthAfter[squeezedLength] : 0;
+        if (!matchedLength || matchedLength <= (attempt.token ? attempt.matchedLength : 0)) { return attempt; }
+        const source = squeezed.substring(0, squeezedLength);
+        const preferredHeadword = getPreferredHeadword(
+          dictionaryEntries,
+          source,
+          dictionaryPriorityByName,
+          dictionaryFrequencyModeByName
+        );
+        if (!preferredHeadword || typeof preferredHeadword.term !== "string") { return attempt; }
+        const token = buildScanToken(position, source, preferredHeadword);
+        token.surface = text.substring(position, position + matchedLength);
+        token.endPos = position + matchedLength;
+        return { token, matchedLength };
+      }
       let i = 0;
       let nameIndex = 0;
       let unparsedRunStart = null;
@@ -497,6 +664,8 @@ ${YOMITAN_SCANNING_HELPERS}
             attempt = await resolveTokenAt(i, splitNameToken.startPos - i);
           }
         }
+        attempt = await applyWaveDashElongation(i, attempt);
+        attempt = await applyMorphologyGuide(i, attempt);
         if (attempt.token) {
           flushUnparsedRun(unparsedRunStart, i);
           unparsedRunStart = null;

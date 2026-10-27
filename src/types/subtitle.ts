@@ -98,6 +98,7 @@ export interface SubtitleStyleConfig {
   hoverTokenColor?: string;
   hoverTokenBackgroundColor?: string;
   nameMatchEnabled?: boolean;
+  morphologyGuidedSplitting?: boolean;
   nameMatchImagesEnabled?: boolean;
   nameMatchColor?: string;
   fontFamily?: string;

@@ -374,6 +374,7 @@ function categoryAndSection(path: string): { category: ConfigSettingsCategory; s
     path.startsWith('subtitleStyle.jlptColors.') ||
     path.startsWith('subtitleStyle.knownWordMaturityColors.') ||
     path === 'subtitleStyle.enableJlpt' ||
+    path === 'subtitleStyle.morphologyGuidedSplitting' ||
     path === 'subtitleStyle.knownWordColor' ||
     path === 'subtitleStyle.nPlusOneColor' ||
     path === 'subtitleStyle.nameMatchEnabled' ||

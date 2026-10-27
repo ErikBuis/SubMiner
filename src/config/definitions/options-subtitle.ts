@@ -120,6 +120,13 @@ export function buildSubtitleConfigOptionRegistry(
       description: 'CSS color used for hovered subtitle token background highlight in mpv.',
     },
     {
+      path: 'subtitleStyle.morphologyGuidedSplitting',
+      kind: 'boolean',
+      defaultValue: defaultConfig.subtitleStyle.morphologyGuidedSplitting,
+      description:
+        'Use a bundled Japanese morphological analyzer to correct where subtitle words begin and end (の+メッセージ instead of のめす+ー+ジ).',
+    },
+    {
       path: 'subtitleStyle.nameMatchEnabled',
       kind: 'boolean',
       defaultValue: defaultConfig.subtitleStyle.nameMatchEnabled,

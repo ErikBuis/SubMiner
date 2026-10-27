@@ -131,6 +131,8 @@ export function applySubtitleDomainConfig(context: ResolveContext): void {
     const fallbackSubtitleStyleHoverTokenBackgroundColor =
       resolved.subtitleStyle.hoverTokenBackgroundColor;
     const fallbackSubtitleStyleNameMatchEnabled = resolved.subtitleStyle.nameMatchEnabled;
+    const fallbackSubtitleStyleMorphologyGuidedSplitting =
+      resolved.subtitleStyle.morphologyGuidedSplitting;
     const fallbackSubtitleStyleNameMatchImagesEnabled =
       resolved.subtitleStyle.nameMatchImagesEnabled;
     const fallbackSubtitleStyleNameMatchColor = resolved.subtitleStyle.nameMatchColor;
@@ -350,6 +352,25 @@ export function applySubtitleDomainConfig(context: ResolveContext): void {
         'subtitleStyle.nameMatchEnabled',
         (src.subtitleStyle as { nameMatchEnabled?: unknown }).nameMatchEnabled,
         resolved.subtitleStyle.nameMatchEnabled,
+        'Expected boolean.',
+      );
+    }
+
+    const morphologyGuidedSplitting = asBoolean(
+      (src.subtitleStyle as { morphologyGuidedSplitting?: unknown }).morphologyGuidedSplitting,
+    );
+    if (morphologyGuidedSplitting !== undefined) {
+      resolved.subtitleStyle.morphologyGuidedSplitting = morphologyGuidedSplitting;
+    } else if (
+      (src.subtitleStyle as { morphologyGuidedSplitting?: unknown }).morphologyGuidedSplitting !==
+      undefined
+    ) {
+      resolved.subtitleStyle.morphologyGuidedSplitting =
+        fallbackSubtitleStyleMorphologyGuidedSplitting;
+      warn(
+        'subtitleStyle.morphologyGuidedSplitting',
+        (src.subtitleStyle as { morphologyGuidedSplitting?: unknown }).morphologyGuidedSplitting,
+        resolved.subtitleStyle.morphologyGuidedSplitting,
         'Expected boolean.',
       );
     }

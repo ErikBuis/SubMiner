@@ -4,6 +4,8 @@ SubMiner can color and underline words in the subtitle overlay: words you alread
 
 Yomitan splits the subtitle into words, so your installed Yomitan dictionaries and their order decide where word boundaries fall. Grammar words such as particles (`は`), auxiliaries (`です`), and endings like `んです` stay hoverable but never get annotation colors.
 
+Yomitan on its own takes the longest dictionary match at each position, which can swallow the start of the next word: `のメッセージ` would split as `のメッセ` (のめす) + `ー` + `ジ`. With `subtitleStyle.morphologyGuidedSplitting` on, a bundled Japanese morphological analyzer (kuromoji with the IPA dictionary, no install needed) checks those boundaries and SubMiner retries a match that cuts into the next word. A wave dash between kana is read as a stretched sound, so `か～くれんぼ` is one word. Every annotation layer below uses these words, and so does the hover highlight. Hovering any character still looks up from that character.
+
 Defaults for every key below are in the [configuration reference](/configuration).
 
 ## Known words {#known-words}

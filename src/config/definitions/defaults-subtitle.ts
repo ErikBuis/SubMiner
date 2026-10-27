@@ -11,6 +11,7 @@ export const SUBTITLE_DEFAULT_CONFIG: Pick<ResolvedConfig, 'subtitleStyle' | 'su
     primaryVisibleOnYomitanPopup: true,
     hoverTokenColor: '#f4dbd6',
     hoverTokenBackgroundColor: 'transparent',
+    morphologyGuidedSplitting: true,
     nameMatchEnabled: false,
     nameMatchImagesEnabled: false,
     nameMatchColor: '#f5bde6',
