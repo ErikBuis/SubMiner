@@ -482,11 +482,8 @@ export function alignSentenceTranslation(options: {
 }
 
 const TRAILING_CLOSERS = ['"', "'", ')', ']', '”', '’', '）', '」', '』'];
-const TRAILING_COMMAS: Array<[string, string]> = [
-  [',', '.'],
-  ['、', '。'],
-  ['，', '。'],
-];
+const TRAILING_COMMAS = [',', '、', '，'];
+const CONTINUATION_MARK = '(...)';
 
 /** Subtitle lines often start lowercase because they continue the previous line. */
 /** Skips leading tags and opening quotes or brackets, but not a continuation's "...". */
@@ -499,10 +496,10 @@ function capitalizeFirstLetter(text: string): string {
 
 /**
  * A line cut off mid-sentence ends in a comma ("Lost in that thought,"). On a card it
- * stands alone, so the trailing comma becomes a full stop. Closing quotes, brackets and
- * HTML tags after the comma stay where they are.
+ * stands alone, so it gets a "(...)" to show the sentence goes on: "Lost in that thought,
+ * (...)". Closing quotes, brackets and HTML tags after the comma stay before the mark.
  */
-function closeSentence(text: string): string {
+function markContinuation(text: string): string {
   let body = text;
   let tail = '';
   for (;;) {
@@ -514,12 +511,11 @@ function closeSentence(text: string): string {
     tail = piece + tail;
     body = body.slice(0, body.length - piece.length);
   }
-  for (const [comma, stop] of TRAILING_COMMAS) {
-    if (body.endsWith(comma)) {
-      return body.slice(0, body.length - comma.length) + stop + tail;
-    }
-  }
-  return text;
+  const comma = TRAILING_COMMAS.find((candidate) => body.endsWith(candidate));
+  if (!comma) return text;
+  // Full-width commas sit flush against the mark, like other CJK punctuation.
+  const separator = comma === ',' ? ' ' : '';
+  return text.trimEnd() + separator + CONTINUATION_MARK;
 }
 
 /**
@@ -529,5 +525,5 @@ function closeSentence(text: string): string {
 export function formatCardTranslation(text: string): string {
   const singleLine = text.replace(/\s+/g, ' ').trim();
   if (!singleLine) return '';
-  return closeSentence(capitalizeFirstLetter(singleLine));
+  return markContinuation(capitalizeFirstLetter(singleLine));
 }
