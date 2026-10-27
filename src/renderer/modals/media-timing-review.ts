@@ -966,11 +966,18 @@ export function createMediaTimingReviewModal(
     return false;
   }
 
-  function wireDomEvents(): void {
-    shieldYomitanHoverScan(
+  /**
+   * Must run synchronously at renderer load: the shield only works while it is
+   * registered ahead of Yomitan's scanner, which hooks up after its own async setup.
+   */
+  function shieldYomitanHover(): () => void {
+    return shieldYomitanHoverScan(
       ctx.dom.mediaTimingReviewModal,
       () => ctx.state.mediaTimingReviewModalOpen,
     );
+  }
+
+  function wireDomEvents(): void {
     ctx.dom.mediaTimingReviewFrameSlider.addEventListener('input', () => {
       if (!resolveInFlight) framePicker.choose(Number(ctx.dom.mediaTimingReviewFrameSlider.value));
     });
@@ -1057,6 +1064,7 @@ export function createMediaTimingReviewModal(
     handlePreviewPosition,
     requestCancel,
     handleMediaTimingReviewKeydown,
+    shieldYomitanHover,
     wireDomEvents,
   };
 }
