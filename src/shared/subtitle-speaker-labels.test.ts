@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  cleanSentenceFuriganaText,
   cleanSentenceText,
   removeSpeakerLabels,
   stripSpeakerLabels,
@@ -55,4 +56,21 @@ test('cleanSentenceText respects the behavior flag', () => {
     cleanSentenceText('（ひとり）ただいま', { stripSpeakerLabels: false }),
     '（ひとり）ただいま',
   );
+});
+
+test('cleanSentenceFuriganaText strips labels from bracket furigana only', () => {
+  assert.equal(
+    cleanSentenceFuriganaText('（ひとり）スマホに 届[とど]くのは', undefined),
+    'スマホに 届[とど]くのは',
+  );
+  assert.equal(
+    cleanSentenceFuriganaText('（ 園児[えんじ]） 先生[せんせい]', undefined),
+    '先生[せんせい]',
+  );
+  assert.equal(
+    cleanSentenceFuriganaText('（ひとり）スマホに 届[とど]くのは', { stripSpeakerLabels: false }),
+    '（ひとり）スマホに 届[とど]くのは',
+  );
+  const markup = '<span class="term">（ひとり）</span>';
+  assert.equal(cleanSentenceFuriganaText(markup, undefined), markup);
 });

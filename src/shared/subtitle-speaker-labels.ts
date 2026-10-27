@@ -38,3 +38,14 @@ export function cleanSentenceText(
 ): string {
   return behavior?.stripSpeakerLabels === false ? text : stripSpeakerLabels(text);
 }
+
+/**
+ * Cleans a sentence furigana value kept from the note, such as `（ひとり）スマホに 届[とど]くのは`.
+ * Markup is left alone: a label wrapped in tags cannot be cut without unbalancing them.
+ */
+export function cleanSentenceFuriganaText(
+  furigana: string,
+  behavior: { stripSpeakerLabels?: boolean } | undefined,
+): string {
+  return furigana.includes('<') ? furigana : cleanSentenceText(furigana, behavior);
+}
