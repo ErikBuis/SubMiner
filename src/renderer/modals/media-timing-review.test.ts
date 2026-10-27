@@ -8,6 +8,7 @@ import {
   createMediaTimingPreviewRequestGuard,
   formatMediaTimingTimestamp,
   mediaTimingTimeFromPointer,
+  resolveMediaTimingReset,
   slideMediaTimingSelection,
   trimMediaTimingSelectionEnd,
 } from './media-timing-review';
@@ -371,4 +372,35 @@ test('an added line whose secondary text is its own text adds no translation', (
     }),
     '',
   );
+});
+
+test('timing reset restores the mined clip and view for the lines on the card', () => {
+  const base = {
+    lineStart: 10,
+    lineEnd: 16,
+    startPadSeconds: 0.2,
+    endPadSeconds: 0.4,
+    selectionStart: 12.8,
+    selectionEnd: 16.4,
+    timelineStart: 11,
+    timelineEnd: 18,
+    mediaEnd: 100,
+    maxMediaDuration: 0,
+  };
+
+  assert.deepEqual(resolveMediaTimingReset({ ...base, linesAdded: false }), {
+    start: 12.8,
+    end: 16.4,
+    timelineStart: 11,
+    timelineEnd: 18,
+  });
+  const added = resolveMediaTimingReset({ ...base, linesAdded: true });
+  assert.equal(added.start, 9.8);
+  assert.equal(added.end, 16.4);
+  assert.equal(added.timelineStart, 8.8);
+  assert.equal(added.timelineEnd, 18);
+  // Over the length limit the reset keeps its start, whatever the selection was before.
+  const capped = resolveMediaTimingReset({ ...base, linesAdded: true, maxMediaDuration: 5 });
+  assert.equal(capped.start, 9.8);
+  assert.equal(capped.end, 14.8);
 });

@@ -277,6 +277,49 @@ export function constrainMediaTimingSelection(options: {
   };
 }
 
+/**
+ * The clip and timeline view that Reset timing restores. With added lines the clip is the
+ * mined padding around those lines; a clip over the length limit keeps its start.
+ */
+export function resolveMediaTimingReset(options: {
+  linesAdded: boolean;
+  lineStart: number;
+  lineEnd: number;
+  startPadSeconds: number;
+  endPadSeconds: number;
+  selectionStart: number;
+  selectionEnd: number;
+  timelineStart: number;
+  timelineEnd: number;
+  mediaEnd: number;
+  maxMediaDuration: number;
+}): { start: number; end: number; timelineStart: number; timelineEnd: number } {
+  const start = options.linesAdded
+    ? Math.max(0, options.lineStart - options.startPadSeconds)
+    : options.selectionStart;
+  const end = options.linesAdded
+    ? Math.min(options.mediaEnd, options.lineEnd + options.endPadSeconds)
+    : options.selectionEnd;
+  const timelineStart =
+    start < options.timelineStart
+      ? Math.max(0, start - LINE_REVEAL_MARGIN_SECONDS)
+      : options.timelineStart;
+  const timelineEnd =
+    end > options.timelineEnd
+      ? Math.min(options.mediaEnd, end + LINE_REVEAL_MARGIN_SECONDS)
+      : options.timelineEnd;
+  const clip = constrainMediaTimingSelection({
+    nextStart: start,
+    nextEnd: end,
+    currentStart: start,
+    timelineStart,
+    timelineEnd,
+    mediaEnd: options.mediaEnd,
+    maxMediaDuration: options.maxMediaDuration,
+  });
+  return { ...clip, timelineStart, timelineEnd };
+}
+
 /** Maps a pointer position over the timeline track back onto a media timestamp. */
 export function mediaTimingTimeFromPointer(options: {
   clientX: number;
@@ -743,6 +786,36 @@ export function createMediaTimingReviewModal(
     if (timelineChanged) queueWaveformLoad(120);
   }
 
+  /**
+   * Restores the mined clip and timeline view for the lines now on the card. Added lines,
+   * the translation and the screenshot stay as they are.
+   */
+  function resetTiming(): void {
+    if (!payload || resolveInFlight) return;
+    const lines = currentLineSelection();
+    const reset = resolveMediaTimingReset({
+      linesAdded: previousCount > 0 || nextCount > 0,
+      lineStart: lines.rangeStart,
+      lineEnd: lines.rangeEnd,
+      startPadSeconds,
+      endPadSeconds,
+      selectionStart: payload.selectionStartTime,
+      selectionEnd: payload.selectionEndTime,
+      timelineStart: payload.timelineStartTime,
+      timelineEnd: payload.timelineEndTime,
+      mediaEnd: payload.mediaDuration ?? Number.POSITIVE_INFINITY,
+      maxMediaDuration: payload.maxMediaDuration,
+    });
+    const timelineChanged =
+      reset.timelineStart !== timelineStart || reset.timelineEnd !== timelineEnd;
+    timelineStart = reset.timelineStart;
+    timelineEnd = reset.timelineEnd;
+    // Anchor the constraint on the reset start, so earlier edits cannot change the result.
+    selectionStart = reset.start;
+    updateSelection(reset.start, reset.end);
+    if (timelineChanged) queueWaveformLoad(120);
+  }
+
   function updateSelection(nextStart: number, nextEnd: number): void {
     if (!payload) return;
     const mediaEnd = payload.mediaDuration ?? Number.POSITIVE_INFINITY;
@@ -1195,15 +1268,7 @@ export function createMediaTimingReviewModal(
       updateSelection(selectionStart, selectionEnd + FINE_ADJUST_SECONDS),
     );
     ctx.dom.mediaTimingReviewPlay.addEventListener('click', () => void togglePreview());
-    ctx.dom.mediaTimingReviewReset.addEventListener('click', () => {
-      if (!payload) return;
-      previousCount = 0;
-      nextCount = 0;
-      updateSelection(payload.selectionStartTime, payload.selectionEndTime);
-      renderSentence();
-      // Reset is about timing: a translation the user edited stays.
-      if (!translationEdited) setTranslation(payload.card?.translation?.text ?? '', false);
-    });
+    ctx.dom.mediaTimingReviewReset.addEventListener('click', () => resetTiming());
     ctx.dom.mediaTimingReviewTranslation.addEventListener('input', () => {
       if (translationEdited) return;
       translationEdited = true;
