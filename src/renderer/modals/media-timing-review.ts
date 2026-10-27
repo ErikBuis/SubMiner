@@ -773,6 +773,20 @@ export function createMediaTimingReviewModal(
     if (timelineChanged) queueWaveformLoad(120);
   }
 
+  /** Returns the review to how it opened: lines, translation, timing and screenshot. */
+  function resetAll(): void {
+    if (!payload || resolveInFlight) return;
+    previousCount = 0;
+    nextCount = 0;
+    renderSentence();
+    setTranslation(payload.card?.translation?.text ?? '', false);
+    resetTiming();
+    framePicker.reset();
+    // Trimming the trailing silence was part of how the review opened.
+    trailingTrimPending = true;
+    queueWaveformLoad();
+  }
+
   function updateSelection(nextStart: number, nextEnd: number): void {
     if (!payload) return;
     const mediaEnd = payload.mediaDuration ?? Number.POSITIVE_INFINITY;
@@ -907,6 +921,7 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewCancelStep.classList.add('hidden');
     ctx.dom.mediaTimingReviewEditor.classList.remove('hidden');
     ctx.dom.mediaTimingReviewCancel.classList.remove('hidden');
+    ctx.dom.mediaTimingReviewResetAll.classList.remove('hidden');
   }
 
   function requestCancel(): void {
@@ -914,6 +929,7 @@ export function createMediaTimingReviewModal(
     stopPreview();
     ctx.dom.mediaTimingReviewEditor.classList.add('hidden');
     ctx.dom.mediaTimingReviewCancel.classList.add('hidden');
+    ctx.dom.mediaTimingReviewResetAll.classList.add('hidden');
     ctx.dom.mediaTimingReviewCancelStep.classList.remove('hidden');
     ctx.dom.mediaTimingReviewCancelMessage.textContent =
       payload.noteId !== undefined
@@ -1226,6 +1242,7 @@ export function createMediaTimingReviewModal(
     );
     ctx.dom.mediaTimingReviewPlay.addEventListener('click', () => void togglePreview());
     ctx.dom.mediaTimingReviewReset.addEventListener('click', () => resetTiming());
+    ctx.dom.mediaTimingReviewResetAll.addEventListener('click', () => resetAll());
     ctx.dom.mediaTimingReviewTranslation.addEventListener('input', () => {
       if (translationEdited) return;
       translationEdited = true;
