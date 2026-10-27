@@ -998,6 +998,60 @@ test('NoteUpdateWorkflow shows the whole card in the review and saves its edited
   assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'My own translation.');
 });
 
+test('NoteUpdateWorkflow passes the note sentence furigana to the review', async () => {
+  const harness = createWordCardTranslationHarness();
+  const reviewRequests: Array<Pick<MediaTimingReviewRequest, 'card'>> = [];
+  harness.deps.client.notesInfo = async () => [
+    {
+      noteId: 42,
+      fields: {
+        Expression: { value: '野菜' },
+        Sentence: { value: '' },
+        SentenceFurigana: {
+          value:
+            ' 野菜[やさい]も<ruby class="x">入<rp>(</rp><rt>はい</rt><rp>)</rp></ruby>ってる<ruby>\n  よ\n<rt>よ</rt></ruby>',
+        },
+      },
+    },
+  ];
+  harness.deps.reviewMediaTiming = async (request) => {
+    reviewRequests.push(request);
+    return { action: 'use-original' };
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.equal(reviewRequests[0]?.card?.sentenceFurigana, '野菜[やさい]も 入[はい]ってる よ[よ]');
+});
+
+test('NoteUpdateWorkflow reads review sentence furigana from the configured field', async () => {
+  const harness = createWordCardTranslationHarness();
+  const reviewRequests: Array<Pick<MediaTimingReviewRequest, 'card'>> = [];
+  harness.deps.client.notesInfo = async () => [
+    {
+      noteId: 42,
+      fields: {
+        Expression: { value: '野菜' },
+        Sentence: { value: '' },
+        Furigana: { value: ' 野菜[やさい]も入ってるよ' },
+        SentenceFurigana: { value: 'unused' },
+      },
+    },
+  ];
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Sentence', sentenceFurigana: 'Furigana' },
+    media: { generateAudio: false, generateImage: false },
+  });
+  harness.deps.reviewMediaTiming = async (request) => {
+    reviewRequests.push(request);
+    return { action: 'use-original' };
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.equal(reviewRequests[0]?.card?.sentenceFurigana, '野菜[やさい]も入ってるよ');
+});
+
 test('NoteUpdateWorkflow keeps the captured sentence for an edited translation', async () => {
   const harness = createWordCardTranslationHarness();
   // No secondary line matches, so the card gets no automatic translation.

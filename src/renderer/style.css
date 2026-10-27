@@ -1625,6 +1625,15 @@ body:focus-visible,
   font-weight: 650;
 }
 
+.media-timing-review-ruby rt {
+  opacity: 0;
+  transition: opacity 80ms ease-out;
+}
+
+.media-timing-review-ruby:hover rt {
+  opacity: 1;
+}
+
 .media-timing-review-meaning {
   max-height: 84px;
   overflow: auto;
