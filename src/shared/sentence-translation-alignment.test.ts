@@ -364,3 +364,44 @@ test('widening reaches across a sign with its own translation', () => {
   assert.equal(aligned?.startTime, 0);
   assert.equal(aligned?.translation, 'First half, second half.');
 });
+
+test('widening keeps out a mined-range line the card sentence left out', () => {
+  // One translation covers the whole sentence and a sign inside it.
+  const primary = [
+    line('前半', 0, 1),
+    line('看板', 1.5, 2.5),
+    line('中盤', 3, 4),
+    line('後半', 4, 6),
+  ];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: [line('The whole sentence.', 0, 6)],
+    startTime: 0,
+    endTime: 4,
+    sentenceText: '前半 中盤',
+    widenSentence: true,
+  });
+  assert.equal(aligned?.text, '前半 中盤 後半');
+});
+
+test('widening follows the mined speaker, not another speaker sharing the interval', () => {
+  const primary = [line('Aの一', 0, 2), line('Bの台詞', 0, 2), line('Aの二', 2, 4)];
+  const secondary = [line('A says this.', 0, 4), line('B says that.', 0, 4)];
+  const plain = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 0,
+    endTime: 2,
+    sentenceText: 'Bの台詞',
+  });
+  const widened = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 0,
+    endTime: 2,
+    sentenceText: 'Bの台詞',
+    widenSentence: true,
+  });
+  assert.equal(widened?.text, plain?.text);
+  assert.equal(widened?.translation, plain?.translation);
+});
