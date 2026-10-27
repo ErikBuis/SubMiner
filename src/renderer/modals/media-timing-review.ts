@@ -126,45 +126,41 @@ function indexOfLine(
 }
 
 /**
- * Moves the start of a run of secondary lines through the sorted lines around the clip: a
- * positive shift adds that many earlier lines, a negative one drops lines from the start
- * while `keep` lines remain. An empty run grows from the last line before `anchor`.
+ * Moves the edges of a run of secondary lines through the sorted lines around the clip: a
+ * positive shift adds that many adjacent lines at that end, a negative one drops lines
+ * from it while `keep` lines remain. Both ends add before either drops, so lines added at
+ * one end can be dropped from the other. An empty run grows from the lines before
+ * `anchors.start` or after `anchors.end`. Returns the shifts actually applied.
  */
-function shiftRunStart(
+function shiftRun(
   run: MediaTimingReviewContextLine[],
   all: readonly MediaTimingReviewContextLine[],
-  shift: number,
-  anchor: number,
+  previousShift: number,
+  nextShift: number,
+  anchors: { start: number; end: number },
   keep: number,
-): { run: MediaTimingReviewContextLine[]; applied: number } {
-  if (shift < 0) {
-    const removed = Math.min(-shift, Math.max(0, run.length - keep));
-    return { run: run.slice(removed), applied: removed > 0 ? -removed : 0 };
-  }
-  const first = run[0]
-    ? indexOfLine(all, run[0])
-    : all.filter((line) => lineMidpoint(line) < anchor).length;
-  const added = all.slice(Math.max(0, first - shift), first);
-  return { run: [...added, ...run], applied: added.length };
-}
-
-/** The mirror of `shiftRunStart` for the end of a run; an empty run grows after `anchor`. */
-function shiftRunEnd(
-  run: MediaTimingReviewContextLine[],
-  all: readonly MediaTimingReviewContextLine[],
-  shift: number,
-  anchor: number,
-  keep: number,
-): { run: MediaTimingReviewContextLine[]; applied: number } {
-  if (shift < 0) {
-    const removed = Math.min(-shift, Math.max(0, run.length - keep));
-    return { run: run.slice(0, run.length - removed), applied: removed > 0 ? -removed : 0 };
-  }
-  const last = run.length > 0 ? indexOfLine(all, run[run.length - 1]!) : -1;
-  const after = last >= 0 ? last + 1 : all.findIndex((line) => lineMidpoint(line) > anchor);
-  const from = after >= 0 ? after : all.length;
-  const added = all.slice(from, from + shift);
-  return { run: [...run, ...added], applied: added.length };
+): { run: MediaTimingReviewContextLine[]; previousShift: number; nextShift: number } {
+  const earlier =
+    run.length > 0
+      ? all.slice(0, indexOfLine(all, run[0]!))
+      : all.filter((line) => lineMidpoint(line) < anchors.start);
+  const later =
+    run.length > 0
+      ? all.slice(indexOfLine(all, run[run.length - 1]!) + 1)
+      : all.filter((line) => lineMidpoint(line) > anchors.end);
+  const prepended =
+    previousShift > 0 ? earlier.slice(Math.max(0, earlier.length - previousShift)) : [];
+  const appended = nextShift > 0 ? later.slice(0, nextShift) : [];
+  let lines = [...prepended, ...run, ...appended];
+  const dropFirst = Math.min(Math.max(0, -previousShift), Math.max(0, lines.length - keep));
+  lines = lines.slice(dropFirst);
+  const dropLast = Math.min(Math.max(0, -nextShift), Math.max(0, lines.length - keep));
+  lines = lines.slice(0, lines.length - dropLast);
+  return {
+    run: lines,
+    previousShift: prepended.length - dropFirst,
+    nextShift: appended.length - dropLast,
+  };
 }
 
 export type MediaTimingReviewTranslationPreview = {
@@ -235,41 +231,37 @@ export function buildMediaTimingReviewTranslationPreview(options: {
   const timedCore = options.initialTranslationLines.length > 0;
   // Timed lines form one run that keeps at least one line. A translation taken from the
   // screen has no timed lines behind it: its text stays, with runs before and after it.
-  const startRun = shiftRunStart(
+  const previousShift = options.translationPreviousShift ?? 0;
+  const nextShift = options.translationNextShift ?? 0;
+  const anchors = { start: options.originalStartTime, end: options.originalEndTime };
+  const keep = timedCore ? 1 : 0;
+  const leading = shiftRun(
     timedCore
       ? dedupeSortedLines([...before, ...options.initialTranslationLines, ...after])
       : before,
     all,
-    options.translationPreviousShift ?? 0,
-    options.originalStartTime,
-    timedCore ? 1 : 0,
+    previousShift,
+    timedCore ? nextShift : 0,
+    anchors,
+    keep,
   );
-  const endRun = shiftRunEnd(
-    timedCore ? startRun.run : after,
-    all,
-    options.translationNextShift ?? 0,
-    options.originalEndTime,
-    timedCore ? 1 : 0,
-  );
-  const leading = timedCore ? endRun.run : startRun.run;
-  const trailing = endRun.run;
-  const keep = timedCore ? 1 : 0;
+  const trailing = timedCore ? leading : shiftRun(after, all, 0, nextShift, anchors, keep);
   const preview = {
-    previousShift: startRun.applied,
-    nextShift: endRun.applied,
-    canAddPrevious: shiftRunStart(leading, all, 1, options.originalStartTime, keep).applied > 0,
-    canRemovePrevious: leading.length > keep,
-    canAddNext: shiftRunEnd(trailing, all, 1, options.originalEndTime, keep).applied > 0,
-    canRemoveNext: trailing.length > keep,
+    previousShift: leading.previousShift,
+    nextShift: trailing.nextShift,
+    canAddPrevious: shiftRun(leading.run, all, 1, 0, anchors, keep).previousShift > 0,
+    canRemovePrevious: leading.run.length > keep,
+    canAddNext: shiftRun(trailing.run, all, 0, 1, anchors, keep).nextShift > 0,
+    canRemoveNext: trailing.run.length > keep,
   };
   if (unchanged) return { text: options.initialTranslation, ...preview };
   if (all.length === 0) return { text: null, ...preview };
   const translation = timedCore
-    ? joinSubtitleLineTexts(endRun.run)
+    ? joinSubtitleLineTexts(leading.run)
     : [
-        joinSubtitleLineTexts(startRun.run),
+        joinSubtitleLineTexts(leading.run),
         options.initialTranslation.trim(),
-        joinSubtitleLineTexts(endRun.run),
+        joinSubtitleLineTexts(trailing.run),
       ]
         .filter(Boolean)
         .join(' ');
