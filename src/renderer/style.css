@@ -1750,6 +1750,8 @@ body:focus-visible,
   --playhead-position: var(--selection-start);
 
   position: relative;
+  /* Keeps the handle and range layers below the sticky header and footer. */
+  isolation: isolate;
   height: 52px;
   margin: 8px 0 9px;
   overflow: hidden;
