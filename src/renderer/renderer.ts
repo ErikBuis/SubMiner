@@ -299,6 +299,7 @@ const playlistBrowserModal = createPlaylistBrowserModal(ctx, {
 const mediaTimingReviewModal = createMediaTimingReviewModal(ctx, {
   modalStateReader: { isAnyModalOpen },
   syncSettingsModalSubtitleSuppression,
+  closeLookupWindow: () => keyboardHandlers.closeLookupWindow(),
 });
 const keyboardHandlers = createKeyboardHandlers(ctx, {
   handleRuntimeOptionsKeydown: runtimeOptionsModal.handleRuntimeOptionsKeydown,
@@ -726,6 +727,8 @@ function runGuardedAsync(action: string, fn: () => Promise<void> | void): void {
 
 registerModalOpenHandlers();
 registerKeyboardCommandHandlers();
+// Before init() awaits anything, so it precedes Yomitan's window listeners.
+mediaTimingReviewModal.shieldYomitanHover();
 registerYomitanLookupListener(window, () => {
   runGuarded('yomitan:lookup', () => {
     window.electronAPI.recordYomitanLookup(subtitleSidebarModal.getSubtitleSidebarMiningContext());
