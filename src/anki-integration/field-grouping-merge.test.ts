@@ -100,6 +100,48 @@ test('getGroupableFieldNames includes Kiku context fields and omits word audio f
   ]);
 });
 
+test('getGroupableFieldNames groups the word card translation field when one is set', () => {
+  assert.equal(
+    createCollaborator().collaborator.getGroupableFieldNames().includes('SentenceTranslation'),
+    false,
+  );
+  const { collaborator } = createCollaborator({
+    config: { fields: { wordCardTranslation: 'SentenceTranslation' } },
+  });
+  assert.equal(collaborator.getGroupableFieldNames().includes('SentenceTranslation'), true);
+});
+
+test('computeFieldGroupingMergedFields keeps each word card translation with its sentence group', async () => {
+  const { collaborator } = createCollaborator({
+    config: { fields: { wordCardTranslation: 'SentenceTranslation' } },
+  });
+
+  const first = await collaborator.computeFieldGroupingMergedFields(
+    200,
+    100,
+    makeNote(200, { Sentence: 'second', SentenceTranslation: 'Second.' }),
+    makeNote(100, { Sentence: 'first', SentenceTranslation: 'First.' }),
+    false,
+  );
+  const second = await collaborator.computeFieldGroupingMergedFields(
+    300,
+    200,
+    makeNote(300, { Sentence: 'third', SentenceTranslation: 'Third.' }),
+    makeNote(200, { Sentence: first.Sentence!, SentenceTranslation: first.SentenceTranslation! }),
+    false,
+  );
+
+  assert.equal(
+    second.SentenceTranslation,
+    second
+      .Sentence!.replace('third', 'Third.')
+      .replace('second', 'Second.')
+      .replace('first', 'First.'),
+  );
+  assert.match(second.SentenceTranslation!, /data-group-id="200">Second\.</);
+  assert.match(second.SentenceTranslation!, /data-group-id="100">First\.</);
+});
+
 test('computeFieldGroupingMergedFields groups both notes and sorts by descending group id when keeping original', async () => {
   const { collaborator } = createCollaborator();
 

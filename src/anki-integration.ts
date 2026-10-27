@@ -660,6 +660,8 @@ export class AnkiIntegration {
       getConfig: () => this.config,
       getCurrentSubtitleText: () => this.mpvClient.currentSubText,
       getCurrentSubtitleStart: () => this.mpvClient.currentSubStart,
+      getSubtitleTracksForTranslation: () => this.subtitleTracksForTranslationProvider?.() ?? null,
+      getLiveSecondarySubtitleFor: (primaryText) => this.getLiveSecondarySubtitleFor(primaryText),
       getEffectiveSentenceCardConfig: () => this.getEffectiveSentenceCardConfig(),
       appendKnownWordsFromNoteInfo: (noteInfo) => this.appendKnownWordsFromNoteInfo(noteInfo),
       removeKnownWordNote: (noteId) => this.removeKnownWordNote(noteId),
@@ -1803,6 +1805,19 @@ export class AnkiIntegration {
       | null,
   ): void {
     this.subtitleTracksForTranslationProvider = provider;
+  }
+
+  /** The live secondary subtitle is only trusted while its primary line is still on screen. */
+  private getLiveSecondarySubtitleFor(primaryText: string): string | undefined {
+    const normalize = (text: string) => text.replace(/\s+/g, '').trim();
+    const liveSecondary = this.mpvClient.currentSecondarySubText?.trim();
+    if (
+      !liveSecondary ||
+      normalize(this.mpvClient.currentSubText ?? '') !== normalize(primaryText)
+    ) {
+      return undefined;
+    }
+    return liveSecondary === primaryText.trim() ? undefined : liveSecondary;
   }
 
   setMediaTimingReviewCallback(

@@ -115,6 +115,13 @@ export function buildIntegrationConfigOptionRegistry(
       description: 'Card field that receives the current selection or translated text.',
     },
     {
+      path: 'ankiConnect.fields.wordCardTranslation',
+      kind: 'string',
+      defaultValue: defaultConfig.ankiConnect.fields.wordCardTranslation,
+      description:
+        'Card field that word cards mined from the dictionary popup fill with the secondary subtitle translating the mined sentence (for example SentenceTranslation in Kiku). Empty: word cards get no translation.',
+    },
+    {
       path: 'ankiConnect.ai.enabled',
       kind: 'boolean',
       defaultValue: defaultConfig.ankiConnect.ai.enabled,

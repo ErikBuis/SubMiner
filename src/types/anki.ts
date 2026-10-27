@@ -169,6 +169,7 @@ export interface AnkiConnectConfig {
     image?: string;
     sentence?: string;
     miscInfo?: string;
+    wordCardTranslation?: string;
     translation?: string;
   };
   ai?: boolean | AiFeatureConfig;
