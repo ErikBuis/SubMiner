@@ -27,6 +27,7 @@ import {
   normalizeKana,
   normalizePosTag,
   splitPosTag,
+  stripKanaStretchMarks,
 } from './token-classification';
 
 const JLPT_LEVEL_LOOKUP_CACHE_LIMIT = 2048;
@@ -524,8 +525,6 @@ export function stripSubtitleAnnotationMetadata(
   return sharedStripSubtitleAnnotationMetadata(token, options);
 }
 
-const STRETCH_WAVE_DASHES = new Set(['～', '〜']);
-
 // Furigana-derived readings can be partial (kanji readings only, e.g. まあ for
 // 待ち合わせてる); matching those against known words produces false positives,
 // so the reading fallback requires a reading that plausibly covers the surface:
@@ -533,14 +532,7 @@ const STRETCH_WAVE_DASHES = new Set(['～', '〜']);
 // in order within the reading. A wave dash stretching a kana (か～くれんぼ,
 // read かくれんぼ) has no counterpart in the reading, so it is not counted.
 function isCompleteReadingForSurface(surface: string, reading: string): boolean {
-  const surfaceChars = [...normalizeKana(surface)].filter(
-    (char, index, chars) =>
-      !(
-        STRETCH_WAVE_DASHES.has(char) &&
-        isKanaChar(chars[index - 1] ?? '') &&
-        isKanaChar(chars[index + 1] ?? '')
-      ),
-  );
+  const surfaceChars = [...stripKanaStretchMarks(normalizeKana(surface))];
   const readingChars = [...normalizeKana(reading)];
   if (readingChars.length < surfaceChars.length) {
     return false;

@@ -55,8 +55,26 @@ export function isKanaCandidateIgnorableChar(char: string): boolean {
   return /^[\s.,!?;:()[\]{}"'`、。！？…‥・「」『』（）［］｛｝〈〉《》【】―-]$/u.test(char);
 }
 
+const KANA_STRETCH_WAVE_DASHES = new Set(['～', '〜']);
+
+// Drops wave dashes that stretch a kana (か～くれんぼ, バイバ～イ), which the
+// scanner keeps in the surface but which are not part of the word.
+export function stripKanaStretchMarks(text: string): string {
+  const chars = [...text];
+  return chars
+    .filter(
+      (char, index) =>
+        !(
+          KANA_STRETCH_WAVE_DASHES.has(char) &&
+          isKanaChar(chars[index - 1] ?? '') &&
+          isKanaChar(chars[index + 1] ?? '')
+        ),
+    )
+    .join('');
+}
+
 export function isKanaCandidateText(text: string): boolean {
-  const normalized = text.trim();
+  const normalized = stripKanaStretchMarks(text.trim());
   if (normalized.length === 0) {
     return false;
   }
