@@ -160,11 +160,11 @@ During preview, the yellow cursor follows the audio player's position through th
 | Export the card          | `Enter` or Export card                                                |
 | Cancel                   | `Escape`                                                              |
 
-The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. `Enter` in the translation still exports the card, and line breaks are written as spaces. Your edit is kept when you choose to keep the original timing or skip media.
+The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. `Enter` in the translation still exports the card, and line breaks are written as spaces. Your edit is kept when you export without media.
 
 Play selection, Export card and the key hints stay at the bottom of the dialog, so they never scroll away. The exported range is used as is, with no extra padding. Added lines go into the sentence field. Reset timing, next to the 0.1 s buttons, restores the original timing and removes added lines.
 
-When you cancel, you can go back to editing, keep the original timing, create the card without media, or discard it. Discard deletes the Yomitan note or audio card, and skips creation for a sentence card.
+Tick Without media, next to Export card, to export the sentence and translation with no audio or image. When you cancel, you can go back to editing or drop the card: a new word card is deleted, a sentence card is not created, and an audio card leaves the earlier note unchanged. To keep the mined timing, use Reset timing and export.
 
 ### Update behavior
 

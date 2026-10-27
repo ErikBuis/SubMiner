@@ -398,6 +398,7 @@ export class NoteUpdateWorkflow {
           return;
         }
         if (timingDecision.action === 'confirm') {
+          skipMedia = timingDecision.skipMedia === true;
           reviewedSentenceText = timingDecision.text?.trim() || undefined;
           if (
             sentenceRange &&

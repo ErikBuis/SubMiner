@@ -422,6 +422,18 @@ test('registerIpcHandlers forwards and validates the reviewed card translation',
   const confirm = { action: 'confirm', startTime: 1, endTime: 2, translation: 'Edited.' };
   assert.deepEqual(await handler({}, { reviewId: 'r', decision: confirm }), { ok: true });
   assert.deepEqual(
+    await handler({}, { reviewId: 'r', decision: { ...confirm, skipMedia: true } }),
+    { ok: true },
+  );
+  assert.equal(
+    (
+      (await handler({}, { reviewId: 'r', decision: { ...confirm, skipMedia: 'yes' } })) as {
+        ok: boolean;
+      }
+    ).ok,
+    false,
+  );
+  assert.deepEqual(
     await handler({}, { reviewId: 'r', decision: { action: 'skip-media', translation: '' } }),
     { ok: true },
   );
@@ -441,6 +453,7 @@ test('registerIpcHandlers forwards and validates the reviewed card translation',
   }
   assert.deepEqual(requests, [
     { reviewId: 'r', decision: confirm },
+    { reviewId: 'r', decision: { ...confirm, skipMedia: true } },
     { reviewId: 'r', decision: { action: 'skip-media', translation: '' } },
     { reviewId: 'r', decision: { action: 'discard' } },
   ]);

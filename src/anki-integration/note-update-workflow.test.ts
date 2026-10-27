@@ -613,6 +613,56 @@ test('NoteUpdateWorkflow keeps the word card but skips media after timing review
   assert.deepEqual(harness.notifications, [{ noteId: 42, label: 'taberu' }]);
 });
 
+test('NoteUpdateWorkflow exports the reviewed sentence without media when the review skips media', async () => {
+  const harness = createWorkflowHarness();
+  const mediaCalls: string[] = [];
+  const deletedNoteIds: number[][] = [];
+  const queuedUpdates: unknown[] = [];
+  harness.deps.captureSubtitleMediaContext = () => ({
+    source: 'overlay',
+    text: 'subtitle-text',
+    startTime: 4,
+    endTime: 6,
+  });
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Sentence', image: 'Picture' },
+    media: { generateAudio: true, generateImage: true },
+    behavior: {},
+  });
+  harness.deps.reviewMediaTiming = async () => ({
+    action: 'confirm',
+    startTime: 3,
+    endTime: 6,
+    text: 'previous subtitle-text',
+    skipMedia: true,
+  });
+  harness.deps.generateAudio = async () => {
+    mediaCalls.push('audio');
+    return Buffer.from('audio');
+  };
+  harness.deps.generateImage = async () => {
+    mediaCalls.push('image');
+    return Buffer.from('image');
+  };
+  harness.deps.queuePendingYoutubeMediaUpdate = async (update) => {
+    queuedUpdates.push(update);
+    return true;
+  };
+  harness.deps.client.deleteNotes = async (noteIds) => {
+    deletedNoteIds.push(noteIds);
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(mediaCalls, []);
+  assert.deepEqual(queuedUpdates, []);
+  assert.deepEqual(deletedNoteIds, []);
+  assert.deepEqual(harness.updates, [
+    { noteId: 42, fields: { Sentence: 'previous subtitle-text' } },
+  ]);
+  assert.deepEqual(harness.notifications, [{ noteId: 42, label: 'taberu' }]);
+});
+
 test('NoteUpdateWorkflow uses the combined review sentence for the card and media range', async () => {
   const harness = createWorkflowHarness();
   const audioContexts: Array<SubtitleMiningContext | undefined> = [];

@@ -582,7 +582,6 @@ export class AnkiIntegration {
       getEffectiveSentenceCardConfig: () => this.getEffectiveSentenceCardConfig(),
       getFallbackDurationSeconds: () => this.getFallbackDurationSeconds(),
       appendKnownWordsFromNoteInfo: (noteInfo) => this.appendKnownWordsFromNoteInfo(noteInfo),
-      removeKnownWordNote: (noteId) => this.removeKnownWordNote(noteId),
       isUpdateInProgress: () => this.updateInProgress,
       setUpdateInProgress: (value) => {
         this.updateInProgress = value;

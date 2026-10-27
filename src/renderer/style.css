@@ -1944,8 +1944,6 @@ body:focus-visible,
 
 .media-timing-review-expand-button,
 .media-timing-review-quiet-button,
-.media-timing-review-original-button,
-.media-timing-review-skip-button,
 .media-timing-review-discard-button,
 .media-timing-review-play-button,
 .media-timing-review-confirm-button,
@@ -2061,8 +2059,6 @@ body:focus-visible,
 .media-timing-review-play-button,
 .media-timing-review-confirm-button,
 .media-timing-review-quiet-button,
-.media-timing-review-original-button,
-.media-timing-review-skip-button,
 .media-timing-review-discard-button {
   padding: 9px 15px;
 }
@@ -2096,20 +2092,40 @@ body:focus-visible,
   background: currentcolor;
 }
 
+.media-timing-review-media-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--ctp-subtext0);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  user-select: none;
+}
+
+.media-timing-review-media-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--ctp-green);
+  cursor: pointer;
+}
+
+.media-timing-review-media-toggle input:focus-visible {
+  outline: 2px solid var(--ctp-yellow);
+  outline-offset: 2px;
+}
+
+.media-timing-review-media-toggle:has(input:disabled) {
+  cursor: default;
+  opacity: 0.42;
+}
+
 .media-timing-review-confirm-button {
   border-color: var(--ctp-green);
   background: var(--ctp-green);
   color: var(--ctp-crust);
-}
-
-.media-timing-review-original-button {
-  border-color: var(--ctp-yellow);
-  color: var(--ctp-yellow);
-}
-
-.media-timing-review-skip-button {
-  border-color: var(--ctp-sky);
-  color: var(--ctp-sky);
 }
 
 .media-timing-review-discard-button {

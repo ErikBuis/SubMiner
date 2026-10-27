@@ -540,6 +540,13 @@
                   role="status"
                   aria-live="polite"
                 ></div>
+                <label
+                  class="media-timing-review-media-toggle"
+                  title="Export the sentence and translation, but add no audio or image"
+                >
+                  <input id="mediaTimingReviewWithoutMedia" type="checkbox" />
+                  Without media
+                </label>
                 <button
                   id="mediaTimingReviewConfirm"
                   class="media-timing-review-confirm-button"
@@ -568,7 +575,7 @@
           <div id="mediaTimingReviewCancelStep" class="media-timing-review-cancel-step hidden">
             <div class="media-timing-review-cancel-mark" aria-hidden="true">?</div>
             <h2>Stop reviewing?</h2>
-            <p id="mediaTimingReviewCancelMessage">Choose what should happen to this card.</p>
+            <p id="mediaTimingReviewCancelMessage">Keep editing, or delete this card.</p>
             <div class="media-timing-review-cancel-actions">
               <button
                 id="mediaTimingReviewCancelBack"
@@ -576,21 +583,6 @@
                 type="button"
               >
                 Keep editing
-              </button>
-              <button
-                id="mediaTimingReviewUseOriginal"
-                class="media-timing-review-original-button"
-                type="button"
-              >
-                Use original timing
-              </button>
-              <button
-                id="mediaTimingReviewSkipMedia"
-                class="media-timing-review-skip-button"
-                type="button"
-                title="Keep this card but do not add audio or an image."
-              >
-                Keep without media
               </button>
               <button
                 id="mediaTimingReviewDiscard"

@@ -307,6 +307,7 @@ function parseMediaTimingReviewResolveRequest(
         Number.isFinite(decisionRecord.screenshotTime))) &&
     (decisionRecord.text === undefined ||
       (typeof decisionRecord.text === 'string' && decisionRecord.text.trim().length > 0)) &&
+    (decisionRecord.skipMedia === undefined || typeof decisionRecord.skipMedia === 'boolean') &&
     ((decisionRecord.sentenceStartTime === undefined &&
       decisionRecord.sentenceEndTime === undefined) ||
       (decisionRecord.text !== undefined &&
@@ -332,6 +333,7 @@ function parseMediaTimingReviewResolveRequest(
               sentenceStartTime: decisionRecord.sentenceStartTime as number,
               sentenceEndTime: decisionRecord.sentenceEndTime as number,
             }),
+        ...(decisionRecord.skipMedia === true ? { skipMedia: true } : {}),
         ...translationPart,
       },
     };
