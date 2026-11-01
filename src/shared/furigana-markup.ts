@@ -7,17 +7,36 @@ export interface FuriganaSegment {
 // Anki's own furigana syntax: the base is everything since the last space, then [reading].
 const BRACKET_FURIGANA_PATTERN = / ?([^\s[\]]+?)\[([^\]]+)\]/g;
 
+// Literal brackets are stored escaped (&#91; &#93;); these stand in for them while the field
+// is flattened to text, so they are not read as reading delimiters.
+const OPEN_BRACKET_PLACEHOLDER = '\uE000';
+const CLOSE_BRACKET_PLACEHOLDER = '\uE001';
+
+/** Keeps escaped literal brackets apart from furigana delimiters until the text is parsed. */
+export function protectEscapedBrackets(html: string): string {
+  return html
+    .replace(/&#(?:91|x5b);/gi, OPEN_BRACKET_PLACEHOLDER)
+    .replace(/&#(?:93|x5d);/gi, CLOSE_BRACKET_PLACEHOLDER);
+}
+
+function restoreBrackets(value: string): string {
+  return value.replaceAll(OPEN_BRACKET_PLACEHOLDER, '[').replaceAll(CLOSE_BRACKET_PLACEHOLDER, ']');
+}
+
 /** Splits Anki bracket furigana ("乗[の]り 遅[おく]れる") into base text and readings. */
 export function parseBracketFurigana(value: string): FuriganaSegment[] {
   const segments: FuriganaSegment[] = [];
   let offset = 0;
   for (const match of value.matchAll(BRACKET_FURIGANA_PATTERN)) {
     const start = match.index ?? 0;
-    if (start > offset) segments.push({ text: value.slice(offset, start) });
-    segments.push({ text: match[1] ?? '', reading: match[2] });
+    if (start > offset) segments.push({ text: restoreBrackets(value.slice(offset, start)) });
+    segments.push({
+      text: restoreBrackets(match[1] ?? ''),
+      reading: restoreBrackets(match[2] ?? ''),
+    });
     offset = start + match[0].length;
   }
-  if (offset < value.length) segments.push({ text: value.slice(offset) });
+  if (offset < value.length) segments.push({ text: restoreBrackets(value.slice(offset)) });
   return segments;
 }
 
@@ -30,6 +49,18 @@ export function stripBracketFurigana(value: string): string {
 
 /** How many characters after a reading's base must match for the base to be anchored. */
 const ANCHOR_CONTEXT_LENGTH = 2;
+
+/**
+ * Whether the text after a base in the line (`shown`) can be the text after it in the
+ * source (`source`). The line may end earlier, as the source joins lines, but a base that
+ * runs into kana the source does not have, or loses kana the source has, is another word.
+ */
+function followsLikeSource(shown: string, source: string): boolean {
+  const common = Math.min(shown.length, source.length);
+  if (shown.slice(0, common) !== source.slice(0, common)) return false;
+  const extra = shown[common] ?? source[common] ?? '';
+  return !/\p{Script=Hiragana}/u.test(extra);
+}
 
 interface ReadingAnchor {
   /** Where the base starts in the line without whitespace. */
@@ -74,14 +105,9 @@ export function annotateLineWithFurigana(
     const following =
       fullText.slice(textOffset, textOffset + ANCHOR_CONTEXT_LENGTH).split('\n')[0] ?? '';
     const found: ReadingAnchor[] = [];
-    for (
-      let at = stripped.indexOf(base + following);
-      at >= 0;
-      at = stripped.indexOf(base + following, at + 1)
-    ) {
-      // A base that ends its source line and runs into kana here is another word.
-      const next = stripped[at + base.length];
-      if (!following && next !== undefined && /\p{Script=Hiragana}/u.test(next)) continue;
+    for (let at = stripped.indexOf(base); at >= 0; at = stripped.indexOf(base, at + 1)) {
+      const shown = stripped.slice(at + base.length, at + base.length + ANCHOR_CONTEXT_LENGTH);
+      if (!followsLikeSource(shown, following)) continue;
       found.push({
         found: at,
         length: base.length,

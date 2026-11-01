@@ -1009,7 +1009,7 @@ test('NoteUpdateWorkflow passes the note sentence furigana to the review', async
         Sentence: { value: '' },
         SentenceFurigana: {
           value:
-            ' 野菜[やさい]も<ruby class="x">入<rp>(</rp><rt>はい</rt><rp>)</rp></ruby>ってる<ruby>\n  よ\n<rt>よ</rt></ruby>',
+            ' 野菜[やさい]も<ruby class="x">入<rp>(</rp><rt>はい</rt><rp>)</rp></ruby>ってる<ruby>\n  よ\n<rt>よ</rt>う<rt>う</rt></ruby>&#91;x&#93;',
         },
       },
     },
@@ -1021,7 +1021,10 @@ test('NoteUpdateWorkflow passes the note sentence furigana to the review', async
 
   await harness.workflow.execute(42);
 
-  assert.equal(reviewRequests[0]?.card?.sentenceFurigana, '野菜[やさい]も 入[はい]ってる よ[よ]');
+  assert.equal(
+    reviewRequests[0]?.card?.sentenceFurigana,
+    '野菜[やさい]も 入[はい]ってる よ[よ] う[う]\uE000x\uE001',
+  );
 });
 
 test('NoteUpdateWorkflow reads review sentence furigana from the configured field', async () => {

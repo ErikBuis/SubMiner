@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   annotateLineWithFurigana,
   parseBracketFurigana,
+  protectEscapedBrackets,
   stripBracketFurigana,
 } from './furigana-markup';
 
@@ -120,5 +121,26 @@ test('annotateLineWithFurigana leaves a word that merely starts like a line-fina
   assert.deepEqual(annotateLineWithFurigana(segments, 'ビールは生'), [
     { text: 'ビールは' },
     { text: '生', reading: 'なま' },
+  ]);
+});
+
+test('annotateLineWithFurigana keeps readings at the end of a line joined to the next by a space', () => {
+  const segments = parseBracketFurigana('猫[ねこ]。 犬[いぬ]。');
+  assert.deepEqual(annotateLineWithFurigana(segments, '猫。'), [
+    { text: '猫', reading: 'ねこ' },
+    { text: '。' },
+  ]);
+  assert.deepEqual(annotateLineWithFurigana(segments, '犬。'), [
+    { text: '犬', reading: 'いぬ' },
+    { text: '。' },
+  ]);
+  assert.equal(annotateLineWithFurigana(parseBracketFurigana('生[い]きる'), '人生'), null);
+});
+
+test('escaped literal brackets are not read as reading delimiters', () => {
+  const value = protectEscapedBrackets('猫[ねこ]は&#91;音楽&#93;');
+  assert.deepEqual(parseBracketFurigana(value), [
+    { text: '猫', reading: 'ねこ' },
+    { text: 'は[音楽]' },
   ]);
 });

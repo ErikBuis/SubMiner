@@ -19,6 +19,7 @@ import {
   widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
 } from './sentence-translation';
+import { protectEscapedBrackets } from '../shared/furigana-markup';
 import { formatCardTranslation } from '../shared/sentence-translation-alignment';
 
 export interface NoteUpdateWorkflowNoteInfo {
@@ -203,12 +204,14 @@ export class NoteUpdateWorkflow {
     // Notes written as HTML ruby read the same as bracket furigana once flattened to it.
     const sentenceFurigana = fieldName
       ? ankiFieldHtmlToPlainText(
-          (noteInfo.fields[fieldName]?.value ?? '')
+          protectEscapedBrackets(noteInfo.fields[fieldName]?.value ?? '')
             .replace(/<rp\b[^>]*>[\s\S]*?<\/rp>/gi, '')
-            .replace(
-              /<ruby\b[^>]*>([\s\S]*?)<rt\b[^>]*>([\s\S]*?)<\/rt>\s*<\/ruby>/gi,
-              (_match, base: string, reading: string) =>
-                ` ${base.replace(/\s+/g, '')}[${reading.replace(/\s+/g, '')}]`,
+            .replace(/<ruby\b[^>]*>([\s\S]*?)<\/ruby>/gi, (_match, content: string) =>
+              Array.from(
+                content.matchAll(/([^<]*)<rt\b[^>]*>([\s\S]*?)<\/rt>/gi),
+                ([, base, reading]) =>
+                  ` ${(base ?? '').replace(/\s+/g, '')}[${(reading ?? '').replace(/\s+/g, '')}]`,
+              ).join(''),
             ),
         )
       : '';
