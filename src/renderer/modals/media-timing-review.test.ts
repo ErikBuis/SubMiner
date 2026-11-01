@@ -5,6 +5,7 @@ import {
   buildMediaTimingReviewTranslationPreview,
   buildMediaTimingLineSelection,
   buildMediaTimingWaveformPath,
+  carryEditedTranslation,
   constrainMediaTimingSelection,
   createMediaTimingPreviewRequestGuard,
   formatMediaTimingTimestamp,
@@ -564,4 +565,175 @@ test('review translation buttons skip a background line no dialogue line has', (
     translationNextShift: 1,
   });
   assert.equal(preview.text, `${own.text} ${narration.text}`);
+});
+
+const carryLines = [
+  { text: 'two before,', startTime: 4, endTime: 6 },
+  { text: 'one before,', startTime: 6, endTime: 8 },
+  { text: 'the mined line,', startTime: 8, endTime: 10 },
+  { text: 'and after.', startTime: 10, endTime: 12 },
+];
+
+function carryPreview(overrides: {
+  previousShift?: number;
+  nextShift?: number;
+  format?: boolean;
+  previousCount?: number;
+  initialTranslationLines?: typeof carryLines;
+  initialTranslation?: string;
+}) {
+  return buildMediaTimingReviewTranslationPreview({
+    previousLines: [{ text: '前の行', startTime: 6, endTime: 8 }],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: overrides.previousCount ?? 0,
+    nextCount: 0,
+    initialTranslation: overrides.initialTranslation ?? 'the mined line,',
+    initialTranslationLines: overrides.initialTranslationLines ?? [carryLines[2]!],
+    translationLines: carryLines,
+    format: overrides.format ?? false,
+    translationPreviousShift: overrides.previousShift,
+    translationNextShift: overrides.nextShift,
+  });
+}
+
+test('an edited translation gains an added line before or after the edit', () => {
+  const start = carryPreview({});
+  const before = carryPreview({ previousShift: 1 });
+  assert.equal(
+    carryEditedTranslation({
+      text: 'my own words',
+      previous: start.runs,
+      next: before.runs,
+      format: false,
+    }),
+    'one before, my own words',
+  );
+  const after = carryPreview({ nextShift: 1 });
+  assert.equal(
+    carryEditedTranslation({
+      text: 'my own words',
+      previous: start.runs,
+      next: after.runs,
+      format: false,
+    }),
+    'my own words and after.',
+  );
+});
+
+test('an edited translation loses only the text of a dropped line', () => {
+  const widened = carryPreview({ previousShift: 2, nextShift: 1 });
+  const edited = 'two before, one before, MY words and after.';
+  const dropFront = carryPreview({ previousShift: 1, nextShift: 1 });
+  assert.equal(
+    carryEditedTranslation({
+      text: edited,
+      previous: widened.runs,
+      next: dropFront.runs,
+      format: false,
+    }),
+    'one before, MY words and after.',
+  );
+  const dropBack = carryPreview({ previousShift: 2 });
+  assert.equal(
+    carryEditedTranslation({
+      text: edited,
+      previous: widened.runs,
+      next: dropBack.runs,
+      format: false,
+    }),
+    'two before, one before, MY words',
+  );
+  // A dropped line the user rewrote is not in the edit any more: the edit stays.
+  assert.equal(
+    carryEditedTranslation({
+      text: 'Two lines before, one before, MY words',
+      previous: widened.runs,
+      next: dropFront.runs,
+      format: false,
+    }),
+    'Two lines before, one before, MY words',
+  );
+});
+
+test('an edited translation is untouched when its lines do not change', () => {
+  const start = carryPreview({});
+  assert.equal(
+    carryEditedTranslation({
+      text: 'my own words',
+      previous: start.runs,
+      next: carryPreview({}).runs,
+      format: true,
+    }),
+    'my own words',
+  );
+});
+
+test('carrying into a formatted edit moves the continuation mark and the capital', () => {
+  // Main formats the card's own translation.
+  const start = carryPreview({ format: true, initialTranslation: 'The mined line, (...)' });
+  const grown = carryPreview({ format: true, previousShift: 1, nextShift: 1 });
+  assert.equal(
+    carryEditedTranslation({
+      text: 'The mined line, edited, (...)',
+      previous: start.runs,
+      next: grown.runs,
+      format: true,
+    }),
+    'One before, the mined line, edited, and after.',
+  );
+  // Dropping both again restores the edit as it was.
+  assert.equal(
+    carryEditedTranslation({
+      text: 'One before, the mined line, edited, and after.',
+      previous: grown.runs,
+      next: start.runs,
+      format: true,
+    }),
+    'The mined line, edited, (...)',
+  );
+});
+
+test('an edited translation follows lines added to the card sentence', () => {
+  const start = carryPreview({});
+  const withLine = carryPreview({ previousCount: 1 });
+  assert.equal(withLine.text, 'one before, the mined line,');
+  assert.equal(
+    carryEditedTranslation({
+      text: 'my own words',
+      previous: start.runs,
+      next: withLine.runs,
+      format: false,
+    }),
+    'one before, my own words',
+  );
+  assert.equal(
+    carryEditedTranslation({
+      text: 'one before, my own words',
+      previous: withLine.runs,
+      next: start.runs,
+      format: false,
+    }),
+    'my own words',
+  );
+});
+
+test('an edited screen translation gains lines on the side they were added', () => {
+  const screen = { initialTranslation: 'From the screen', initialTranslationLines: [] };
+  const start = carryPreview(screen);
+  const before = carryPreview({ ...screen, previousShift: 1 });
+  const both = carryPreview({ ...screen, previousShift: 1, nextShift: 1 });
+  const once = carryEditedTranslation({
+    text: 'Edited screen text',
+    previous: start.runs,
+    next: before.runs,
+    format: false,
+  });
+  assert.equal(once, 'one before, Edited screen text');
+  assert.equal(
+    carryEditedTranslation({ text: once, previous: before.runs, next: both.runs, format: false }),
+    'one before, Edited screen text and after.',
+  );
 });

@@ -12,8 +12,11 @@ import {
   findBestOverlappingLine,
   isSourceLanguageText,
   isSoundCue,
+  capitalizeFirstLetter,
   formatCardTranslation,
   joinSubtitleLineTexts,
+  markContinuation,
+  stripContinuationMark,
 } from '../../shared/sentence-translation-alignment';
 
 const MINIMUM_CLIP_SECONDS = 0.1;
@@ -114,8 +117,10 @@ const lineMidpoint = (line: MediaTimingReviewContextLine): number =>
 const lineKey = (line: MediaTimingReviewContextLine): string =>
   `${line.startTime}|${line.endTime}|${line.text}`;
 
+type TimedSpan = Pick<MediaTimingReviewContextLine, 'startTime' | 'endTime'>;
+
 /** Chronological order, as `dedupeSortedLines` sorts. */
-function compareLines(a: MediaTimingReviewContextLine, b: MediaTimingReviewContextLine): number {
+function compareLines(a: TimedSpan, b: TimedSpan): number {
   return a.startTime - b.startTime || a.endTime - b.endTime;
 }
 
@@ -170,6 +175,18 @@ export type MediaTimingReviewTranslationPreview = {
   canRemovePrevious: boolean;
   canAddNext: boolean;
   canRemoveNext: boolean;
+  /** The timed lines the text is built from, to carry a later change into an edit. */
+  runs: MediaTimingReviewTranslationRuns;
+};
+
+/**
+ * The secondary lines behind a translation. A timed translation is one run (`leading`).
+ * A translation taken from the screen sits at `screen`, between its two runs.
+ */
+export type MediaTimingReviewTranslationRuns = {
+  leading: MediaTimingReviewContextLine[];
+  trailing: MediaTimingReviewContextLine[];
+  screen: TimedSpan | null;
 };
 
 /**
@@ -267,6 +284,11 @@ export function buildMediaTimingReviewTranslationPreview(options: {
     canRemovePrevious: resolve(previousShift - 1, nextShift).leading.previousShift < previousShift,
     canAddNext: resolve(previousShift, nextShift + 1).trailing.nextShift > nextShift,
     canRemoveNext: resolve(previousShift, nextShift - 1).trailing.nextShift < nextShift,
+    runs: {
+      leading: all.length > 0 ? leading.run : [],
+      trailing: all.length > 0 && !core ? trailing.run : [],
+      screen: core ? null : { startTime: anchors.start, endTime: anchors.end },
+    },
   };
   if (unchanged) return { text: options.initialTranslation, ...preview };
   if (all.length === 0) return { text: null, ...preview };
@@ -286,6 +308,127 @@ export function buildMediaTimingReviewTranslation(
   options: Parameters<typeof buildMediaTimingReviewTranslationPreview>[0],
 ): string | null {
   return buildMediaTimingReviewTranslationPreview(options).text;
+}
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** `part` as a pattern that allows any whitespace where it has some. */
+function looseTextPattern(part: string): string {
+  return part.trim().split(/\s+/u).map(escapeRegExp).join('\\s+');
+}
+
+/** Formatting may have capitalized the line, so its capitalized form counts too. */
+function partVariants(part: string): string[] {
+  const capitalized = capitalizeFirstLetter(part);
+  return capitalized === part ? [part] : [part, capitalized];
+}
+
+/** The text without `part` at its start, or null when it does not start with it. */
+function stripLeadingPart(text: string, part: string): string | null {
+  for (const variant of partVariants(part)) {
+    const match = text.match(new RegExp(`^\\s*${looseTextPattern(variant)}(?:\\s+|$)`, 'u'));
+    if (match) return text.slice(match[0].length);
+  }
+  return null;
+}
+
+/** The text without `part` at its end, or null when it does not end with it. */
+function stripTrailingPart(text: string, part: string): string | null {
+  for (const variant of partVariants(part)) {
+    const match = text.match(new RegExp(`(?:^|\\s+)${looseTextPattern(variant)}\\s*$`, 'u'));
+    if (match) return text.slice(0, text.length - match[0].length);
+  }
+  return null;
+}
+
+/** Undoes the capital formatting gave a line that starts lowercase, now it is no longer first. */
+function restoreLowercaseStart(text: string, line: string): string {
+  const match = line.match(/^((?:\s|<[^>]*>|["'“‘«(\[¿¡])*)(\p{Ll})/u);
+  if (!match) return text;
+  const prefix = match[1] ?? '';
+  const letter = match[2]!;
+  const capitalized = prefix + letter.toUpperCase();
+  return text.startsWith(capitalized) ? prefix + letter + text.slice(capitalized.length) : text;
+}
+
+/**
+ * Carries a change in the lines behind the translation into a translation the user typed,
+ * instead of replacing it: an added line's text goes before or after the edit, and a
+ * dropped line's text comes off its start or end when the edit still has it there. A
+ * change that cannot be placed at either end, such as a dropped line the user rewrote,
+ * leaves that end of the edit alone.
+ */
+export function carryEditedTranslation(options: {
+  text: string;
+  previous: MediaTimingReviewTranslationRuns;
+  next: MediaTimingReviewTranslationRuns;
+  format: boolean;
+}): string {
+  const oldLines = dedupeSortedLines([...options.previous.leading, ...options.previous.trailing]);
+  const newLines = dedupeSortedLines([...options.next.leading, ...options.next.trailing]);
+  const oldKeys = new Set(oldLines.map(lineKey));
+  const newKeys = new Set(newLines.map(lineKey));
+  const kept = oldLines.filter((line) => newKeys.has(lineKey(line)));
+  const removed = oldLines.filter((line) => !newKeys.has(lineKey(line)));
+  const added = newLines.filter((line) => !oldKeys.has(lineKey(line)));
+  if (removed.length === 0 && added.length === 0) return options.text;
+  // The lines both versions share, and a translation taken from the screen, stay in
+  // place; what changed sits before or after them.
+  const screen = options.next.screen ?? options.previous.screen;
+  const pivots = [...kept, ...(screen ? [screen] : [])].sort(compareLines);
+  const first = pivots[0];
+  const last = pivots[pivots.length - 1];
+  if (!first || !last) return options.text;
+  const isFront = (line: TimedSpan) => compareLines(line, first) < 0;
+  const isBack = (line: TimedSpan) => compareLines(line, last) > 0;
+
+  let text = options.text;
+  let frontChanged = false;
+  let backChanged = false;
+  // The line now at the start of the text, when the text starts with a line.
+  let frontLine: MediaTimingReviewContextLine | undefined = oldLines[0];
+
+  const removedBack = removed.filter(isBack);
+  if (removedBack.length > 0) {
+    const base = options.format ? stripContinuationMark(text) : text;
+    const stripped = stripTrailingPart(base, joinSubtitleLineTexts(removedBack));
+    if (stripped !== null) {
+      text = stripped.trimEnd();
+      backChanged = true;
+    }
+  }
+  const removedFront = removed.filter(isFront);
+  if (removedFront.length > 0) {
+    const stripped = stripLeadingPart(text, joinSubtitleLineTexts(removedFront));
+    if (stripped !== null) {
+      text = stripped.trimStart();
+      frontChanged = true;
+      const dropped = new Set(removedFront.map(lineKey));
+      frontLine = oldLines.find((line) => !dropped.has(lineKey(line)));
+    } else {
+      frontLine = undefined;
+    }
+  }
+  if (frontLine && screen && compareLines(frontLine, screen) > 0) frontLine = undefined;
+
+  const addedFront = added.filter(isFront);
+  if (addedFront.length > 0) {
+    const rest =
+      options.format && frontLine
+        ? restoreLowercaseStart(text, joinSubtitleLineTexts([frontLine]))
+        : text;
+    text = [joinSubtitleLineTexts(addedFront), rest.trimStart()].filter(Boolean).join(' ');
+    frontChanged = true;
+  }
+  const addedBack = added.filter(isBack);
+  if (addedBack.length > 0) {
+    const rest = options.format ? stripContinuationMark(text) : text;
+    text = [rest.trimEnd(), joinSubtitleLineTexts(addedBack)].filter(Boolean).join(' ');
+    backChanged = true;
+  }
+  if (options.format && frontChanged) text = capitalizeFirstLetter(text);
+  if (options.format && backChanged) text = markContinuation(text);
+  return text;
 }
 
 export function createMediaTimingPreviewRequestGuard() {
@@ -443,6 +586,8 @@ export function createMediaTimingReviewModal(
   let trailingTrimPending = false;
   /** Once the user types in the translation it no longer follows added or removed lines. */
   let translationEdited = false;
+  /** The lines behind the shown translation, to carry a change into an edited one. */
+  let shownTranslationRuns: MediaTimingReviewTranslationRuns | null = null;
   /** Secondary lines added (positive) or dropped (negative) at the translation's ends. */
   let translationPreviousShift = 0;
   let translationNextShift = 0;
@@ -780,7 +925,10 @@ export function createMediaTimingReviewModal(
     renderTranslationState();
   }
 
-  /** Keeps an untouched translation in step with the lines on the card. */
+  /**
+   * Keeps the translation in step with the lines on the card. An untouched translation is
+   * rebuilt; an edited one keeps the user's text and only gains or loses the changed lines.
+   */
   function followTranslation(): void {
     const translation = payload?.card?.translation;
     if (!payload || !translation) return;
@@ -811,18 +959,30 @@ export function createMediaTimingReviewModal(
     dom.mediaTimingReviewTranslationPrevRemove.disabled = !preview.canRemovePrevious;
     dom.mediaTimingReviewTranslationNextAdd.disabled = !preview.canAddNext;
     dom.mediaTimingReviewTranslationNextRemove.disabled = !preview.canRemoveNext;
-    if (!translationEdited && preview.text !== null) setTranslation(preview.text, false);
+    if (preview.text === null) return;
+    if (!translationEdited) {
+      setTranslation(preview.text, false);
+    } else if (shownTranslationRuns) {
+      const input = dom.mediaTimingReviewTranslation;
+      const carried = carryEditedTranslation({
+        text: input.value,
+        previous: shownTranslationRuns,
+        next: preview.runs,
+        format: translation.format,
+      });
+      if (carried !== input.value) input.value = carried;
+    }
+    shownTranslationRuns = preview.runs;
   }
 
   /**
-   * Adds or drops a secondary line at one end of the translation. This rebuilds the text
-   * from the lines, so it also replaces a translation the user typed.
+   * Adds or drops a secondary line at one end of the translation. A translation the user
+   * typed keeps their text: the line's text is only added to or taken off that end.
    */
   function adjustTranslationLines(direction: 'previous' | 'next', delta: number): void {
     if (!payload?.card?.translation || resolveInFlight) return;
     if (direction === 'previous') translationPreviousShift += delta;
     else translationNextShift += delta;
-    translationEdited = false;
     followTranslation();
   }
 
@@ -1204,6 +1364,7 @@ export function createMediaTimingReviewModal(
     renderCard();
     translationPreviousShift = 0;
     translationNextShift = 0;
+    shownTranslationRuns = null;
     setTranslation(nextPayload.card?.translation?.text ?? '', false);
     followTranslation();
     setStatus('');
@@ -1354,7 +1515,8 @@ export function createMediaTimingReviewModal(
       nextCount = 0;
       updateSelection(payload.selectionStartTime, payload.selectionEndTime);
       renderSentence();
-      // Reset is about timing: a translation the user edited stays.
+      // Reset is about timing: a translation the user edited keeps its text and its own
+      // added lines, and only loses the translations of the card lines reset removes.
       if (!translationEdited) {
         translationPreviousShift = 0;
         translationNextShift = 0;

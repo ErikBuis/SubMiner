@@ -508,7 +508,7 @@ const CONTINUATION_MARK = '(...)';
 
 /** Subtitle lines often start lowercase because they continue the previous line. */
 /** Skips leading tags and opening quotes or brackets, but not a continuation's "...". */
-function capitalizeFirstLetter(text: string): string {
+export function capitalizeFirstLetter(text: string): string {
   return text.replace(
     /^((?:\s|<[^>]*>|["'“‘«(\[¿¡])*)(\p{Ll})/u,
     (_match, prefix: string, letter: string) => prefix + letter.toUpperCase(),
@@ -520,7 +520,7 @@ function capitalizeFirstLetter(text: string): string {
  * stands alone, so it gets a "(...)" to show the sentence goes on: "Lost in that thought,
  * (...)". Closing quotes, brackets and HTML tags after the comma stay before the mark.
  */
-function markContinuation(text: string): string {
+export function markContinuation(text: string): string {
   let body = text;
   let tail = '';
   for (;;) {
@@ -537,6 +537,13 @@ function markContinuation(text: string): string {
   // Full-width commas sit flush against the mark, like other CJK punctuation.
   const separator = comma === ',' ? ' ' : '';
   return text.trimEnd() + separator + CONTINUATION_MARK;
+}
+
+/** Takes off the "(...)" that `markContinuation` adds, so more text can follow. */
+export function stripContinuationMark(text: string): string {
+  const trimmed = text.trimEnd();
+  if (!trimmed.endsWith(CONTINUATION_MARK)) return text;
+  return trimmed.slice(0, trimmed.length - CONTINUATION_MARK.length).trimEnd();
 }
 
 /**
