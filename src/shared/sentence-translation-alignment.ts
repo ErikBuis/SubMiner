@@ -446,11 +446,15 @@ export function alignSentenceTranslation(options: {
   });
   if (minedIndexes.length === 0) return null;
   const sentence = compactText(options.sentenceText ?? '');
+  const excluded = new Set<number>();
   if (sentence) {
     const inSentence = minedIndexes.filter((index) =>
       sentence.includes(compactText(primary[index]!.text)),
     );
-    if (inSentence.length > 0) minedIndexes = inSentence;
+    if (inSentence.length > 0) {
+      for (const index of minedIndexes) if (!inSentence.includes(index)) excluded.add(index);
+      minedIndexes = inSentence;
+    }
   }
 
   const groups = buildSentenceTranslationGroups(
@@ -463,15 +467,21 @@ export function alignSentenceTranslation(options: {
   let indexes = minedIndexes;
   if (options.widenSentence) {
     // Every primary line the matching secondary events translate, also across a sign
-    // with its own translation that splits them into separate runs.
-    const targets = new Set(
-      [groups[minedIndexes[0]!], groups[minedIndexes[minedIndexes.length - 1]!]]
-        .map((group) => group?.secondary)
-        .filter((event): event is TimedSubtitleText => Boolean(event)),
-    );
+    // with its own translation that splits them into separate runs. The per-speaker
+    // assignment decides, so a speaker sharing the interval keeps their own lines, and
+    // only grouped lines widen: an overlap fallback is no evidence of one sentence.
+    const assigned = assignGroupTranslations(primary, secondary, groups);
+    const translatedBy = (index: number) =>
+      groups[index]?.secondary ? (assigned.get(index) ?? []) : [];
+    const targets = new Set([
+      ...translatedBy(minedIndexes[0]!),
+      ...translatedBy(minedIndexes[minedIndexes.length - 1]!),
+    ]);
     const widened = new Set(minedIndexes);
-    groups.forEach((group, index) => {
-      if (group.secondary && targets.has(group.secondary)) widened.add(index);
+    primary.forEach((_line, index) => {
+      // A line the card sentence left out of the mined range stays out.
+      if (excluded.has(index)) return;
+      if (translatedBy(index).some((event) => targets.has(event))) widened.add(index);
     });
     const candidate = [...widened].sort((a, b) => a - b);
     const candidateLines = candidate.map((index) => primary[index]!);
