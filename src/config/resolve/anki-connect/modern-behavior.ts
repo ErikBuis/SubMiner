@@ -12,6 +12,7 @@ export function applyModernBehaviorResolution(
     'overwriteAudio',
     'overwriteImage',
     'highlightWord',
+    'stripSpeakerLabels',
     'autoUpdateNewCards',
   ] as const) {
     applyModernValue(

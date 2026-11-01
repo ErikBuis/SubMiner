@@ -9,6 +9,7 @@ import type {
 } from '../types/anki';
 import { resolveWordCardKind } from './note-field-utils';
 import { STATS_MINING_TAG } from '../shared/anki-source';
+import { cleanSentenceText } from '../shared/subtitle-speaker-labels';
 
 export interface NoteUpdateWorkflowNoteInfo {
   noteId: number;
@@ -40,6 +41,7 @@ export interface NoteUpdateWorkflowDeps {
     behavior?: {
       overwriteAudio?: boolean;
       overwriteImage?: boolean;
+      stripSpeakerLabels?: boolean;
     };
   };
   getCurrentSubtitleText: () => string | undefined;
@@ -274,8 +276,11 @@ export class NoteUpdateWorkflow {
 
       this.deps.appendKnownWordsFromNoteInfo(noteInfo);
 
-      const currentSubtitleText =
+      const rawSubtitleText =
         reviewedSentenceText ?? subtitleMiningContext?.text ?? this.deps.getCurrentSubtitleText();
+      const currentSubtitleText = rawSubtitleText
+        ? cleanSentenceText(rawSubtitleText, config.behavior)
+        : rawSubtitleText;
       if (sentenceField && currentSubtitleText) {
         const processedSentence = this.deps.processSentence(currentSubtitleText, fields);
         updatedFields[sentenceField] = processedSentence;

@@ -18,6 +18,8 @@ interface AnkiIntegrationLike {
     endTime: number,
     secondarySub?: string,
   ) => Promise<boolean>;
+  /** Removes leading speaker labels from one subtitle block; empty when only a label is left. */
+  cleanSubtitleBlock?: (text: string) => string;
 }
 
 interface MpvClientLike {
@@ -227,7 +229,11 @@ export function handleMineSentenceDigit(
 
   const rangeStart = Math.min(...timings.map((t) => t.startTime));
   const rangeEnd = Math.max(...timings.map((t) => t.endTime));
-  const sentence = blocks.join(' ');
+  // Labels only sit at the start of a cue, so clean each block before joining them.
+  const cleanedBlocks = blocks
+    .map((block) => deps.ankiIntegration?.cleanSubtitleBlock?.(block) ?? block)
+    .filter((block) => block.length > 0);
+  const sentence = (cleanedBlocks.length > 0 ? cleanedBlocks : blocks).join(' ');
   const secondarySubText = getSecondarySubTextForMinedBlocks(
     entries,
     deps.getCurrentSecondarySubText,

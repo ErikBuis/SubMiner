@@ -124,3 +124,44 @@ test('sentence card writes generated audio only to sentence audio field', async 
   assert.deepEqual(audioRanges, [{ start: 11.4, end: 14.2, padding: 0 }]);
   assert.deepEqual(requestedProperties, ['volume']);
 });
+
+for (const stripSpeakerLabels of [true, false]) {
+  test(`sentence card ${stripSpeakerLabels ? 'drops' : 'keeps'} the speaker label`, async () => {
+    const addedFields: Record<string, string>[] = [];
+    const service = new CardCreationService(
+      createCardCreationDeps({
+        getConfig: () =>
+          createAnkiConfig({
+            fields: { word: 'Expression' },
+            behavior: { stripSpeakerLabels },
+          }),
+        client: createFakeClient({
+          addNote: async (_deck, _modelName, fields) => {
+            addedFields.push(fields);
+            return 42;
+          },
+          notesInfo: async () => [{ noteId: 42, fields: { Sentence: { value: '' } } }],
+        }),
+        getEffectiveSentenceCardConfig: () => ({
+          model: 'Sentence',
+          sentenceField: 'Sentence',
+          audioField: 'SentenceAudio',
+          lapisEnabled: true,
+          kikuEnabled: false,
+          fieldGroupingMode: 'disabled',
+        }),
+        reviewMediaTiming: async () => ({
+          action: 'confirm',
+          startTime: 1,
+          endTime: 2,
+          text: '（ひとり）\n部活も入らず',
+        }),
+      }),
+    );
+
+    assert.equal(await service.createSentenceCard('（ひとり）\n部活も入らず', 1, 2), true);
+    const expected = stripSpeakerLabels ? '部活も入らず' : '（ひとり）\n部活も入らず';
+    assert.equal(addedFields[0]?.Sentence, expected);
+    assert.equal(addedFields[0]?.Expression, expected);
+  });
+}
