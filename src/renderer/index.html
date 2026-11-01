@@ -347,26 +347,20 @@
               ></textarea>
             </div>
 
-            <div class="media-timing-review-readout" aria-live="polite">
-              <div>
-                <span>Starts</span>
-                <strong id="mediaTimingReviewStartValue">00:00.000</strong>
-              </div>
-              <div class="media-timing-review-duration">
-                <span>Clip length</span>
-                <strong id="mediaTimingReviewDuration">0.00s</strong>
-              </div>
-              <div>
-                <span>Ends</span>
-                <strong id="mediaTimingReviewEndValue">00:00.000</strong>
-              </div>
-            </div>
-
             <div class="media-timing-review-timeline-shell">
-              <div class="media-timing-review-timeline-labels">
-                <span id="mediaTimingReviewTimelineStart">00:00</span>
-                <span id="mediaTimingReviewWaveformLabel">speech-weighted waveform</span>
-                <span id="mediaTimingReviewTimelineEnd">00:00</span>
+              <div class="media-timing-review-readout" aria-live="polite">
+                <div class="media-timing-review-readout-edge is-start">
+                  <span>Start</span>
+                  <strong id="mediaTimingReviewStartValue">00:00.000</strong>
+                </div>
+                <div class="media-timing-review-duration" title="Clip length">
+                  <strong id="mediaTimingReviewDuration">0.00s</strong>
+                  <span>clip</span>
+                </div>
+                <div class="media-timing-review-readout-edge is-end">
+                  <strong id="mediaTimingReviewEndValue">00:00.000</strong>
+                  <span>End</span>
+                </div>
               </div>
               <div id="mediaTimingReviewSelectionTrack" class="media-timing-review-track">
                 <svg
@@ -425,7 +419,15 @@
                 >
                   Earlier &minus;2s
                 </button>
-                <span>Drag an edge to trim, or drag the highlighted clip to move it.</span>
+                <span id="mediaTimingReviewTimelineStart" class="media-timing-review-timeline-edge"
+                  >00:00</span
+                >
+                <span id="mediaTimingReviewWaveformLabel" class="media-timing-review-timeline-hint"
+                  >Drag an edge to trim, or the clip to move it.</span
+                >
+                <span id="mediaTimingReviewTimelineEnd" class="media-timing-review-timeline-edge"
+                  >00:00</span
+                >
                 <button
                   id="mediaTimingReviewShowLater"
                   class="media-timing-review-expand-button"
