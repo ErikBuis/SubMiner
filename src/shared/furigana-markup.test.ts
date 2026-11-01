@@ -91,3 +91,34 @@ test('annotateLineWithFurigana only anchors a reading where the text after it ma
   assert.equal(annotateLineWithFurigana(segments, ''), null);
   assert.equal(annotateLineWithFurigana(parseBracketFurigana('plain'), 'plain'), null);
 });
+
+test('annotateLineWithFurigana does not look past the end of a source line', () => {
+  const segments = parseBracketFurigana('猫[ねこ]。\n犬[いぬ]。');
+  assert.deepEqual(annotateLineWithFurigana(segments, '猫。'), [
+    { text: '猫', reading: 'ねこ' },
+    { text: '。' },
+  ]);
+  assert.deepEqual(annotateLineWithFurigana(segments, '犬。'), [
+    { text: '犬', reading: 'いぬ' },
+    { text: '。' },
+  ]);
+});
+
+test('annotateLineWithFurigana places the readings that fit best when a base repeats', () => {
+  const segments = parseBracketFurigana('行[い]った。\n仕事[しごと]を 行[おこな]った。');
+  assert.deepEqual(annotateLineWithFurigana(segments, '仕事を行った。'), [
+    { text: '仕事', reading: 'しごと' },
+    { text: 'を' },
+    { text: '行', reading: 'おこな' },
+    { text: 'った。' },
+  ]);
+});
+
+test('annotateLineWithFurigana leaves a word that merely starts like a line-final base plain', () => {
+  const segments = parseBracketFurigana('ビールは 生[なま]');
+  assert.equal(annotateLineWithFurigana(segments, '生きる'), null);
+  assert.deepEqual(annotateLineWithFurigana(segments, 'ビールは生'), [
+    { text: 'ビールは' },
+    { text: '生', reading: 'なま' },
+  ]);
+});
