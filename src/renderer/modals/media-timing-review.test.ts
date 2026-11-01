@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   buildMediaTimingReviewTranslation,
   buildMediaTimingReviewTranslationPreview,
+  applyTranslationLineChanges,
   buildMediaTimingLineSelection,
   buildMediaTimingWaveformPath,
   constrainMediaTimingSelection,
@@ -564,4 +565,63 @@ test('review translation buttons skip a background line no dialogue line has', (
     translationNextShift: 1,
   });
   assert.equal(preview.text, `${own.text} ${narration.text}`);
+});
+
+test('an edited translation keeps the edit when lines come and go at its ends', () => {
+  const a = { text: 'Before,', startTime: 6, endTime: 8 };
+  const b = { text: 'the mined line', startTime: 8, endTime: 10 };
+  const c = { text: 'and after.', startTime: 10, endTime: 12 };
+  const lines = (...run: (typeof a)[]) => ({ leadingLines: run, trailingLines: run });
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'My own wording',
+      before: lines(b),
+      after: lines(a, b, c),
+      format: false,
+    }),
+    'Before, My own wording and after.',
+  );
+  // A dropped line leaves only when the edit still starts or ends with it.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'before, my wording and after.',
+      before: lines(a, b, c),
+      after: lines(b),
+      format: false,
+    }),
+    'my wording',
+  );
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'Rewritten completely',
+      before: lines(a, b),
+      after: lines(b),
+      format: false,
+    }),
+    'Rewritten completely',
+  );
+  // Formatting moves the continuation mark to the new end.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'Lost in that thought, (...)',
+      before: lines(b),
+      after: lines(b, c),
+      format: true,
+    }),
+    'Lost in that thought, and after.',
+  );
+});
+
+test('an edited screen translation gets lines on the side they belong to', () => {
+  const before = { text: 'Earlier', startTime: 4, endTime: 6 };
+  const after = { text: 'later', startTime: 12, endTime: 14 };
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'Typed text',
+      before: { leadingLines: [], trailingLines: [] },
+      after: { leadingLines: [before], trailingLines: [after] },
+      format: false,
+    }),
+    'Earlier Typed text later',
+  );
 });
