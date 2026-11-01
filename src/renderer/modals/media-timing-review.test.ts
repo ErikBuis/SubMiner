@@ -121,6 +121,32 @@ test('line selection ends at the latest added cue, not the last one', () => {
   assert.equal(selection.rangeEnd, 10);
 });
 
+test('line selection leaves a label-only line out of the composed sentence', () => {
+  const base = {
+    previousLines: [{ text: 'ただいま', startTime: 2.5, endTime: 4 }],
+    nextLines: [],
+    text: '（歓声）',
+    originalStartTime: 5,
+    originalEndTime: 7,
+    previousCount: 1,
+    nextCount: 0,
+  };
+
+  const stripped = buildMediaTimingLineSelection({ ...base, stripSpeakerLabels: true });
+  assert.deepEqual(stripped.lineTexts, ['ただいま', '（歓声）']);
+  assert.equal(stripped.sentence, 'ただいま');
+
+  const kept = buildMediaTimingLineSelection(base);
+  assert.equal(kept.sentence, 'ただいま （歓声）');
+
+  const alone = buildMediaTimingLineSelection({
+    ...base,
+    previousCount: 0,
+    stripSpeakerLabels: true,
+  });
+  assert.equal(alone.sentence, '（歓声）');
+});
+
 test('preview request guard blocks overlap and invalidates stale responses', () => {
   const guard = createMediaTimingPreviewRequestGuard();
   const first = guard.begin();

@@ -82,7 +82,11 @@ import type {
 } from './anki-integration/pending-youtube-media-queue';
 import { resolveMpvVolumeScale } from './anki-integration/mpv-volume';
 import type { SubtitleTracksForTranslation } from './anki-integration/sentence-translation';
-import { cleanSentenceFuriganaText, cleanSentenceText } from './shared/subtitle-speaker-labels';
+import {
+  cleanSentenceFuriganaText,
+  cleanSentenceText,
+  removeSpeakerLabels,
+} from './shared/subtitle-speaker-labels';
 
 const log = createLogger('anki').child('integration');
 
@@ -1832,6 +1836,10 @@ export class AnkiIntegration {
 
   private isMediaTimingReviewEnabled(): boolean {
     return this.config.media?.reviewTiming === true && Boolean(this.mediaTimingReviewCallback);
+  }
+
+  cleanSubtitleBlock(text: string): string {
+    return this.config.behavior?.stripSpeakerLabels === false ? text : removeSpeakerLabels(text);
   }
 
   private async reviewMediaTiming(
