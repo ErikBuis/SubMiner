@@ -56,7 +56,8 @@ function mainScriptFamily(text: string): string | null {
  * languages of one script (Japanese and Chinese) cannot be told apart from one language.
  */
 function isSourceLanguageText(translationLines: readonly string[], minedText: string): boolean {
-  const compact = (text: string) => text.normalize('NFKC').replace(/\s+/gu, '');
+  // Punctuation is no language: tracks punctuate the same line differently.
+  const compact = (text: string) => text.normalize('NFKC').replace(/[\s\p{P}\p{S}]+/gu, '');
   const lines = translationLines
     .flatMap((text) => text.split(/\r?\n|\\N/))
     .map(compact)
