@@ -81,7 +81,11 @@ import type {
   PendingYoutubeMediaQueueReadyOptions,
 } from './anki-integration/pending-youtube-media-queue';
 import { resolveMpvVolumeScale } from './anki-integration/mpv-volume';
-import { cleanSentenceFuriganaText, cleanSentenceText } from './shared/subtitle-speaker-labels';
+import {
+  cleanSentenceFuriganaText,
+  cleanSentenceText,
+  removeSpeakerLabels,
+} from './shared/subtitle-speaker-labels';
 
 const log = createLogger('anki').child('integration');
 
@@ -1798,6 +1802,10 @@ export class AnkiIntegration {
     callback: ((request: MediaTimingReviewRequest) => Promise<MediaTimingReviewDecision>) | null,
   ): void {
     this.mediaTimingReviewCallback = callback;
+  }
+
+  cleanSubtitleBlock(text: string): string {
+    return this.config.behavior?.stripSpeakerLabels === false ? text : removeSpeakerLabels(text);
   }
 
   private async reviewMediaTiming(

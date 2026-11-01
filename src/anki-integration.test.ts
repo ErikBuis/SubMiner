@@ -379,6 +379,15 @@ test('AnkiIntegration drops speaker labels from kept sentence furigana', () => {
   );
 });
 
+test('AnkiIntegration.cleanSubtitleBlock follows the stripSpeakerLabels option', () => {
+  const enabled = createIntegration({ behavior: {} });
+  const disabled = createIntegration({ behavior: { stripSpeakerLabels: false } });
+
+  assert.equal(enabled.cleanSubtitleBlock('（B）こんばんは'), 'こんばんは');
+  assert.equal(enabled.cleanSubtitleBlock('（拍手）'), '');
+  assert.equal(disabled.cleanSubtitleBlock('（B）こんばんは'), '（B）こんばんは');
+});
+
 // --- Proxy, field grouping, notifications -----------------------------------
 
 test('AnkiIntegration reports an occupied proxy address through its notification seam', async () => {

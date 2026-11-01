@@ -275,6 +275,7 @@ export function buildMediaTimingReviewPayload(
     text: request.text,
     previousLines: cleanContextLines(options.contextLines?.previous, request.stripSpeakerLabels),
     nextLines: cleanContextLines(options.contextLines?.next, request.stripSpeakerLabels),
+    ...(request.stripSpeakerLabels ? { stripSpeakerLabels: true } : {}),
     ...(request.noteId !== undefined ? { noteId: request.noteId } : {}),
     originalStartTime: request.startTime,
     originalEndTime: request.endTime,

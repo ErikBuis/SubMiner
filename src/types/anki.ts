@@ -54,6 +54,8 @@ export interface MediaTimingReviewOpenPayload {
   /** Lines before/after the mined one, both chronological: nearest previous line is last, nearest next line is first. */
   previousLines: MediaTimingReviewContextLine[];
   nextLines: MediaTimingReviewContextLine[];
+  /** Leave label-only lines out of the sentence composed from several lines. */
+  stripSpeakerLabels?: boolean;
   noteId?: number;
   originalStartTime: number;
   originalEndTime: number;

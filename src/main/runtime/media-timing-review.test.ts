@@ -1216,6 +1216,7 @@ describe('buildMediaTimingReviewPayload speaker labels', () => {
       payload.nextLines.map((line) => line.text),
       ['放課後は即帰宅'],
     );
+    assert.equal(payload.stripSpeakerLabels, true);
   });
 
   test('drops adjacent cues that consist only of a label', () => {
@@ -1252,6 +1253,7 @@ describe('buildMediaTimingReviewPayload speaker labels', () => {
       contextLines,
     });
 
+    assert.equal(payload.stripSpeakerLabels, undefined);
     assert.equal(payload.previousLines[0]?.text, '（園児）せんせー');
     assert.equal(payload.nextLines[0]?.text, '（ひとり）\n放課後は即帰宅');
   });
