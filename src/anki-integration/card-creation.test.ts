@@ -450,6 +450,18 @@ test('createSentenceCard ignores a same-language track that splits lines differe
   assert.equal(addedFields[0]?.Translation, undefined);
 });
 
+test('createSentenceCard ignores a same-language cue that only punctuates differently', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [{ text: '今日は、いい天気ですね。', startTime: 1, endTime: 4 }],
+      secondary: [{ text: '今日はいい天気ですね！', startTime: 1, endTime: 4 }],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('今日は、いい天気ですね。', 1, 4), true);
+  assert.equal(addedFields[0]?.Translation, undefined);
+});
+
 test('createSentenceCard ignores a shorter same-language cue inside the mined line', async () => {
   const { service, addedFields } = createTimedTranslationService({
     tracks: {
