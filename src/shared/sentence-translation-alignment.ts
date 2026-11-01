@@ -374,8 +374,9 @@ export function isSourceLanguageText(
   minedText: string,
 ): boolean {
   // Cue markup (`<i>`, `&amp;`) differs between tracks and is not language.
+  // Punctuation is no language either: tracks punctuate the same line differently.
   const comparable = (text: string) =>
-    compactText(decodeCharacterReferences(stripSubtitleTags(text)));
+    compactText(decodeCharacterReferences(stripSubtitleTags(text))).replace(/[\p{P}\p{S}]+/gu, '');
   const lines = translationLines
     .flatMap((text) => text.split(/\r?\n|\\N/))
     .map(comparable)
