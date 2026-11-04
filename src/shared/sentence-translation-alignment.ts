@@ -41,9 +41,10 @@ export const REVIEW_CONTEXT_EPSILON_SECONDS = 0.05;
 
 /** Fraction of a primary line that must fall inside a secondary event to join its sentence. */
 export const DEFAULT_SENTENCE_GROUP_MIN_OVERLAP = 0.6;
-/** Fraction of a primary line that must fall inside the mined range to count as mined. */
+/** Lines whose start and end differ by less than this are co-timed. */
 const CO_TIMED_EPSILON_SECONDS = 0.01;
 const SCORE_EPSILON = 1e-9;
+/** Fraction of a primary line that must fall inside the mined range to count as mined. */
 const MINED_LINE_MIN_OVERLAP = 0.5;
 const MIN_DURATION_SECONDS = 0.001;
 
@@ -374,8 +375,9 @@ export function isSourceLanguageText(
   minedText: string,
 ): boolean {
   // Cue markup (`<i>`, `&amp;`) differs between tracks and is not language.
+  // Punctuation is no language either: tracks punctuate the same line differently.
   const comparable = (text: string) =>
-    compactText(decodeCharacterReferences(stripSubtitleTags(text)));
+    compactText(decodeCharacterReferences(stripSubtitleTags(text))).replace(/[\p{P}\p{S}]+/gu, '');
   const lines = translationLines
     .flatMap((text) => text.split(/\r?\n|\\N/))
     .map(comparable)

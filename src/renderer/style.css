@@ -93,33 +93,6 @@ body:focus-visible,
   pointer-events: auto;
 }
 
-.controller-status-toast {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  max-width: min(360px, calc(100vw - 32px));
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(138, 213, 202, 0.45);
-  background: linear-gradient(135deg, rgba(10, 44, 40, 0.94), rgba(8, 28, 33, 0.94));
-  color: rgba(228, 255, 251, 0.98);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(-6px);
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease;
-  z-index: 1300;
-}
-
-.controller-status-toast:not(.hidden) {
-  opacity: 1;
-  transform: translateY(0);
-}
-
 .overlay-error-toast {
   position: absolute;
   top: 16px;
@@ -1955,8 +1928,6 @@ body:focus-visible,
 
 .media-timing-review-expand-button,
 .media-timing-review-quiet-button,
-.media-timing-review-original-button,
-.media-timing-review-skip-button,
 .media-timing-review-discard-button,
 .media-timing-review-play-button,
 .media-timing-review-confirm-button,
@@ -2072,8 +2043,6 @@ body:focus-visible,
 .media-timing-review-play-button,
 .media-timing-review-confirm-button,
 .media-timing-review-quiet-button,
-.media-timing-review-original-button,
-.media-timing-review-skip-button,
 .media-timing-review-discard-button {
   padding: 9px 15px;
 }
@@ -2107,20 +2076,40 @@ body:focus-visible,
   background: currentcolor;
 }
 
+.media-timing-review-media-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--ctp-subtext0);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  user-select: none;
+}
+
+.media-timing-review-media-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--ctp-green);
+  cursor: pointer;
+}
+
+.media-timing-review-media-toggle input:focus-visible {
+  outline: 2px solid var(--ctp-yellow);
+  outline-offset: 2px;
+}
+
+.media-timing-review-media-toggle:has(input:disabled) {
+  cursor: default;
+  opacity: 0.42;
+}
+
 .media-timing-review-confirm-button {
   border-color: var(--ctp-green);
   background: var(--ctp-green);
   color: var(--ctp-crust);
-}
-
-.media-timing-review-original-button {
-  border-color: var(--ctp-yellow);
-  color: var(--ctp-yellow);
-}
-
-.media-timing-review-skip-button {
-  border-color: var(--ctp-sky);
-  color: var(--ctp-sky);
 }
 
 .media-timing-review-discard-button {
@@ -2170,6 +2159,37 @@ body:focus-visible,
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2;
+}
+
+/* Controller hints: shown beside each control while controller support is on. */
+.media-timing-review-modal.controller-hints-visible button[data-controller-hint]::after,
+#kikuFieldGroupingModal.controller-hints-visible [data-controller-hint]::after {
+  content: attr(data-controller-hint);
+  text-transform: none;
+  /* Buttons use the system UI font, where ○ □ △ are small; Japanese fonts draw them (and
+     the ╳ used for the PlayStation cross) at full size, and SubMiner already expects one. */
+  font-family:
+    'M PLUS 1', 'Noto Sans CJK JP', 'Hiragino Sans', 'Yu Gothic', 'DejaVu Sans', sans-serif;
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border: 1px solid var(--ctp-surface1);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--ctp-mantle);
+  color: var(--ctp-subtext0);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.media-timing-review-modal.controller-hints-visible .media-timing-review-line-stepper button {
+  width: auto;
+  min-width: 24px;
+  padding: 0 5px;
 }
 
 .media-timing-review-cancel-step {
@@ -3063,7 +3083,21 @@ iframe[id^='yomitan-popup'],
 
 .kiku-preview-toggle {
   display: inline-flex;
+  align-items: center;
   gap: 6px;
+}
+
+/* "Scroll ▲ ▼" tag in the preview header, only while controller hints show. */
+.kiku-preview-scroll-hint {
+  display: none;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ctp-subtext0);
+}
+
+#kikuFieldGroupingModal.controller-hints-visible .kiku-preview-scroll-hint[data-controller-hint] {
+  display: inline;
 }
 
 .kiku-preview-toggle button {
@@ -3555,6 +3589,8 @@ iframe[id^='yomitan-popup'],
   border-radius: 8px;
   background: rgba(24, 25, 38, 0.9);
   color: var(--ctp-text);
+  /* Selects default to the system UI font, where the PlayStation ○ is small. */
+  font-family: inherit;
 }
 
 .controller-select-summary {
@@ -3586,6 +3622,40 @@ iframe[id^='yomitan-popup'],
 
 .controller-config-group:first-child {
   margin-top: 0;
+}
+
+.controller-config-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.controller-config-group-action {
+  padding: 2px 8px;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.controller-config-subgroup {
+  padding: 10px 10px 4px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--ctp-subtext0);
+}
+
+.controller-config-warning {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ctp-yellow);
+}
+
+.controller-config-row.has-warning .controller-config-badge {
+  border-color: var(--ctp-yellow);
 }
 
 .controller-config-row {
@@ -3631,6 +3701,7 @@ iframe[id^='yomitan-popup'],
   padding: 2px 8px;
   border: 0;
   border-radius: 4px;
+  font-family: inherit; /* the overlay's Japanese-first fonts draw ○ □ △ at full size */
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -3666,11 +3737,28 @@ iframe[id^='yomitan-popup'],
   color: var(--ctp-overlay2);
 }
 
+/* Before Alt+C sees a controller the rows are a preview: actions look unavailable. */
+.controller-config-locked .controller-config-reset-icon,
+.controller-config-locked .controller-config-edit-icon,
+.controller-config-locked .controller-config-group-action,
+.controller-config-locked .controller-config-edit-panel button {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .controller-config-edit-panel {
+  /* The list is a height-capped flex column: without this the panel (overflow hidden, so no
+     minimum height) is squeezed to its border once the rows overflow. */
+  flex-shrink: 0;
   overflow: hidden;
   animation: configEditSlideIn 180ms ease-out;
   border-bottom: 1px solid rgba(138, 173, 244, 0.15);
   background: rgba(138, 173, 244, 0.04);
+}
+
+/* Redrawn while it stays open (after Learn, Reset, …): no slide-in again. */
+.controller-config-edit-panel-kept {
+  animation: none;
 }
 
 @keyframes configEditSlideIn {
@@ -4543,6 +4631,94 @@ body.subtitle-sidebar-embedded-open #subtitleSidebarContent {
 .changelog-empty-entry {
   font-size: 12px;
   color: var(--ctp-subtext0);
+}
+
+.plugin-panel-content {
+  width: min(760px, 94%);
+  max-height: 86%;
+}
+
+.plugin-panel-body {
+  display: block;
+  overflow-y: auto;
+  max-height: calc(86vh - 110px);
+  padding-right: 6px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ctp-text);
+  outline: none;
+  user-select: text;
+}
+
+.plugin-panel-body > :first-child {
+  margin-top: 0;
+}
+
+.plugin-panel-body p,
+.plugin-panel-body ul,
+.plugin-panel-body ol,
+.plugin-panel-body blockquote,
+.plugin-panel-body pre {
+  margin: 0 0 12px;
+}
+
+.plugin-panel-body h3,
+.plugin-panel-body h4,
+.plugin-panel-body h5,
+.plugin-panel-body h6 {
+  margin: 16px 0 8px;
+  color: var(--ctp-blue);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.plugin-panel-body h3 {
+  font-size: 17px;
+}
+
+.plugin-panel-body ul,
+.plugin-panel-body ol {
+  padding-left: 22px;
+}
+
+.plugin-panel-body li + li {
+  margin-top: 4px;
+}
+
+.plugin-panel-body strong {
+  color: var(--ctp-peach);
+}
+
+.plugin-panel-body code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(54, 58, 79, 0.85);
+  font-size: 0.92em;
+}
+
+.plugin-panel-body pre {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(30, 32, 48, 0.9);
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.plugin-panel-body pre code {
+  padding: 0;
+  background: none;
+}
+
+.plugin-panel-body blockquote {
+  padding-left: 12px;
+  border-left: 3px solid rgba(138, 173, 244, 0.5);
+  color: var(--ctp-subtext1);
+}
+
+.plugin-panel-body hr {
+  margin: 14px 0;
+  border: none;
+  border-top: 1px solid rgba(110, 115, 141, 0.3);
 }
 
 @media (max-width: 640px) {

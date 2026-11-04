@@ -31,12 +31,6 @@
     <!-- Programmatic focus fallback target for Electron/window focus management. -->
     <div id="overlay" tabindex="-1">
       <div
-        id="controllerStatusToast"
-        class="controller-status-toast hidden"
-        role="status"
-        aria-live="polite"
-      ></div>
-      <div
         id="overlayErrorToast"
         class="overlay-error-toast hidden"
         role="status"
@@ -462,7 +456,7 @@
                 id="mediaTimingReviewReset"
                 class="media-timing-review-quiet-button media-timing-review-reset-button"
                 type="button"
-                title="Restore the mined subtitle timing and sentence"
+                title="Restore the mined clip for the lines on the card. Added lines, the translation and the screenshot stay"
               >
                 Reset timing
               </button>
@@ -552,6 +546,13 @@
                   role="status"
                   aria-live="polite"
                 ></div>
+                <label
+                  class="media-timing-review-media-toggle"
+                  title="Export the sentence and translation, but add no audio or image"
+                >
+                  <input id="mediaTimingReviewWithoutMedia" type="checkbox" />
+                  Without media
+                </label>
                 <button
                   id="mediaTimingReviewConfirm"
                   class="media-timing-review-confirm-button"
@@ -580,7 +581,7 @@
           <div id="mediaTimingReviewCancelStep" class="media-timing-review-cancel-step hidden">
             <div class="media-timing-review-cancel-mark" aria-hidden="true">?</div>
             <h2>Stop reviewing?</h2>
-            <p id="mediaTimingReviewCancelMessage">Choose what should happen to this card.</p>
+            <p id="mediaTimingReviewCancelMessage">Keep editing, or delete this card.</p>
             <div class="media-timing-review-cancel-actions">
               <button
                 id="mediaTimingReviewCancelBack"
@@ -588,21 +589,6 @@
                 type="button"
               >
                 Keep editing
-              </button>
-              <button
-                id="mediaTimingReviewUseOriginal"
-                class="media-timing-review-original-button"
-                type="button"
-              >
-                Use original timing
-              </button>
-              <button
-                id="mediaTimingReviewSkipMedia"
-                class="media-timing-review-skip-button"
-                type="button"
-                title="Keep this card but do not add audio or an image."
-              >
-                Keep without media
               </button>
               <button
                 id="mediaTimingReviewDiscard"
@@ -629,20 +615,20 @@
               </div>
               <div class="kiku-cards-container">
                 <div id="kikuCard1" class="kiku-card active" tabindex="0">
-                  <div class="kiku-card-label">1 &mdash; Original Card</div>
+                  <div id="kikuCard1Label" class="kiku-card-label">1 &mdash; Original Card</div>
                   <div class="kiku-card-expression" id="kikuCard1Expression"></div>
                   <div class="kiku-card-sentence" id="kikuCard1Sentence"></div>
                   <div class="kiku-card-meta" id="kikuCard1Meta"></div>
                 </div>
                 <div id="kikuCard2" class="kiku-card" tabindex="0">
-                  <div class="kiku-card-label">2 &mdash; New Card</div>
+                  <div id="kikuCard2Label" class="kiku-card-label">2 &mdash; New Card</div>
                   <div class="kiku-card-expression" id="kikuCard2Expression"></div>
                   <div class="kiku-card-sentence" id="kikuCard2Sentence"></div>
                   <div class="kiku-card-meta" id="kikuCard2Meta"></div>
                 </div>
               </div>
               <div class="kiku-footer">
-                <label class="kiku-delete-toggle">
+                <label id="kikuDeleteToggle" class="kiku-delete-toggle">
                   <input id="kikuDeleteDuplicate" type="checkbox" checked />
                   Delete duplicate card after merge
                 </label>
@@ -657,8 +643,11 @@
 
             <div id="kikuPreviewStep" class="hidden">
               <div class="kiku-preview-header">
-                <div class="kiku-preview-title">Final Merge Preview</div>
-                <div class="kiku-preview-toggle">
+                <div class="kiku-preview-title">
+                  Final Merge Preview
+                  <span id="kikuPreviewScrollHint" class="kiku-preview-scroll-hint">Scroll</span>
+                </div>
+                <div id="kikuPreviewToggle" class="kiku-preview-toggle">
                   <button id="kikuPreviewCompact" type="button">Compact</button>
                   <button id="kikuPreviewFull" type="button">Full</button>
                 </div>
@@ -970,6 +959,10 @@
               <span>Preferred Controller</span>
               <select id="controllerSelectPicker"></select>
             </label>
+            <label class="controller-select-field">
+              <span>Button Style</span>
+              <select id="controllerSelectFaceButtonStyle"></select>
+            </label>
             <div id="controllerSelectSummary" class="controller-select-summary"></div>
             <div id="controllerConfigList" class="controller-config-list"></div>
             <div id="controllerSelectStatus" class="runtime-options-status"></div>
@@ -1077,6 +1070,15 @@
             <div id="changelogStatus" class="changelog-status"></div>
             <div id="changelogList" class="changelog-list"></div>
           </div>
+        </div>
+      </div>
+      <div id="pluginPanelModal" class="modal hidden" aria-hidden="true">
+        <div class="modal-content plugin-panel-content">
+          <div class="modal-header">
+            <div id="pluginPanelTitle" class="modal-title"></div>
+            <button id="pluginPanelClose" class="modal-close" type="button">Close</button>
+          </div>
+          <div id="pluginPanelBody" class="modal-body plugin-panel-body" tabindex="0"></div>
         </div>
       </div>
       <div id="playlistBrowserModal" class="modal hidden" aria-hidden="true">

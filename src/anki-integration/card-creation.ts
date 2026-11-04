@@ -10,7 +10,9 @@ import {
   type MediaTimingReviewRequest,
   type WordCardKind,
 } from '../types/anki';
+import { shiftSubtitleRangeToVideoClock, toSubtitleClock } from '../core/services/subtitle-clock';
 import { createLogger } from '../logger';
+import type { PluginMiningProvenance } from '../plugin-api';
 import type { MediaInput } from '../media-input';
 import { SubtitleTimingTracker } from '../subtitle-timing-tracker';
 import { AiConfig } from '../types/integrations';
@@ -111,6 +113,8 @@ interface CardCreationMediaGenerator {
 }
 
 interface CardCreationDeps {
+  captureMiningProvenance?: () => PluginMiningProvenance | null;
+  onNoteCreated?: (noteId: number, provenance: PluginMiningProvenance | null) => void;
   getConfig: () => AnkiConnectConfig;
   /** Parsed subtitle tracks for picking the translation by timing; null when not parsed. */
   getSubtitleTracksForTranslation?: () =>
@@ -160,13 +164,14 @@ interface CardCreationDeps {
   };
   getFallbackDurationSeconds: () => number;
   appendKnownWordsFromNoteInfo: (noteInfo: CardCreationNoteInfo) => void;
-  removeKnownWordNote: (noteId: number) => void;
   isUpdateInProgress: () => boolean;
   setUpdateInProgress: (value: boolean) => void;
   trackLastAddedNoteId?: (noteId: number) => void;
   trackLastAddedDuplicateNoteIds?: (noteId: number, duplicateNoteIds: number[]) => void;
   findDuplicateNoteIds?: (expression: string, noteInfo: CardCreationNoteInfo) => Promise<number[]>;
   recordCardsMinedCallback?: (count: number, noteIds?: number[]) => void;
+  /** Called once card creation is done writing a card; queued YouTube media may still be pending. */
+  onCardsReady?: (noteIds: number[]) => void;
   reviewMediaTiming?: (
     request: Omit<MediaTimingReviewRequest, 'audioPadding' | 'maxMediaDuration'>,
   ) => Promise<MediaTimingReviewDecision>;
@@ -445,10 +450,12 @@ export class CardCreationService {
         return;
       }
 
-      let startTime = mpvClient.currentSubStart;
-      let endTime = mpvClient.currentSubEnd;
+      let { startTime, endTime } = shiftSubtitleRangeToVideoClock(
+        { startTime: mpvClient.currentSubStart, endTime: mpvClient.currentSubEnd },
+        mpvClient.currentSubDelay,
+      );
 
-      if (startTime === undefined || endTime === undefined) {
+      if (mpvClient.currentSubStart === undefined || mpvClient.currentSubEnd === undefined) {
         const currentTime = mpvClient.currentTimePos || 0;
         const fallback = this.deps.getFallbackDurationSeconds() / 2;
         startTime = currentTime - fallback;
@@ -493,13 +500,14 @@ export class CardCreationService {
               noteId,
             })
           : ({ action: 'use-original' } as const);
+        // The note was mined before this review, so cancelling leaves it as it was.
         if (timingDecision.action === 'discard') {
-          await this.deps.client.deleteNotes([noteId]);
-          this.deps.removeKnownWordNote(noteId);
-          this.deps.showStatusNotification('Card deleted.');
+          this.deps.showStatusNotification('Card left unchanged.');
           return;
         }
-        const skipMedia = timingDecision.action === 'skip-media';
+        const skipMedia =
+          timingDecision.action === 'skip-media' ||
+          (timingDecision.action === 'confirm' && timingDecision.skipMedia === true);
         const exactReviewedRange = timingDecision.action === 'confirm';
         let sentenceText = mpvClient.currentSubText;
         if (timingDecision.action === 'confirm') {
@@ -620,6 +628,15 @@ export class CardCreationService {
     // The cap limits the media only; the translation still covers every line of the sentence.
     let subtitleStartTime = startTime;
     let subtitleEndTime = endTime;
+    const captured = this.deps.captureMiningProvenance?.() ?? null;
+    const provenance = captured && {
+      ...captured,
+      subtitle: {
+        text: sentence,
+        startTime: toSubtitleClock(startTime, mpvClient.currentSubDelay ?? 0),
+        endTime: toSubtitleClock(endTime, mpvClient.currentSubDelay ?? 0),
+      },
+    };
     const cappedEndTime = clampMediaEndTime(startTime, endTime, maxMediaDuration);
     if (cappedEndTime !== endTime) {
       log.warn(
@@ -628,6 +645,7 @@ export class CardCreationService {
       endTime = cappedEndTime;
     }
 
+    let createdNoteId: number | null = null;
     try {
       return await this.deps.withUpdateProgress('Creating sentence card', async () => {
         const behavior = this.deps.getConfig().behavior;
@@ -698,7 +716,9 @@ export class CardCreationService {
           'translation' in timingDecision ? timingDecision.translation?.trim() : undefined;
         const reviewedTranslation =
           typedTranslation === undefined ? undefined : plainTextToAnkiFieldHtml(typedTranslation);
-        const skipMedia = timingDecision.action === 'skip-media';
+        const skipMedia =
+          timingDecision.action === 'skip-media' ||
+          (timingDecision.action === 'confirm' && timingDecision.skipMedia === true);
         const exactReviewedRange = timingDecision.action === 'confirm';
         let sentenceStartTime = subtitleStartTime;
         let sentenceEndTime = subtitleEndTime;
@@ -819,6 +839,8 @@ export class CardCreationService {
             fields,
             this.getConfiguredAnkiTags(),
           );
+          createdNoteId = noteId;
+          this.deps.onNoteCreated?.(noteId, provenance);
           log.info('Created sentence card:', noteId);
         } catch (error) {
           log.error('Failed to create sentence card:', (error as Error).message);
@@ -983,6 +1005,8 @@ export class CardCreationService {
       log.error('Error creating sentence card:', (error as Error).message);
       this.deps.showUpdateResult(`Sentence card failed: ${(error as Error).message}`, false);
       return false;
+    } finally {
+      if (createdNoteId !== null) this.deps.onCardsReady?.([createdNoteId]);
     }
   }
 

@@ -86,7 +86,6 @@ export function createCardCreationDeps(
     }),
     getFallbackDurationSeconds: () => 10,
     appendKnownWordsFromNoteInfo: () => undefined,
-    removeKnownWordNote: () => undefined,
     isUpdateInProgress: () => false,
     setUpdateInProgress: () => undefined,
     trackLastAddedNoteId: () => undefined,
