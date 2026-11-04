@@ -1,23 +1,24 @@
-import { createBuildStartupBootstrapRuntimeFactoryDepsHandler } from './startup-bootstrap-deps-builder';
-import { createBuildAppLifecycleRuntimeRunnerMainDepsHandler } from './startup-lifecycle-main-deps';
-import { createBuildStartupBootstrapMainDepsHandler } from './startup-bootstrap-main-deps';
+import type { AppLifecycleRuntimeRunnerParams } from '../startup-lifecycle';
+import type { StartupBootstrapRuntimeFactoryDeps } from '../startup';
 
-type AppLifecycleRuntimeRunnerMainDeps = Parameters<
-  typeof createBuildAppLifecycleRuntimeRunnerMainDepsHandler
->[0];
-type StartupBootstrapMainDeps = Parameters<typeof createBuildStartupBootstrapMainDepsHandler>[0];
-type StartupBootstrapRuntimeFactoryDeps = Parameters<
-  typeof createBuildStartupBootstrapRuntimeFactoryDepsHandler
->[0];
+// Bootstrap deps as main.ts supplies them; the config-generation exit callbacks are built here.
+type StartupBootstrapMainDeps = Omit<
+  StartupBootstrapRuntimeFactoryDeps,
+  'onConfigGenerated' | 'onGenerateConfigError'
+> & {
+  setExitCode: (code: number) => void;
+  quitApp: () => void;
+  logGenerateConfigError: (message: string) => void;
+};
 
 export function createStartupRuntimeHandlers<
   TCliArgs,
   TStartupState,
   TStartupBootstrapRuntimeDeps = unknown,
 >(deps: {
-  appLifecycleRuntimeRunnerMainDeps: AppLifecycleRuntimeRunnerMainDeps;
+  appLifecycleRuntimeRunnerMainDeps: AppLifecycleRuntimeRunnerParams;
   createAppLifecycleRuntimeRunner: (
-    params: AppLifecycleRuntimeRunnerMainDeps,
+    params: AppLifecycleRuntimeRunnerParams,
   ) => (args: TCliArgs) => void;
   buildStartupBootstrapMainDeps: (
     startAppLifecycle: (args: TCliArgs) => void,
@@ -28,18 +29,24 @@ export function createStartupRuntimeHandlers<
   runStartupBootstrapRuntime: (deps: TStartupBootstrapRuntimeDeps) => TStartupState;
   applyStartupState: (startupState: TStartupState) => void;
 }) {
-  const appLifecycleRuntimeRunnerMainDeps = createBuildAppLifecycleRuntimeRunnerMainDepsHandler(
-    deps.appLifecycleRuntimeRunnerMainDeps,
-  )();
   const appLifecycleRuntimeRunner = deps.createAppLifecycleRuntimeRunner(
-    appLifecycleRuntimeRunnerMainDeps,
+    deps.appLifecycleRuntimeRunnerMainDeps,
   );
 
-  const startupBootstrapMainDeps = createBuildStartupBootstrapMainDepsHandler(
-    deps.buildStartupBootstrapMainDeps(appLifecycleRuntimeRunner),
-  )();
-  const startupBootstrapRuntimeFactoryDeps =
-    createBuildStartupBootstrapRuntimeFactoryDepsHandler(startupBootstrapMainDeps)();
+  const { setExitCode, quitApp, logGenerateConfigError, ...bootstrapDeps } =
+    deps.buildStartupBootstrapMainDeps(appLifecycleRuntimeRunner);
+  const startupBootstrapRuntimeFactoryDeps: StartupBootstrapRuntimeFactoryDeps = {
+    ...bootstrapDeps,
+    onConfigGenerated: (exitCode) => {
+      setExitCode(exitCode);
+      quitApp();
+    },
+    onGenerateConfigError: (error) => {
+      logGenerateConfigError(`Failed to generate config: ${error.message}`);
+      setExitCode(1);
+      quitApp();
+    },
+  };
 
   const runAndApplyStartupState = (): TStartupState => {
     const startupState = deps.runStartupBootstrapRuntime(
