@@ -21,8 +21,8 @@ good test looks like here.
 
 ## Do Not Write
 
-- Pass-through tests: a builder or handler that only forwards deps (`*-main-deps.ts`,
-  `*-runtime-handlers.ts`) needs no test. TypeScript already checks the shape.
+- Pass-through tests: a handler or adapter that only forwards deps
+  (`*-runtime-handlers.ts`) needs no test. TypeScript already checks the shape.
 - Source-text tests: reading `.ts`, `.css`, `.html`, `.lua`, `.swift`, or workflow YAML
   and asserting with regexes. If the invariant matters, extract the logic and run it
   (see `src/preload-ipc-listeners.ts`). Policy lints over workflow YAML are the
@@ -47,3 +47,7 @@ good test looks like here.
 - `src/main/main-wiring.test.ts` and `src/renderer/renderer-init-order.test.ts` still
   regex `main.ts` / `renderer.ts` to guard startup ordering. Replace each test with a
   behavioral one as the logic moves out of `main.ts` closures.
+- `src/main/runtime/overlay-geometry-runtime.ts` and
+  `src/main/runtime/visible-overlay-interaction-runtime.ts` value-import Electron, so they
+  cannot load under `bun test` and stay outside `src/main/assemblies/overlay.ts`. Inject
+  `screen`/`dialog` to make them testable and movable.

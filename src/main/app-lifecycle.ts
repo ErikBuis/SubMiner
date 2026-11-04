@@ -24,6 +24,7 @@ export interface AppReadyRuntimeDepsFactoryInput {
   loadSubtitlePosition: AppReadyRuntimeDeps['loadSubtitlePosition'];
   resolveKeybindings: AppReadyRuntimeDeps['resolveKeybindings'];
   createMpvClient: AppReadyRuntimeDeps['createMpvClient'];
+  startPlugins?: AppReadyRuntimeDeps['startPlugins'];
   reloadConfig: AppReadyRuntimeDeps['reloadConfig'];
   getResolvedConfig: AppReadyRuntimeDeps['getResolvedConfig'];
   getConfigWarnings: AppReadyRuntimeDeps['getConfigWarnings'];
@@ -51,7 +52,7 @@ export interface AppReadyRuntimeDepsFactoryInput {
   handleFirstRunSetup: AppReadyRuntimeDeps['handleFirstRunSetup'];
   prewarmSubtitleDictionaries?: AppReadyRuntimeDeps['prewarmSubtitleDictionaries'];
   startBackgroundWarmups: AppReadyRuntimeDeps['startBackgroundWarmups'];
-  texthookerOnlyMode: AppReadyRuntimeDeps['texthookerOnlyMode'];
+  isTexthookerOnlyMode: AppReadyRuntimeDeps['isTexthookerOnlyMode'];
   shouldAutoInitializeOverlayRuntimeFromConfig: AppReadyRuntimeDeps['shouldAutoInitializeOverlayRuntimeFromConfig'];
   setVisibleOverlayVisible: AppReadyRuntimeDeps['setVisibleOverlayVisible'];
   initializeOverlayRuntime: AppReadyRuntimeDeps['initializeOverlayRuntime'];
@@ -94,6 +95,7 @@ export function createAppReadyRuntimeDeps(
     loadSubtitlePosition: params.loadSubtitlePosition,
     resolveKeybindings: params.resolveKeybindings,
     createMpvClient: params.createMpvClient,
+    startPlugins: params.startPlugins,
     reloadConfig: params.reloadConfig,
     getResolvedConfig: params.getResolvedConfig,
     getConfigWarnings: params.getConfigWarnings,
@@ -121,7 +123,7 @@ export function createAppReadyRuntimeDeps(
     handleFirstRunSetup: params.handleFirstRunSetup,
     prewarmSubtitleDictionaries: params.prewarmSubtitleDictionaries,
     startBackgroundWarmups: params.startBackgroundWarmups,
-    texthookerOnlyMode: params.texthookerOnlyMode,
+    isTexthookerOnlyMode: params.isTexthookerOnlyMode,
     shouldAutoInitializeOverlayRuntimeFromConfig:
       params.shouldAutoInitializeOverlayRuntimeFromConfig,
     setVisibleOverlayVisible: params.setVisibleOverlayVisible,

@@ -20,6 +20,8 @@ type ConfigHotReloadAppliedDeps = {
   invalidateTokenizationCache?: () => void;
   refreshSubtitlePrefetch?: () => void;
   refreshCurrentSubtitle?: () => void;
+  /** Re-reads the live line and re-parses the active cue list through the new filters. */
+  refreshSubtitleFilter?: () => void;
   setLogLevel?: (level: ResolvedConfig['logging']['level']) => void;
   setLogRotation?: (rotation: ResolvedConfig['logging']['rotation']) => void;
   setLogFileToggles?: (files: ResolvedConfig['logging']['files']) => void;
@@ -180,6 +182,10 @@ export function createConfigHotReloadAppliedHandler(deps: ConfigHotReloadApplied
       deps.applyAnkiRuntimeConfigPatch(ankiPatch);
     }
 
+    if (diff.hotReloadFields.includes('subtitleFilter')) {
+      deps.refreshSubtitleFilter?.();
+    }
+
     if (hasAnnotationRuntimeHotReload(diff)) {
       deps.invalidateTokenizationCache?.();
       deps.refreshSubtitlePrefetch?.();
@@ -225,6 +231,35 @@ export function createConfigHotReloadMessageHandler(deps: ConfigHotReloadMessage
     if (type === 'system' || type === 'both' || type === 'osd-system') {
       deps.showDesktopNotification('SubMiner', { body: message });
     }
+  };
+}
+
+type ConfigWatchListener = (eventType: string, filename: string | null) => void;
+
+// Watches the config file, or its directory (filtered to config.json[c]) when the file
+// does not exist yet, and calls onChange for relevant events.
+export function createWatchConfigPathHandler(deps: {
+  fileExists: (path: string) => boolean;
+  dirname: (path: string) => string;
+  watchPath: (targetPath: string, listener: ConfigWatchListener) => { close: () => void };
+}) {
+  return (configPath: string, onChange: () => void): { close: () => void } => {
+    const watchTarget = deps.fileExists(configPath) ? configPath : deps.dirname(configPath);
+    const watcher = deps.watchPath(watchTarget, (_eventType, filename) => {
+      if (watchTarget === configPath) {
+        onChange();
+        return;
+      }
+
+      const normalized =
+        typeof filename === 'string' ? filename : filename ? String(filename) : undefined;
+      if (!normalized || normalized === 'config.json' || normalized === 'config.jsonc') {
+        onChange();
+      }
+    });
+    return {
+      close: () => watcher.close(),
+    };
   };
 }
 
