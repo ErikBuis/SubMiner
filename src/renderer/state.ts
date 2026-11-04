@@ -67,6 +67,8 @@ export type RendererState = {
   youtubePickerStatus: string;
 
   mediaTimingReviewModalOpen: boolean;
+  /** True while a modal in the separate modal window owns the controller. */
+  controllerSuspendedByModalWindow: boolean;
 
   kikuModalOpen: boolean;
   kikuSelectedCard: 1 | 2;
@@ -98,6 +100,8 @@ export type RendererState = {
   controllerDebugModalOpen: boolean;
   subtitleSidebarModalOpen: boolean;
   controllerDeviceSelectedIndex: number;
+  /** While Alt+C is open, the controller selected in it; that window then reads this pad. */
+  controllerSelectGamepadId: string | null;
   controllerConfig: ResolvedControllerConfig | null;
   connectedGamepads: ControllerDeviceInfo[];
   activeGamepadId: string | null;
@@ -108,6 +112,7 @@ export type RendererState = {
   sessionHelpSelectedIndex: number;
   changelogModalOpen: boolean;
   changelogSelectedIndex: number;
+  pluginPanelModalOpen: boolean;
   playlistBrowserModalOpen: boolean;
   playlistBrowserSnapshot: PlaylistBrowserSnapshot | null;
   playlistBrowserStatus: string;
@@ -138,6 +143,7 @@ export type RendererState = {
   jlptN5Color: string;
   preserveSubtitleLineBreaks: boolean;
   autoPauseVideoOnSubtitleHover: boolean;
+  autoPauseVideoOnKeyboardMode: boolean;
   autoPauseVideoOnYomitanPopup: boolean;
   primaryVisibleOnYomitanPopup: boolean;
   frequencyDictionaryEnabled: boolean;
@@ -206,6 +212,7 @@ export function createRendererState(): RendererState {
     youtubePickerStatus: '',
 
     mediaTimingReviewModalOpen: false,
+    controllerSuspendedByModalWindow: false,
 
     kikuModalOpen: false,
     kikuSelectedCard: 1,
@@ -237,6 +244,7 @@ export function createRendererState(): RendererState {
     controllerDebugModalOpen: false,
     subtitleSidebarModalOpen: false,
     controllerDeviceSelectedIndex: 0,
+    controllerSelectGamepadId: null,
     controllerConfig: null,
     connectedGamepads: [],
     activeGamepadId: null,
@@ -247,6 +255,7 @@ export function createRendererState(): RendererState {
     sessionHelpSelectedIndex: 0,
     changelogModalOpen: false,
     changelogSelectedIndex: 0,
+    pluginPanelModalOpen: false,
     playlistBrowserModalOpen: false,
     playlistBrowserSnapshot: null,
     playlistBrowserStatus: '',
@@ -277,6 +286,7 @@ export function createRendererState(): RendererState {
     jlptN5Color: '#8aadf4',
     preserveSubtitleLineBreaks: false,
     autoPauseVideoOnSubtitleHover: false,
+    autoPauseVideoOnKeyboardMode: false,
     autoPauseVideoOnYomitanPopup: false,
     primaryVisibleOnYomitanPopup: true,
     frequencyDictionaryEnabled: false,

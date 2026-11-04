@@ -1,7 +1,9 @@
+import type { PluginMpvEventMap } from '../../plugin-api';
 import { EventEmitter } from 'events';
 import { Config, MpvClient, MpvSubtitleRenderMetrics } from '../../types';
 import {
   dispatchMpvProtocolMessage,
+  MPV_REQUEST_ID_SUBTEXT,
   MPV_REQUEST_ID_TRACK_LIST_AUDIO,
   MPV_REQUEST_ID_TRACK_LIST_SECONDARY,
   MpvMessage,
@@ -122,24 +124,8 @@ export interface MpvIpcClientProtocolDeps {
 
 export interface MpvIpcClientDeps extends MpvIpcClientProtocolDeps {}
 
-export interface MpvIpcClientEventMap {
-  'connection-change': { connected: boolean };
-  'subtitle-change': { text: string; isOverlayVisible: boolean };
-  'subtitle-timing': { text: string; start: number; end: number };
-  'time-pos-change': { time: number };
-  'duration-change': { duration: number };
-  'pause-change': { paused: boolean };
-  'fullscreen-change': { fullscreen: boolean };
-  'secondary-subtitle-change': { text: string };
-  'subtitle-track-change': { sid: number | null };
-  'secondary-subtitle-track-change': { sid: number | null };
-  'secondary-subtitle-delay-change': { delay: number };
-  'subtitle-track-list-change': { trackList: unknown[] | null };
-  'media-path-change': { path: string };
-  'media-title-change': { title: string | null };
+export interface MpvIpcClientEventMap extends PluginMpvEventMap {
   'subtitle-metrics-change': { patch: Partial<MpvSubtitleRenderMetrics> };
-  'secondary-subtitle-visibility': { visible: boolean };
-  'client-message': { args: string[] };
 }
 
 type MpvIpcClientEventName = keyof MpvIpcClientEventMap;
@@ -158,10 +144,13 @@ export class MpvIpcClient implements MpvClient {
   private hasConnectedOnce = false;
   private socketErrorWarnedForDisconnect = false;
   public currentVideoPath = '';
+  private awaitingPathChangeAfterEndFile = false;
   public currentMediaTitle: string | null = null;
   public currentTimePos = 0;
   public currentSubStart = 0;
   public currentSubEnd = 0;
+  /** mpv `sub-delay`: seconds each primary line plays after its `sub-start`/`sub-end`. */
+  public currentSubDelay = 0;
   public currentSubText = '';
   public currentSecondarySubText = '';
   public currentAudioStreamIndex: number | null = null;
@@ -463,6 +452,10 @@ export class MpvIpcClient implements MpvClient {
         this.currentSubEnd = value;
       },
       getCurrentSubEnd: () => this.currentSubEnd,
+      setCurrentSubDelay: (value: number) => {
+        this.currentSubDelay = value;
+      },
+      getCurrentSubDelay: () => this.currentSubDelay,
       emitMediaPathChange: (payload) => {
         this.emit('media-path-change', payload);
       },
@@ -501,9 +494,14 @@ export class MpvIpcClient implements MpvClient {
       autoLoadSecondarySubTrack: (path: string) => {
         this.autoLoadSecondarySubTrack(path);
       },
+      getCurrentVideoPath: () => this.currentVideoPath,
       setCurrentVideoPath: (value: string) => {
         this.currentVideoPath = value;
         this.currentMediaTitle = null;
+      },
+      getAwaitingPathChangeAfterEndFile: () => this.awaitingPathChangeAfterEndFile,
+      setAwaitingPathChangeAfterEndFile: (value: boolean) => {
+        this.awaitingPathChangeAfterEndFile = value;
       },
       emitSecondarySubtitleVisibility: (payload) => {
         this.emit('secondary-subtitle-visibility', payload);
@@ -523,6 +521,10 @@ export class MpvIpcClient implements MpvClient {
       emitClientMessage: (payload) => {
         this.emit('client-message', payload);
       },
+      emitEndFile: (payload) => {
+        this.emit('end-file', payload);
+      },
+      emitFileLoaded: () => this.emit('file-loaded', undefined),
     };
   }
 
@@ -594,10 +596,23 @@ export class MpvIpcClient implements MpvClient {
     });
   }
 
+  /** Re-reads `sub-text` so the current line passes through the protocol handler again. */
+  refreshSubtitleText(): void {
+    this.send({ command: ['get_property', 'sub-text'], request_id: MPV_REQUEST_ID_SUBTEXT });
+  }
+
   async requestProperty(name: string): Promise<unknown> {
     const response = await this.request(['get_property', name]);
     if (response.error && response.error !== 'success') {
       throw new Error(`Failed to read MPV property '${name}': ${response.error}`);
+    }
+    return response.data;
+  }
+
+  async requestCommand(command: (string | number | boolean)[]): Promise<unknown> {
+    const response = await this.request(command);
+    if (response.error && response.error !== 'success') {
+      throw new Error(`MPV command failed: ${response.error}`);
     }
     return response.data;
   }

@@ -379,6 +379,20 @@ function M.create(ctx)
 		end
 	end
 
+	-- Handles the app's subminer-overlay-loading-ready message: the spinner is done, and warm
+	-- playlist advances reuse this window, so they must not restart it (#315).
+	local function mark_overlay_content_ready()
+		state.overlay_content_ready_seen = true
+		finish_overlay_loading_osd()
+	end
+
+	-- Handles subminer-overlay-loading-dismissed: the app's current overlay window has no content
+	-- (hidden mid-load, or a replaced window), so earlier readiness no longer applies.
+	local function mark_overlay_content_not_ready()
+		state.overlay_content_ready_seen = false
+		finish_overlay_loading_osd()
+	end
+
 	-- The app asks for the spinner when its overlay window is still loading. While the
 	-- pause-until-ready gate shows its own OSD messages, those own the OSD line.
 	local function request_overlay_loading_osd()
@@ -815,6 +829,7 @@ function M.create(ctx)
 
 					state.overlay_running = false
 					state.auto_play_ready_signal_seen = false
+					state.overlay_content_ready_seen = false
 					subminer_log("error", "process", "Overlay start failed after retries: " .. reason)
 					stop_overlay_loading_osd()
 					show_osd("Overlay start failed")
@@ -869,6 +884,7 @@ function M.create(ctx)
 		state.overlay_running = false
 		state.texthooker_running = false
 		state.auto_play_ready_signal_seen = false
+		state.overlay_content_ready_seen = false
 		stop_overlay_loading_osd()
 		disarm_auto_play_ready_gate()
 		show_osd("Stopped")
@@ -1008,6 +1024,7 @@ function M.create(ctx)
 			state.overlay_running = false
 			state.texthooker_running = false
 			state.auto_play_ready_signal_seen = false
+			state.overlay_content_ready_seen = false
 			state.suppress_ready_overlay_restore = false
 			state.force_ready_overlay_restore = true
 			disarm_auto_play_ready_gate({ resume_playback = false })
@@ -1031,6 +1048,7 @@ function M.create(ctx)
 					if not success or (result and result.status ~= 0) then
 						state.overlay_running = false
 						state.auto_play_ready_signal_seen = false
+						state.overlay_content_ready_seen = false
 						subminer_log(
 							"error",
 							"process",
@@ -1114,6 +1132,8 @@ function M.create(ctx)
 		restore_sub_visibility_before_overlay = restore_sub_visibility_before_overlay,
 		finish_overlay_loading_osd = finish_overlay_loading_osd,
 		stop_overlay_loading_osd = stop_overlay_loading_osd,
+		mark_overlay_content_ready = mark_overlay_content_ready,
+		mark_overlay_content_not_ready = mark_overlay_content_not_ready,
 	}
 end
 
