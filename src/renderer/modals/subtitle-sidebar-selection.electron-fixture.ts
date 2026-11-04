@@ -28,6 +28,7 @@ export async function setup() {
     ],
     currentSubtitle: { text: '最初の台詞', startTime: 0, endTime: 1 },
     currentTimeSec: 0,
+    subDelay: 0,
     config: {
       ...SUBTITLE_DEFAULT_CONFIG.subtitleSidebar,
       enabled: true,
@@ -101,6 +102,7 @@ export async function setup() {
     handleControllerDebugKeydown: () => false,
     handleSessionHelpKeydown: () => false,
     handleChangelogKeydown: () => false,
+    handlePluginPanelKeydown: () => false,
     openSessionHelpModal: () => {},
     getPlaybackPaused: async () => false,
   });

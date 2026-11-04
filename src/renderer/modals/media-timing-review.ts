@@ -6,6 +6,11 @@ import type {
   MediaTimingReviewPreviewPosition,
 } from '../../types/anki';
 import type { ModalStateReader, RendererContext } from '../context';
+import type {
+  MediaTimingReviewControllerAction,
+  MediaTimingReviewStep,
+} from '../handlers/media-timing-review-controller.js';
+import type { RendererDom } from '../utils/dom';
 import { createModalFocusGuard } from './modal-focus-guard';
 import { shieldYomitanScan } from '../yomitan-popup.js';
 
@@ -24,6 +29,43 @@ const SPEECH_TAIL_SECONDS = 0.15;
 const MINIMUM_TRAILING_TRIM_SECONDS = 0.1;
 /** Allow buffering and output-device delays without cutting off an advancing preview. */
 const PREVIEW_STALL_TIMEOUT_MS = 15_000;
+
+type ButtonDomKey = {
+  [Key in keyof RendererDom]: RendererDom[Key] extends HTMLButtonElement ? Key : never;
+}[keyof RendererDom];
+
+/** The on-screen button each controller action presses. */
+export const MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS: Record<
+  MediaTimingReviewControllerAction,
+  ButtonDomKey
+> = {
+  confirm: 'mediaTimingReviewConfirm',
+  cancel: 'mediaTimingReviewCancel',
+  play: 'mediaTimingReviewPlay',
+  resetTiming: 'mediaTimingReviewReset',
+  showEarlier: 'mediaTimingReviewShowEarlier',
+  showLater: 'mediaTimingReviewShowLater',
+  startBack: 'mediaTimingReviewStartBack',
+  startForward: 'mediaTimingReviewStartForward',
+  endBack: 'mediaTimingReviewEndBack',
+  endForward: 'mediaTimingReviewEndForward',
+  previousLineAdd: 'mediaTimingReviewPrevAdd',
+  previousLineRemove: 'mediaTimingReviewPrevRemove',
+  nextLineAdd: 'mediaTimingReviewNextAdd',
+  nextLineRemove: 'mediaTimingReviewNextRemove',
+  framePrevious: 'mediaTimingReviewFramePrevious',
+  frameNext: 'mediaTimingReviewFrameNext',
+  frameReset: 'mediaTimingReviewFrameReset',
+  keepEditing: 'mediaTimingReviewCancelBack',
+  useOriginal: 'mediaTimingReviewUseOriginal',
+  skipMedia: 'mediaTimingReviewSkipMedia',
+  discard: 'mediaTimingReviewDiscard',
+};
+
+/** A controller press only counts when a mouse click could have reached the button. */
+export function isMediaTimingReviewButtonAvailable(button: HTMLButtonElement): boolean {
+  return !button.disabled && button.closest('.hidden') === null;
+}
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
@@ -969,6 +1011,10 @@ export function createMediaTimingReviewModal(
   /**
    * Must run synchronously at renderer load: the shield only works while it is
    * registered ahead of Yomitan's scanner, which hooks up after its own async setup.
+   *
+   * The shield stops `pointerdown`/`mousedown` at window capture for everything inside the
+   * dialog, so a `pointerdown`/`mousedown` listener added inside it later never fires. Press
+   * handling for the dialog has to go through the `onPress` callback below.
    */
   function shieldYomitanHover(): () => void {
     return shieldYomitanScan(
@@ -983,6 +1029,44 @@ export function createMediaTimingReviewModal(
         }
       },
     );
+  }
+
+  function getControllerStep(): MediaTimingReviewStep {
+    return ctx.dom.mediaTimingReviewCancelStep.classList.contains('hidden') ? 'editor' : 'cancel';
+  }
+
+  /** Presses the on-screen button for a controller action, so every guard it has applies. */
+  function handleControllerAction(action: MediaTimingReviewControllerAction): boolean {
+    if (!ctx.state.mediaTimingReviewModalOpen) return false;
+    const button = ctx.dom[MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS[action]];
+    if (!isMediaTimingReviewButtonAvailable(button)) return false;
+    button.click();
+    return true;
+  }
+
+  /**
+   * Hints live in a data attribute drawn by CSS, so they survive code that rewrites a
+   * button's text (Skip media / Discard labels change with the card). Unbound actions
+   * show no tag. Only changed attributes are written, since this runs every frame.
+   */
+  function setControllerHints(
+    hints: Record<MediaTimingReviewControllerAction, string | null>,
+  ): void {
+    for (const [action, domKey] of Object.entries(MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS) as Array<
+      [MediaTimingReviewControllerAction, ButtonDomKey]
+    >) {
+      const button = ctx.dom[domKey];
+      const hint = hints[action];
+      if (hint === null || hint === undefined) {
+        if (button.dataset.controllerHint !== undefined) delete button.dataset.controllerHint;
+      } else if (button.dataset.controllerHint !== hint) {
+        button.dataset.controllerHint = hint;
+      }
+    }
+  }
+
+  function setControllerHintsVisible(visible: boolean): void {
+    ctx.dom.mediaTimingReviewModal.classList.toggle('controller-hints-visible', visible);
   }
 
   function wireDomEvents(): void {
@@ -1008,6 +1092,9 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewFrameReset.addEventListener('click', () => {
       if (!resolveInFlight) framePicker.reset();
     });
+    // No `pointerdown`/`mousedown` listeners here: shieldYomitanHover stops those at window
+    // capture, so they would never fire. Presses (including the drag start on the track) are
+    // handled in its `onPress` callback instead.
     const track = ctx.dom.mediaTimingReviewSelectionTrack;
     track.addEventListener('pointermove', (event) => {
       if (drag?.pointerId === event.pointerId) applyDrag(event.clientX);
@@ -1073,5 +1160,9 @@ export function createMediaTimingReviewModal(
     handleMediaTimingReviewKeydown,
     shieldYomitanHover,
     wireDomEvents,
+    getControllerStep,
+    handleControllerAction,
+    setControllerHints,
+    setControllerHintsVisible,
   };
 }
