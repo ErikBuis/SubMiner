@@ -26,16 +26,21 @@ import type {
   ControllerConfig,
   ResolvedControllerProfileConfig,
   ControllerTriggerInputMode,
+  ControllerFaceButtonLabels,
   Keybinding,
   ResolvedControllerBindingsConfig,
+  ResolvedControllerFieldGroupingBindings,
+  ResolvedControllerReviewBindings,
 } from './runtime';
 import type {
   FrequencyDictionaryMatchMode,
   FrequencyDictionaryMode,
   NPlusOneMatchMode,
+  ResolvedSubtitleFilterConfig,
   ResolvedSubtitleSidebarConfig,
   SecondarySubConfig,
   SubtitlePosition,
+  SubtitleFilterConfig,
   SubtitleSidebarConfig,
   SubtitleStyleConfig,
 } from './subtitle';
@@ -142,6 +147,13 @@ export interface RawShortcutsConfig extends ShortcutsConfig {
 
 export type DictionaryBackend = 'yomitan' | 'hachidori';
 
+/** One `plugins.<id>` entry; the id names the directory under `<config dir>/plugins/`. */
+export interface PluginConfig {
+  enabled?: boolean;
+  /** Passed to the plugin as `ctx.settings`. */
+  settings?: Record<string, unknown>;
+}
+
 export interface Config {
   dictionaryBackend?: DictionaryBackend;
   subtitlePosition?: SubtitlePosition;
@@ -160,6 +172,7 @@ export interface Config {
   startupWarmups?: StartupWarmupsConfig;
   subtitleStyle?: SubtitleStyleConfig;
   subtitleSidebar?: SubtitleSidebarConfig;
+  subtitleFilter?: SubtitleFilterConfig;
   auto_start_overlay?: boolean;
   jimaku?: JimakuConfig;
   /** @deprecated Use tsukihime. */
@@ -176,6 +189,7 @@ export interface Config {
   stats?: StatsConfig;
   updates?: UpdatesConfig;
   notifications?: NotificationsConfig;
+  plugins?: Record<string, PluginConfig>;
   logging?: {
     level?: 'debug' | 'info' | 'warn' | 'error';
     rotation?: LogRotation;
@@ -213,11 +227,14 @@ export interface ResolvedConfig {
     horizontalJumpPixels: number;
     stickDeadzone: number;
     triggerInputMode: ControllerTriggerInputMode;
+    faceButtonLabels: ControllerFaceButtonLabels;
     triggerDeadzone: number;
     repeatDelayMs: number;
     repeatIntervalMs: number;
     buttonIndices: Required<ControllerButtonIndicesConfig>;
     bindings: Required<ResolvedControllerBindingsConfig>;
+    reviewBindings: ResolvedControllerReviewBindings;
+    fieldGroupingBindings: ResolvedControllerFieldGroupingBindings;
     profiles: Record<string, ResolvedControllerProfileConfig>;
   };
   ankiConnect: AnkiConnectConfig & {
@@ -331,11 +348,13 @@ export interface ResolvedConfig {
     };
   };
   subtitleSidebar: ResolvedSubtitleSidebarConfig;
+  subtitleFilter: ResolvedSubtitleFilterConfig;
   auto_start_overlay: boolean;
   jimaku: JimakuConfig & {
     apiBaseUrl: string;
     languagePreference: JimakuLanguagePreference;
     maxEntryResults: number;
+    autoOpenWhenPrimarySubtitleMissing: boolean;
   };
   tsukihime: TsukihimeConfig & {
     apiBaseUrl: string;
@@ -428,6 +447,7 @@ export interface ResolvedConfig {
   };
   updates: Required<UpdatesConfig>;
   notifications: Required<NotificationsConfig>;
+  plugins: Record<string, Required<PluginConfig>>;
   logging: {
     level: 'debug' | 'info' | 'warn' | 'error';
     rotation: LogRotation;
