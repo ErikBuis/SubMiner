@@ -856,7 +856,7 @@ export function createMediaTimingReviewModal(
     if (timelineChanged) queueWaveformLoad(120);
   }
 
-  /** Returns the review to how it opened: lines, translation, timing and screenshot. */
+  /** Returns the review to how it opened: lines, translation, timing, screenshot and media. */
   function resetAll(): void {
     if (!payload || resolveInFlight) return;
     previousCount = 0;
@@ -864,7 +864,10 @@ export function createMediaTimingReviewModal(
     renderSentence();
     setTranslation(payload.card?.translation?.text ?? '', false);
     resetTiming();
+    ctx.dom.mediaTimingReviewWithoutMedia.checked = false;
     framePicker.reset();
+    // Export card is only disabled without media while a screenshot blocks it.
+    renderFramePicker();
     // Trimming the trailing silence was part of how the review opened.
     trailingTrimPending = true;
     queueWaveformLoad();
