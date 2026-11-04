@@ -105,7 +105,10 @@ function useMpv(): Promise<Started> {
     const subtitlePath = path.join(root, 'clip.srt');
     const probePath = path.join(root, 'probe.lua');
     const screenshotDir = path.join(root, 'screenshots');
-    const socketPath = path.join(root, 'mpv.sock');
+    const socketPath =
+      process.platform === 'win32'
+        ? `\\\\.\\pipe\\${path.basename(root)}-mpv`
+        : path.join(root, 'mpv.sock');
     // The script directory's name is the plugin's script name, which its options are keyed by.
     const pluginLoaderDir = path.join(root, 'scripts', 'subminer');
     fs.mkdirSync(screenshotDir);
