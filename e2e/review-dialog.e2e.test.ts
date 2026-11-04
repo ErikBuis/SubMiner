@@ -9,7 +9,7 @@ import { waitUntil } from './harness/wait';
 
 // Bun caps node:test hooks at 5s whatever their timeout option says, so the
 // session boots inside whichever test runs first and every test budgets for it.
-const TEST_TIMEOUT_MS = 120_000;
+const TEST_TIMEOUT_MS = 180_000;
 let started: Promise<E2eSession> | undefined;
 
 function useSession(): Promise<E2eSession> {
@@ -49,6 +49,23 @@ const REVIEW_OPEN = `(() => {
 })()`;
 
 // The review opens in the dedicated modal window when the app has one, else in the overlay.
+/** What each renderer page shows, for a failure message. */
+async function describeRendererPages(session: E2eSession): Promise<string> {
+  const lines: string[] = [];
+  for (const target of await listCdpTargets(session.cdpPort).catch(() => [])) {
+    if (!target.url.includes('renderer/index.html')) continue;
+    const page = await connectCdpPage(target).catch(() => null);
+    const modalClass = await page
+      ?.evaluate<string>(
+        `document.getElementById('mediaTimingReviewModal')?.className ?? '(no review modal)'`,
+      )
+      .catch((error: unknown) => `(evaluate failed: ${String(error)})`);
+    page?.close();
+    lines.push(`${target.url}: ${modalClass ?? '(could not connect)'}`);
+  }
+  return lines.join('\n') || '(no renderer pages)';
+}
+
 async function findOpenReview(session: E2eSession): Promise<CdpPage | null> {
   const targets = (await listCdpTargets(session.cdpPort)).filter((target) =>
     target.url.includes('renderer/index.html'),
@@ -120,6 +137,11 @@ async function openSentenceReview(
   session: E2eSession,
 ): Promise<{ review: CdpPage; mining: Promise<void> }> {
   await waitForPreviousCardMedia(session);
+  const leftOver = await findOpenReview(session);
+  if (leftOver) {
+    leftOver.close();
+    throw new Error('A media timing review from an earlier step is still open');
+  }
   await session.mpv.command('seek', FIXTURE_CUES[1].at, 'absolute+exact');
   await session.mpv.command('set_property', 'pause', true);
   session.anki.requests.length = 0;
@@ -138,7 +160,8 @@ async function openSentenceReview(
         if (miningError) throw miningError;
         return findOpenReview(session);
       },
-      { description: 'the media timing review to open', timeoutMs: 30_000 },
+      // The first review on a fresh macOS runner can take well over 30 s to show.
+      { description: 'the media timing review to open', timeoutMs: 90_000 },
     );
     return { review, mining };
   } catch (error) {
@@ -147,7 +170,10 @@ async function openSentenceReview(
     const tail = fs.existsSync(appLog)
       ? fs.readFileSync(appLog, 'utf8').split('\n').slice(-40).join('\n')
       : '(no app log)';
-    throw new Error(`${String(error)}\n--- end of app.log ---\n${tail}`);
+    const pages = await describeRendererPages(session);
+    throw new Error(
+      `${String(error)}\n--- renderer pages ---\n${pages}\n--- end of app.log ---\n${tail}`,
+    );
   }
 }
 
