@@ -145,7 +145,8 @@ function useMpv(): Promise<Started> {
     fs.closeSync(log);
     await once(child, 'spawn');
     const mpv = await connectMpv(socketPath, () => `mpv exited (${String(child.exitCode)})`);
-    await waitUntil(async () => (await mpv.command('get_property', 'duration')) !== null, {
+    // `duration` is unavailable (an error, not null) until the file has loaded.
+    await waitUntil(() => mpv.command('get_property', 'duration').catch(() => null), {
       description: 'mpv to load the clip',
       timeoutMs: 20_000,
     });
