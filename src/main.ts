@@ -1648,6 +1648,7 @@ const {
     restoreMpvSubVisibility: () => {
       restoreOverlayMpvSubtitles({ force: true });
     },
+    releaseMpvInputLock: () => mining.mpvInputLock.unlock(),
     isAppReady: () => app.isReady(),
     unregisterAllGlobalShortcuts: () => globalShortcut.unregisterAll(),
     stopSubtitleWebsocket: () => {
@@ -1797,6 +1798,7 @@ const playback = createPlaybackAssembly({
   managedLocalSubtitleSelectionRuntime,
   jimakuAutoOpenRuntime,
   mediaTimingReviewRuntime: mining.mediaTimingReviewRuntime,
+  mpvInputLock: mining.mpvInputLock,
   discordPresenceRuntime,
   immersionMediaRuntime: stats.immersionMediaRuntime,
   mediaRuntime,

@@ -22,6 +22,7 @@ import {
   type RemoteMediaWindowRange,
   type RemoteMediaWindowSource,
 } from '../../core/services/remote-media-window-cache';
+import type { MpvInputLock } from '../../core/services/mpv-input-lock';
 import type { MediaInput, MediaInputOptions } from '../../media-input';
 
 const INITIAL_TIMELINE_MARGIN_SECONDS = 2;
@@ -107,6 +108,8 @@ export interface MediaTimingReviewRuntimeDeps {
   };
   decisionTimeoutMs?: number;
   openModal: (payload: MediaTimingReviewOpenPayload, signal: AbortSignal) => Promise<boolean>;
+  /** Blocks mpv's own key and mouse bindings while the modal is open. */
+  inputLock?: Pick<MpvInputLock, 'lock' | 'unlock'>;
   /** Tells the modal that the hidden player finished the previewed clip. */
   onPreviewEnded?: (reviewId: string) => void;
   onPreviewPosition?: (position: MediaTimingReviewPreviewPosition) => void;
@@ -323,18 +326,6 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
     if (active) active.restorePlayback = false;
   }
 
-  /**
-   * mpv resumed playback while the review is open. That happens when a key reaches mpv
-   * itself instead of the overlay, for example Space or P after switching back to the mpv
-   * window, so the overlay's deferral never sees it. The review holds playback, so pause
-   * again; closing the review still restores the state from before it opened.
-   */
-  function holdPauseDuringReview(paused: boolean): boolean {
-    if (paused || !active || !active.mpvClient.connected) return false;
-    active.mpvClient.send({ command: ['set_property', 'pause', 'yes'] });
-    return true;
-  }
-
   function ensureWindow(
     review: ActiveReview,
     range: RemoteMediaWindowRange,
@@ -523,6 +514,9 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
     };
     active = review;
     pendingPauseRestore = null;
+    // From here until cleanup, keys that reach the mpv window behind the dialog (after alt+tab,
+    // or a click on the video) must not change playback or settings.
+    deps.inputLock?.lock();
     // Download the visible timeline once now; the waveform and preview both wait on it.
     void previewFor(review, {
       startTime: payload.timelineStartTime,
@@ -786,6 +780,7 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
     if (expected && current !== expected) return;
     active = null;
     if (!current) return;
+    deps.inputLock?.unlock();
     deps.clearFrameCache?.();
     void current.preview?.session.then((session) => session.dispose()).catch(() => {});
     if ((current.restorePlayback || resumeDeferred) && current.mpvClient.connected) {
@@ -812,7 +807,6 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
     resolveReview,
     deferPlaybackResume,
     cancelPlaybackResume,
-    holdPauseDuringReview,
     dispose,
   };
 }

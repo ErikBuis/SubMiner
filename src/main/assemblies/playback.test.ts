@@ -82,7 +82,10 @@ function makeDeps(recorder: Recorder): PlaybackAssemblyDeps {
     mediaTimingReviewRuntime: {
       deferPlaybackResume: spy('timingReview.deferPlaybackResume', () => false),
       cancelPlaybackResume: spy('timingReview.cancelPlaybackResume', noop),
-      holdPauseDuringReview: spy('timingReview.holdPauseDuringReview', () => false),
+    },
+    mpvInputLock: {
+      sync: spy('mpvInputLock.sync', noop),
+      handleClientMessage: spy('mpvInputLock.handleClientMessage', () => false),
     },
     discordPresenceRuntime: { publishDiscordPresence: spy('discord.publish', noop) },
     immersionMediaRuntime: { syncFromCurrentMediaState: spy('immersion.sync', noop) },
@@ -234,6 +237,26 @@ test('mpv connection starts the loading OSD, resends overlay readiness, and flus
   assert.ok(
     names.indexOf('flushQueuedMpvOsdNotifications') < names.indexOf('refreshMpvSessionBindings'),
   );
+});
+
+test('mpv connection re-sends the input lock state after asking the plugin to reload its bindings', () => {
+  const { recorder, appState, emit } = setup();
+  appState.sessionBindingsInitialized = true;
+  appState.mpvClient = {
+    connected: true,
+    send: recorder.spy('mpv.send', () => true),
+  } as unknown as NonNullable<typeof appState.mpvClient>;
+
+  emit('connection-change', { connected: true });
+
+  const reloadIndex = recorder.calls.findIndex(
+    (call) =>
+      call.name === 'mpv.send' &&
+      (call.args[0] as { command: unknown[] }).command[1] === 'subminer-reload-session-bindings',
+  );
+  assert.ok(reloadIndex >= 0);
+  // The plugin handles script messages in order, so the lock state must come after the reload.
+  assert.ok(reloadIndex < recorder.names().indexOf('mpvInputLock.sync'));
 });
 
 test('media path change starts the loading OSD, then clears rendered subtitle state before broadcasting', (t) => {

@@ -138,7 +138,9 @@ Media settings apply to the next card without a restart.
 
 With `media.reviewTiming` on, SubMiner pauses before making media for word, sentence, and audio cards and opens a review dialog. You can also toggle it for the current session with **Review Media Timing** in the runtime options palette (`Ctrl/Cmd+Shift+O`). Clipboard updates and stats-dashboard mining skip the review.
 
-Playback stays paused while the dialog is open, even if the popup or hover that paused it goes away, or a key such as `Space` reaches mpv directly (for example after switching back to the mpv window). When the dialog closes, playback resumes if it was playing before, or if the popup closed in the meantime. A popup that is still open keeps it paused.
+Playback stays paused while the dialog is open, even if the popup or hover that paused it goes away. When the dialog closes, playback resumes if it was playing before, or if the popup closed in the meantime. A popup that is still open keeps it paused.
+
+While the dialog is open, mpv's own keys and mouse buttons do nothing, so `Space`, seeking, volume, or `q` pressed in the mpv window (for example after switching back to it) can't change playback behind the dialog. mpv shows a short reminder instead. The window's close button still quits mpv. If SubMiner crashes with the dialog open, the SubMiner mpv plugin gives mpv its keys back about 3 seconds after the next key press.
 
 The dialog shows the clip over a speech waveform. When the waveform loads, an untouched clip end moves back to just after the last speech in the line. The orange bars still mark the subtitle's original start and end.
 
