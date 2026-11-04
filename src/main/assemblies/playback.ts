@@ -129,7 +129,7 @@ export interface PlaybackAssemblyDeps {
   >;
   mediaTimingReviewRuntime: Pick<
     ReturnType<typeof createMediaTimingReviewRuntime>,
-    'deferPlaybackResume' | 'cancelPlaybackResume'
+    'deferPlaybackResume' | 'cancelPlaybackResume' | 'holdPauseDuringReview'
   >;
   discordPresenceRuntime: Pick<
     ReturnType<typeof createDiscordPresenceRuntime>,
@@ -761,6 +761,9 @@ export function createPlaybackAssembly(deps: PlaybackAssemblyDeps) {
         secondarySubtitleTrackController.handleTimePos(time);
       },
       onFullscreenChange: (fullscreen) => deps.onFullscreenChange(fullscreen),
+      onPlaybackPauseChange: (paused) => {
+        mediaTimingReviewRuntime.holdPauseDuringReview(paused);
+      },
       onSubtitleTrackChange: (sid) => {
         lastObservedPrimarySubtitleTrackId = sid;
         logger.info('[mpv-subtitles] primary subtitle track changed', { sid });

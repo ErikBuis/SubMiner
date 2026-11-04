@@ -90,6 +90,8 @@ export function createMpvMainEventBindingDeps(deps: {
   onTimePosUpdate?: (time: number) => void;
   consumeExplicitSeek?: () => boolean;
   onFullscreenChange?: (fullscreen: boolean) => void;
+  /** Every mpv pause change, including ones made by keys that reached mpv itself. */
+  onPlaybackPauseChange?: (paused: boolean) => void;
   updateSubtitleRenderMetrics: (patch: Record<string, unknown>) => void;
   refreshDiscordPresence: () => void;
   ensureImmersionTrackerInitialized: () => void;
@@ -373,6 +375,7 @@ export function createMpvMainEventBindingDeps(deps: {
       : undefined,
     recordPauseState: (paused: boolean) => {
       deps.appState.playbackPaused = paused;
+      deps.onPlaybackPauseChange?.(paused);
       // Lets keyboard-only mode's auto-pause see the user playing or pausing themselves.
       deps.broadcastToOverlayWindows('mpv:pause-changed', paused);
       deps.ensureImmersionTrackerInitialized();

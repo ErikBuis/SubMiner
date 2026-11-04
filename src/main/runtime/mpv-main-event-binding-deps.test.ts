@@ -89,6 +89,28 @@ test('media duration is recorded for both immersion and AniList', () => {
   assert.deepEqual(calls, ['immersion:1234', 'anilist:1234']);
 });
 
+test('pause changes reach the injected pause hook after the app state records them', () => {
+  const calls: string[] = [];
+  const { handlers, appState } = buildMainDeps(
+    {},
+    {
+      onPlaybackPauseChange: (paused) =>
+        calls.push(`hook:${paused}:state:${String(appState.playbackPaused)}`),
+      broadcastToOverlayWindows: (channel, payload) => calls.push(`${channel}:${payload}`),
+    },
+  );
+
+  handlers.recordPauseState(false);
+  handlers.recordPauseState(true);
+
+  assert.deepEqual(calls, [
+    'hook:false:state:false',
+    'mpv:pause-changed:false',
+    'hook:true:state:true',
+    'mpv:pause-changed:true',
+  ]);
+});
+
 test('mpv main event main deps treat managed playback as quit-on-disconnect', () => {
   const deps = buildMainDeps({
     initialArgs: { managedPlayback: true },

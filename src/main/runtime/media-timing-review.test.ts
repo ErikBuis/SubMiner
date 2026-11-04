@@ -674,6 +674,71 @@ test('media timing review holds overlay resume requests until the review closes'
   assert.equal(runtime.deferPlaybackResume(), false);
 });
 
+test('media timing review pauses again when mpv resumes behind the open dialog', async () => {
+  const { runtime, payload, pendingDecision, commands } = await startActiveMediaTimingReview();
+
+  // A key that reached mpv itself (Space after switching back to the mpv window).
+  assert.equal(runtime.holdPauseDuringReview(false), true);
+  assert.equal(runtime.holdPauseDuringReview(true), false);
+  assert.deepEqual(commands, [
+    ['set_property', 'pause', 'yes'],
+    ['set_property', 'pause', 'yes'],
+  ]);
+
+  runtime.resolveReview({ reviewId: payload.reviewId, decision: { action: 'use-original' } });
+  await pendingDecision;
+
+  // Paused before the review, so closing it keeps playback paused, and mpv is free again.
+  assert.deepEqual(commands, [
+    ['set_property', 'pause', 'yes'],
+    ['set_property', 'pause', 'yes'],
+  ]);
+  assert.equal(runtime.holdPauseDuringReview(false), false);
+});
+
+test('media timing review still resumes on close after holding the pause', async () => {
+  const { runtime, payload, pendingDecision, commands } = await startActiveMediaTimingReview({
+    paused: false,
+  });
+
+  assert.equal(runtime.holdPauseDuringReview(false), true);
+  runtime.resolveReview({ reviewId: payload.reviewId, decision: { action: 'use-original' } });
+  await pendingDecision;
+
+  assert.deepEqual(commands, [
+    ['set_property', 'pause', 'yes'],
+    ['set_property', 'pause', 'yes'],
+    ['set_property', 'pause', 'no'],
+  ]);
+});
+
+test('media timing review leaves mpv pause changes alone without an open review', () => {
+  const commands: Array<Array<string | number>> = [];
+  const runtime = createMediaTimingReviewRuntime({
+    getMpvClient: () => ({
+      connected: true,
+      currentVideoPath: '/video/show.mkv',
+      requestProperty: async () => null,
+      send: ({ command }) => commands.push(command),
+    }),
+    getCurrentMediaPath: () => '/video/show.mkv',
+    getMpvExecutablePath: () => 'mpv',
+    generateWaveform: async () => [],
+    createPreviewSession: () => ({
+      start: async () => undefined,
+      play: async () => undefined,
+      stop: async () => undefined,
+      onPlaybackEnded: () => undefined,
+      dispose: () => undefined,
+    }),
+    openModal: async () => true,
+    showStatus: () => undefined,
+  });
+
+  assert.equal(runtime.holdPauseDuringReview(false), false);
+  assert.deepEqual(commands, []);
+});
+
 for (const paused of [true, false]) {
   test(`media timing review stays paused after an overlay pause request (paused before: ${paused})`, async () => {
     const { runtime, payload, pendingDecision, commands } = await startActiveMediaTimingReview({

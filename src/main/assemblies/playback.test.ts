@@ -82,6 +82,7 @@ function makeDeps(recorder: Recorder): PlaybackAssemblyDeps {
     mediaTimingReviewRuntime: {
       deferPlaybackResume: spy('timingReview.deferPlaybackResume', () => false),
       cancelPlaybackResume: spy('timingReview.cancelPlaybackResume', noop),
+      holdPauseDuringReview: spy('timingReview.holdPauseDuringReview', () => false),
     },
     discordPresenceRuntime: { publishDiscordPresence: spy('discord.publish', noop) },
     immersionMediaRuntime: { syncFromCurrentMediaState: spy('immersion.sync', noop) },

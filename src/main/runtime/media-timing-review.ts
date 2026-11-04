@@ -323,6 +323,18 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
     if (active) active.restorePlayback = false;
   }
 
+  /**
+   * mpv resumed playback while the review is open. That happens when a key reaches mpv
+   * itself instead of the overlay, for example Space or P after switching back to the mpv
+   * window, so the overlay's deferral never sees it. The review holds playback, so pause
+   * again; closing the review still restores the state from before it opened.
+   */
+  function holdPauseDuringReview(paused: boolean): boolean {
+    if (paused || !active || !active.mpvClient.connected) return false;
+    active.mpvClient.send({ command: ['set_property', 'pause', 'yes'] });
+    return true;
+  }
+
   function ensureWindow(
     review: ActiveReview,
     range: RemoteMediaWindowRange,
@@ -800,6 +812,7 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
     resolveReview,
     deferPlaybackResume,
     cancelPlaybackResume,
+    holdPauseDuringReview,
     dispose,
   };
 }
