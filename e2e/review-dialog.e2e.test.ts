@@ -105,12 +105,29 @@ async function openSentenceReview(
   // The command returns once the card is made, which waits for the review. Awaiting it here
   // would wait for a review nobody answers.
   const mining = session.runAppCommand('--mine-sentence');
-  mining.catch(() => undefined);
-  const review = await waitUntil(() => findOpenReview(session), {
-    description: 'the media timing review to open',
-    timeoutMs: 30_000,
+  // A mining command that fails before the review opens should fail the test with its own
+  // error, not with a timeout waiting for the review.
+  let miningError: unknown;
+  mining.catch((error: unknown) => {
+    miningError = error;
   });
-  return { review, mining };
+  try {
+    const review = await waitUntil(
+      async () => {
+        if (miningError) throw miningError;
+        return findOpenReview(session);
+      },
+      { description: 'the media timing review to open', timeoutMs: 30_000 },
+    );
+    return { review, mining };
+  } catch (error) {
+    // CI keeps the logs as an artifact, but the end of the app log in the error is quicker.
+    const appLog = path.join(session.root, 'app.log');
+    const tail = fs.existsSync(appLog)
+      ? fs.readFileSync(appLog, 'utf8').split('\n').slice(-40).join('\n')
+      : '(no app log)';
+    throw new Error(`${String(error)}\n--- end of app.log ---\n${tail}`);
+  }
 }
 
 test(
