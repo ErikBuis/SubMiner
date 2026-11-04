@@ -2,3 +2,4 @@ type: changed
 area: anki
 
 - The card review no longer stops at 900px tall, and the screenshot picker shows a smaller thumbnail, so the whole dialog fits without scrolling on most screens. Long sentences or small windows can still scroll.
+- A long screenshot status message now stays on one line under the frame buttons instead of pushing the dialog taller. Hover it to read the whole message.

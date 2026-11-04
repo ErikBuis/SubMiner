@@ -1468,8 +1468,12 @@ body:focus-visible,
 .media-timing-frame-controls p {
   margin: 6px 0 0;
   min-height: 1.4em;
+  overflow: hidden;
   color: var(--ctp-subtext0);
   font-size: 11px;
+  /* One line keeps the dialog height steady; the full message is in the title. */
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 @media (max-width: 520px) {
   .media-timing-frame-picker {
