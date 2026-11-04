@@ -3,6 +3,7 @@ import type {
   MediaTimingReviewActionResult,
   MediaTimingReviewContextLine,
   MediaTimingReviewDecision,
+  MediaTimingReviewFurigana,
   MediaTimingReviewOpenPayload,
   MediaTimingReviewPreviewRequest,
   MediaTimingReviewPreviewPosition,
@@ -27,6 +28,7 @@ import {
   REVIEW_CONTEXT_EPSILON_SECONDS as CONTEXT_LINE_EPSILON_SECONDS,
   REVIEW_CONTEXT_LINE_LIMIT as CONTEXT_LINE_LIMIT,
 } from '../../shared/sentence-translation-alignment';
+import { protectEscapedBrackets } from '../../shared/furigana-markup';
 
 const INITIAL_TIMELINE_MARGIN_SECONDS = 2;
 const REVIEW_DECISION_TIMEOUT_MS = 5 * 60_000;
@@ -112,7 +114,61 @@ export interface MediaTimingReviewRuntimeDeps {
   /** Tells the modal that the hidden player finished the previewed clip. */
   onPreviewEnded?: (reviewId: string) => void;
   onPreviewPosition?: (position: MediaTimingReviewPreviewPosition) => void;
+  /** Readings for one line of Japanese as plain bracket furigana; null when unavailable. */
+  generateFurigana?: (text: string) => Promise<string | null>;
+  /** Sends readings for the review's lines to the open modal. */
+  onFurigana?: (furigana: MediaTimingReviewFurigana) => void;
   showStatus: (message: string) => void;
+}
+
+const KANJI_PATTERN = /[\p{Script=Han}\u3005]/u;
+
+/**
+ * The texts the review can show that need readings: the card's own text first, then the
+ * nearby lines the user can add, nearest first. Lines without kanji need none.
+ */
+export function reviewFuriganaTexts(
+  payload: Pick<MediaTimingReviewOpenPayload, 'text' | 'previousLines' | 'nextLines'>,
+): string[] {
+  const previous = [...payload.previousLines].reverse();
+  const nearby: string[] = [];
+  for (let index = 0; index < Math.max(previous.length, payload.nextLines.length); index++) {
+    const before = previous[index];
+    const after = payload.nextLines[index];
+    if (before) nearby.push(before.text);
+    if (after) nearby.push(after.text);
+  }
+  return [...new Set([payload.text, ...nearby])].filter((text) => KANJI_PATTERN.test(text));
+}
+
+/** A line without readings, with its literal brackets kept apart from reading delimiters. */
+function plainFuriganaLine(line: string): string {
+  return protectEscapedBrackets(line.replace(/\[/g, '&#91;').replace(/\]/g, '&#93;'));
+}
+
+/**
+ * Readings for a text, generated line by line so its line breaks stay where they are.
+ * Null when no line got a reading.
+ */
+export async function generateReviewTextFurigana(
+  text: string,
+  generate: (line: string) => Promise<string | null>,
+): Promise<string | null> {
+  let annotated = false;
+  const lines: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    let furigana: string | null = null;
+    if (KANJI_PATTERN.test(line)) {
+      try {
+        furigana = await generate(line.trim());
+      } catch {
+        furigana = null;
+      }
+    }
+    if (furigana && furigana.includes('[')) annotated = true;
+    lines.push(furigana || plainFuriganaLine(line));
+  }
+  return annotated ? lines.join('\n') : null;
 }
 
 function finiteNumber(value: unknown): number | null {
@@ -420,6 +476,30 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
     return started;
   }
 
+  /**
+   * Generates readings for the lines the review can show and sends them once the modal is
+   * open, so opening never waits on them. The card's own text goes out first; the nearby
+   * lines follow together.
+   */
+  async function sendReviewFurigana(review: ActiveReview, opened: Promise<boolean>): Promise<void> {
+    const { generateFurigana, onFurigana } = deps;
+    if (!generateFurigana || !onFurigana) return;
+    const texts = reviewFuriganaTexts(review.payload);
+    const lines: MediaTimingReviewFurigana['lines'] = [];
+    let sent = 0;
+    for (const [index, text] of texts.entries()) {
+      if (active !== review) return;
+      const furigana = await generateReviewTextFurigana(text, generateFurigana);
+      if (furigana) lines.push({ text, furigana });
+      if (index !== 0 && index !== texts.length - 1) continue;
+      if (!(await opened) || active !== review) return;
+      if (lines.length > sent) {
+        sent = lines.length;
+        onFurigana({ reviewId: review.payload.reviewId, lines: [...lines] });
+      }
+    }
+  }
+
   async function runReview(
     request: MediaTimingReviewRequest,
     lifecycle: ReviewRequestLifecycle,
@@ -525,6 +605,7 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
       return { action: 'use-original' };
     }
     const openModal = deps.openModal(payload, lifecycle.signal).catch(() => false);
+    void sendReviewFurigana(review, openModal);
     const openResult = await Promise.race([
       openModal.then((opened) => ({ kind: 'opened' as const, opened })),
       lifecycle.cancelled.then(() => ({ kind: 'cancelled' as const })),

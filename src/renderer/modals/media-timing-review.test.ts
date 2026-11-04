@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { CONTROLLER_REVIEW_ACTIONS } from '../../shared/controller-review';
+import { parseBracketFurigana } from '../../shared/furigana-markup';
 import {
+  annotateReviewLine,
   buildMediaTimingReviewTranslation,
   MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS,
   isMediaTimingReviewButtonAvailable,
@@ -393,4 +395,33 @@ test('controller presses skip disabled buttons and buttons on the hidden step', 
   assert.equal(isMediaTimingReviewButtonAvailable(button(false, false)), true);
   assert.equal(isMediaTimingReviewButtonAvailable(button(true, false)), false);
   assert.equal(isMediaTimingReviewButtonAvailable(button(false, true)), false);
+});
+
+test('review lines prefer the note furigana on the card text and generated readings elsewhere', () => {
+  const note = parseBracketFurigana(' 今日[きょう]は 晴[は]れ');
+  const generated = new Map([
+    ['今日は晴れ', parseBracketFurigana(' 今日[こんにち]は 晴[は]れ')],
+    ['明日も晴れ', parseBracketFurigana(' 明日[あした]も 晴[は]れ')],
+  ]);
+  const readings = (segments: ReturnType<typeof annotateReviewLine>) =>
+    segments?.filter((segment) => segment.reading).map((segment) => segment.reading);
+  // The card's own text reads as the note spells it.
+  assert.deepEqual(
+    readings(annotateReviewLine({ line: '今日は晴れ', own: true, noteFurigana: note, generated })),
+    ['きょう', 'は'],
+  );
+  // An added line takes its generated readings, not the note's partial match.
+  assert.deepEqual(
+    readings(annotateReviewLine({ line: '明日も晴れ', own: false, noteFurigana: note, generated })),
+    ['あした', 'は'],
+  );
+  // Without a note field, as on a sentence card, the card text uses generated readings.
+  assert.deepEqual(
+    readings(annotateReviewLine({ line: '今日は晴れ', own: true, noteFurigana: null, generated })),
+    ['こんにち', 'は'],
+  );
+  assert.equal(
+    annotateReviewLine({ line: 'ねえ', own: false, noteFurigana: null, generated }),
+    null,
+  );
 });

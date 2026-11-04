@@ -816,6 +816,11 @@ function registerModalOpenHandlers(): void {
   window.electronAPI.onMediaTimingReviewPreviewPosition((position) => {
     mediaTimingReviewModal.handlePreviewPosition(position);
   });
+  window.electronAPI.onMediaTimingReviewFurigana((furigana) => {
+    runGuarded('media-timing-review:furigana', () => {
+      mediaTimingReviewModal.handleFurigana(furigana);
+    });
+  });
   window.electronAPI.onOpenPlaylistBrowser(() => {
     runGuardedAsync('playlist-browser:open', async () => {
       await playlistBrowserModal.openPlaylistBrowserModal();

@@ -127,6 +127,16 @@ export interface MediaTimingReviewPreviewPosition {
   time: number;
 }
 
+/**
+ * Readings generated for the lines the review can show, sent once the modal is open. Each
+ * entry is one line's text (the card's own text or a nearby line) as plain bracket
+ * furigana, with the same line breaks as the text.
+ */
+export interface MediaTimingReviewFurigana {
+  reviewId: string;
+  lines: { text: string; furigana: string }[];
+}
+
 export interface MediaTimingReviewWaveformRequest {
   reviewId: string;
   startTime: number;

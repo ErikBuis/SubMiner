@@ -109,6 +109,7 @@ import type {
   MediaTimingReviewActionResult,
   MediaTimingReviewOpenPayload,
   MediaTimingReviewPreviewPosition,
+  MediaTimingReviewFurigana,
   MediaTimingReviewPreviewRequest,
   MediaTimingReviewResolveRequest,
   MediaTimingReviewFrameRequest,
@@ -490,6 +491,32 @@ const electronAPI: ElectronAPI = {
         callback({ reviewId: payload.reviewId, time: payload.time });
       },
     );
+  },
+  onMediaTimingReviewFurigana: (callback: (furigana: MediaTimingReviewFurigana) => void): void => {
+    ipcRenderer.on(IPC_CHANNELS.event.mediaTimingReviewFurigana, (_event, payload: unknown) => {
+      if (
+        typeof payload !== 'object' ||
+        payload === null ||
+        !('reviewId' in payload) ||
+        typeof payload.reviewId !== 'string' ||
+        !('lines' in payload) ||
+        !Array.isArray(payload.lines)
+      )
+        return;
+      const lines = (payload.lines as unknown[]).filter(
+        (line): line is { text: string; furigana: string } =>
+          typeof line === 'object' &&
+          line !== null &&
+          'text' in line &&
+          typeof line.text === 'string' &&
+          'furigana' in line &&
+          typeof line.furigana === 'string',
+      );
+      callback({
+        reviewId: payload.reviewId,
+        lines: lines.map(({ text, furigana }) => ({ text, furigana })),
+      });
+    });
   },
   previewMediaTimingReview: (
     request: MediaTimingReviewPreviewRequest,
