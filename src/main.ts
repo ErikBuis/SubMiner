@@ -88,6 +88,11 @@ import {
 } from './shared/log-files';
 import { createFatalErrorReporter } from './main/fatal-error';
 import {
+  activateWindowsWindow,
+  getWindowsForegroundProcessName,
+} from './window-trackers/windows-helper';
+import { createWindowsModalFocusHandoff } from './main/runtime/windows-modal-focus-handoff';
+import {
   commandNeedsOverlayStartupPrereqs,
   commandNeedsOverlayRuntime,
   isHeadlessInitialCommand,
@@ -459,8 +464,10 @@ const bootServices = createMainBootServices({
         setModalWindowBounds: (geometry) => overlayManager.setModalWindowBounds(geometry),
       },
       {
-        onModalStateChange: (isActive: boolean) =>
-          overlayModalInputState.handleModalInputStateChange(isActive),
+        onModalStateChange: (isActive: boolean) => {
+          overlayModalInputState.handleModalInputStateChange(isActive);
+          windowsModalFocusHandoff.setModalActive(isActive);
+        },
         bindModalWindowAboveMpv: (window) =>
           visibleOverlayInteractionRuntime.bindWindowsModalWindowAboveMpv(window),
         // On macOS, after the last modal closes the post-close visibility sync hides the overlay
@@ -1346,6 +1353,16 @@ const visibleOverlayInteractionRuntime = createVisibleOverlayInteractionRuntime(
     overlayGeometryRuntime.enforceOverlayLayerOrder();
   },
   getOverlayForegroundSeparateWindows: () => getOverlayForegroundSeparateWindows(),
+});
+
+const windowsModalFocusHandoff = createWindowsModalFocusHandoff({
+  platform: process.platform,
+  getModalWindow: () => overlayManager.getModalWindow(),
+  getForegroundProcessName: () => getWindowsForegroundProcessName(),
+  activateNativeWindow: (window) =>
+    activateWindowsWindow(
+      visibleOverlayInteractionRuntime.getWindowsNativeWindowHandleNumber(window),
+    ),
 });
 
 const getRuntimeOptionsStateHandler = createGetRuntimeOptionsStateHandler({
