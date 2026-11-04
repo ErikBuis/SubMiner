@@ -61,6 +61,12 @@ function M.create(ctx)
 		mp.register_script_message("subminer-reload-session-bindings", function()
 			ctx.session_bindings.reload_bindings()
 		end)
+		mp.register_script_message("subminer-input-lock", function(value)
+			ctx.input_lock.handle_state_message(value)
+		end)
+		mp.register_script_message("subminer-input-lock-blocked-key", function()
+			ctx.input_lock.handle_blocked_key()
+		end)
 	end
 
 	return {

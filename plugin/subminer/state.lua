@@ -39,6 +39,9 @@ function M.new()
 		session_binding_names = {},
 		session_numeric_binding_names = {},
 		session_numeric_selection = nil,
+		-- The app's input lock (card review open) and the pending wait for its answer to a blocked key.
+		input_lock_active = false,
+		input_lock_answer_timeout = nil,
 	}
 end
 

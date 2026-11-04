@@ -26,6 +26,8 @@ export function createOnWillQuitCleanupHandler(deps: {
   stopConfigHotReload: () => void;
   restorePreviousSecondarySubVisibility: () => void;
   restoreMpvSubVisibility: () => void;
+  /** Gives mpv its own key bindings back if a dialog still held them. */
+  releaseMpvInputLock: () => void;
   unregisterAllGlobalShortcuts: () => void;
   stopSubtitleWebsocket: () => void;
   stopTexthookerService: () => void;
@@ -74,6 +76,7 @@ export function createOnWillQuitCleanupHandler(deps: {
     deps.stopConfigHotReload();
     deps.restorePreviousSecondarySubVisibility();
     deps.restoreMpvSubVisibility();
+    deps.releaseMpvInputLock();
     deps.unregisterAllGlobalShortcuts();
     deps.stopSubtitleWebsocket();
     deps.stopTexthookerService();

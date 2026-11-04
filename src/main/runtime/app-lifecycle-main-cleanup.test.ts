@@ -14,6 +14,7 @@ function buildCleanupDeps(overrides: Partial<BuilderDeps> = {}) {
     stopConfigHotReload: noop,
     restorePreviousSecondarySubVisibility: noop,
     restoreMpvSubVisibility: noop,
+    releaseMpvInputLock: noop,
     isAppReady: () => true,
     unregisterAllGlobalShortcuts: noop,
     stopSubtitleWebsocket: noop,

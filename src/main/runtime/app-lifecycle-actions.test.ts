@@ -18,6 +18,7 @@ function makeCleanupDeps(calls: string[], overrides: Partial<CleanupDeps> = {}):
     stopConfigHotReload: record('stopConfigHotReload'),
     restorePreviousSecondarySubVisibility: record('restorePreviousSecondarySubVisibility'),
     restoreMpvSubVisibility: record('restoreMpvSubVisibility'),
+    releaseMpvInputLock: record('releaseMpvInputLock'),
     unregisterAllGlobalShortcuts: record('unregisterAllGlobalShortcuts'),
     stopSubtitleWebsocket: record('stopSubtitleWebsocket'),
     stopTexthookerService: record('stopTexthookerService'),
@@ -96,6 +97,9 @@ test('on will quit cleanup handler flushes before teardown and awaits stats befo
 
   await cleanup();
   assert.ok(calls.indexOf('flushMpvLog') < calls.indexOf('destroyMpvSocket'));
+  // The lock release is an mpv command, so it must go out while the socket is still open.
+  assert.ok(calls.indexOf('releaseMpvInputLock') >= 0);
+  assert.ok(calls.indexOf('releaseMpvInputLock') < calls.indexOf('destroyMpvSocket'));
   assert.ok(calls.indexOf('stopStatsServer:complete') < calls.indexOf('destroyImmersionTracker'));
   assert.ok(calls.indexOf('destroyImmersionTracker') < calls.indexOf('destroyAnkiIntegration'));
 });

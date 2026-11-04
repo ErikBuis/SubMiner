@@ -490,6 +490,7 @@ function M.create(ctx)
 
 	local function clear_bindings()
 		remove_binding_names(state.session_binding_names)
+		ctx.input_lock.keep_on_top()
 	end
 
 	local function register_bindings()
@@ -545,6 +546,8 @@ function M.create(ctx)
 
 		remove_binding_names(previous_binding_names)
 		state.session_binding_names = next_binding_names
+		-- Changing bindings re-enabled this script's sections above a held input lock.
+		ctx.input_lock.keep_on_top()
 
 		subminer_log(
 			"info",

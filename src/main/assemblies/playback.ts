@@ -8,6 +8,7 @@ import {
   toSubtitleClock,
   tokenizeSubtitle as tokenizeSubtitleCore,
 } from '../../core/services';
+import type { MpvInputLock } from '../../core/services/mpv-input-lock';
 import { parseSubtitleCues } from '../../core/services/subtitle-cue-parser';
 import { filterSubtitleCues } from '../../shared/subtitle-text-filter';
 import { resolveAniSkipMetadataForFile } from '../runtime/aniskip-metadata';
@@ -131,6 +132,8 @@ export interface PlaybackAssemblyDeps {
     ReturnType<typeof createMediaTimingReviewRuntime>,
     'deferPlaybackResume' | 'cancelPlaybackResume'
   >;
+  /** Keeps mpv's own bindings locked across reconnects while a dialog holds the lock. */
+  mpvInputLock: Pick<MpvInputLock, 'sync' | 'handleClientMessage'>;
   discordPresenceRuntime: Pick<
     ReturnType<typeof createDiscordPresenceRuntime>,
     'publishDiscordPresence'
@@ -247,6 +250,7 @@ export function createPlaybackAssembly(deps: PlaybackAssemblyDeps) {
     managedLocalSubtitleSelectionRuntime,
     jimakuAutoOpenRuntime,
     mediaTimingReviewRuntime,
+    mpvInputLock,
     discordPresenceRuntime,
     immersionMediaRuntime,
     mediaRuntime,
@@ -615,6 +619,8 @@ export function createPlaybackAssembly(deps: PlaybackAssemblyDeps) {
             'subminer-reload-session-bindings',
           ]);
         }
+        // After the reload request, so the plugin handles the lock state last.
+        mpvInputLock.sync();
         if (appState.currentSubText.trim()) {
           subtitleProcessingController.refreshCurrentSubtitle(appState.currentSubText);
         }
@@ -1056,6 +1062,9 @@ export function createPlaybackAssembly(deps: PlaybackAssemblyDeps) {
     client.on('media-path-change', aniSkipRuntime.handleMediaPathChange);
     client.on('time-pos-change', aniSkipRuntime.handleTimePosChange);
     client.on('client-message', aniSkipRuntime.handleClientMessage);
+    client.on('client-message', ({ args }) => {
+      mpvInputLock.handleClientMessage(args);
+    });
     deps.getPluginHost().attachMpvClient(client);
     return client;
   }

@@ -22,6 +22,7 @@ import {
   type RemoteMediaWindowRange,
   type RemoteMediaWindowSource,
 } from '../../core/services/remote-media-window-cache';
+import type { MpvInputLock } from '../../core/services/mpv-input-lock';
 import type { MediaInput, MediaInputOptions } from '../../media-input';
 
 const INITIAL_TIMELINE_MARGIN_SECONDS = 2;
@@ -107,6 +108,8 @@ export interface MediaTimingReviewRuntimeDeps {
   };
   decisionTimeoutMs?: number;
   openModal: (payload: MediaTimingReviewOpenPayload, signal: AbortSignal) => Promise<boolean>;
+  /** Blocks mpv's own key and mouse bindings while the modal is open. */
+  inputLock?: Pick<MpvInputLock, 'lock' | 'unlock'>;
   /** Tells the modal that the hidden player finished the previewed clip. */
   onPreviewEnded?: (reviewId: string) => void;
   onPreviewPosition?: (position: MediaTimingReviewPreviewPosition) => void;
@@ -536,6 +539,8 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
       deps.showStatus('Timing review could not open. Using the original subtitle timing.');
       return { action: 'use-original' };
     }
+    // Keys that reach the mpv window behind the dialog must not change playback or settings.
+    deps.inputLock?.lock();
 
     const decisionWatchdog = setTimeout(
       () => resolveDecision({ action: 'use-original' }),
@@ -774,6 +779,7 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
     if (expected && current !== expected) return;
     active = null;
     if (!current) return;
+    deps.inputLock?.unlock();
     deps.clearFrameCache?.();
     void current.preview?.session.then((session) => session.dispose()).catch(() => {});
     if ((current.restorePlayback || resumeDeferred) && current.mpvClient.connected) {
