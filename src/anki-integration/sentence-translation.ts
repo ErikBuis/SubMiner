@@ -11,7 +11,10 @@ import {
 } from '../shared/sentence-translation-alignment';
 import { decodeCharacterReferences, HTML_SUBTITLE_TAG_PATTERN } from '../shared/subtitle-markup';
 
-/** Parsed primary and secondary subtitle tracks, in the same timeline as the mined range. */
+/**
+ * Parsed primary and secondary subtitle tracks on the video clock (each moved by its mpv
+ * subtitle delay), like the mined ranges they are compared with.
+ */
 export interface SubtitleTracksForTranslation {
   primary: readonly TimedSubtitleText[];
   secondary: readonly TimedSubtitleText[];
