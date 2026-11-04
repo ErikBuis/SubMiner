@@ -60,6 +60,7 @@ export function createOverlayNotificationsRuntime(deps: OverlayNotificationsRunt
   showYoutubeFlowStatusNotification: (message: string) => void;
   showOverlayLoadingStatusNotification: () => void;
   dismissOverlayLoadingStatusNotification: () => void;
+  reportOverlayContentReadyToPlugin: () => void;
   maybeStartOverlayLoadingOsd: (mediaPath?: string | null) => void;
 } {
   function isVisibleOverlayContentReady(): boolean {
@@ -209,12 +210,36 @@ export function createOverlayNotificationsRuntime(deps: OverlayNotificationsRunt
     ]);
   }
 
+  function isMainOverlayContentReady(): boolean {
+    const overlayWindow = deps.getMainOverlayWindow();
+    return Boolean(overlayWindow && isOverlayWindowContentReady(overlayWindow));
+  }
+
+  function sendPluginOverlayLoadingMessage(
+    message: 'subminer-overlay-loading-ready' | 'subminer-overlay-loading-dismissed',
+  ): void {
+    sendMpvCommandRuntime(deps.getMpvClient(), ['script-message', message]);
+  }
+
+  // Hide paths also dismiss, often before the overlay has content. Only a content-ready window
+  // reports `subminer-overlay-loading-ready`: the plugin remembers it and skips the spinner on
+  // later playlist files, so other dismissals send the stop-only message, which also makes the
+  // plugin forget readiness from a replaced window.
   function dismissOverlayLoadingStatusNotification(): void {
-    sendMpvCommandRuntime(deps.getMpvClient(), [
-      'script-message',
-      'subminer-overlay-loading-ready',
-    ]);
+    sendPluginOverlayLoadingMessage(
+      isMainOverlayContentReady()
+        ? 'subminer-overlay-loading-ready'
+        : 'subminer-overlay-loading-dismissed',
+    );
     dismissOverlayNotification('overlay-loading-status');
+  }
+
+  // Called when mpv (re)connects: a ready message sent while mpv was away, or before this mpv's
+  // plugin existed, was lost. Never sends the dismissal, since nothing is being hidden.
+  function reportOverlayContentReadyToPlugin(): void {
+    if (isMainOverlayContentReady()) {
+      sendPluginOverlayLoadingMessage('subminer-overlay-loading-ready');
+    }
   }
 
   const maybeStartOverlayLoadingOsd = createMaybeStartOverlayLoadingOsdHandler({
@@ -240,6 +265,7 @@ export function createOverlayNotificationsRuntime(deps: OverlayNotificationsRunt
     showYoutubeFlowStatusNotification,
     showOverlayLoadingStatusNotification,
     dismissOverlayLoadingStatusNotification,
+    reportOverlayContentReadyToPlugin,
     maybeStartOverlayLoadingOsd,
   };
 }
