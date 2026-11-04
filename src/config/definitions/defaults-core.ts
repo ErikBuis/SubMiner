@@ -1,3 +1,5 @@
+import { getDefaultControllerFieldGroupingBindings } from '../../shared/controller-field-grouping';
+import { getDefaultControllerReviewBindings } from '../../shared/controller-review';
 import { ResolvedConfig } from '../../types/config';
 
 export const CORE_DEFAULT_CONFIG: Pick<
@@ -17,6 +19,7 @@ export const CORE_DEFAULT_CONFIG: Pick<
   | 'startupWarmups'
   | 'updates'
   | 'notifications'
+  | 'plugins'
   | 'auto_start_overlay'
 > = {
   dictionaryBackend: 'yomitan',
@@ -53,6 +56,7 @@ export const CORE_DEFAULT_CONFIG: Pick<
     stickDeadzone: 0.2,
     triggerInputMode: 'auto',
     triggerDeadzone: 0.5,
+    faceButtonLabels: 'xbox',
     repeatDelayMs: 320,
     repeatIntervalMs: 120,
     buttonIndices: {
@@ -78,11 +82,20 @@ export const CORE_DEFAULT_CONFIG: Pick<
       nextAudio: { kind: 'button', buttonIndex: 5 },
       playCurrentAudio: { kind: 'button', buttonIndex: 4 },
       toggleMpvPause: { kind: 'button', buttonIndex: 9 },
+      holdSecondarySub: { kind: 'none' },
+      previousEntry: { kind: 'none' },
+      nextEntry: { kind: 'none' },
+      previousSubtitle: { kind: 'none' },
+      nextSubtitle: { kind: 'none' },
+      replaySubtitle: { kind: 'none' },
+      playNextSubtitle: { kind: 'none' },
       leftStickHorizontal: { kind: 'axis', axisIndex: 0, dpadFallback: 'horizontal' },
       leftStickVertical: { kind: 'axis', axisIndex: 1, dpadFallback: 'vertical' },
       rightStickHorizontal: { kind: 'axis', axisIndex: 3, dpadFallback: 'none' },
       rightStickVertical: { kind: 'axis', axisIndex: 4, dpadFallback: 'none' },
     },
+    reviewBindings: getDefaultControllerReviewBindings(),
+    fieldGroupingBindings: getDefaultControllerFieldGroupingBindings(),
     profiles: {},
   },
   shortcuts: {
@@ -145,5 +158,6 @@ export const CORE_DEFAULT_CONFIG: Pick<
   notifications: {
     overlayPosition: 'top-right',
   },
+  plugins: {},
   auto_start_overlay: true,
 };
