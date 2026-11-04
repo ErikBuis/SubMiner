@@ -616,6 +616,139 @@ test('an edited translation keeps the edit when lines come and go at its ends', 
   );
 });
 
+test('a dropped line is cut from an edit only as whole words at its start or end', () => {
+  const no = { text: 'No', startTime: 6, endTime: 8 };
+  const mined = { text: 'the mined line', startTime: 8, endTime: 10 };
+  const here = { text: 'here.', startTime: 10, endTime: 12 };
+  const lines = (...run: (typeof no)[]) => ({ leadingLines: run, trailingLines: run });
+  // "No" is not the start of "Nobody", and "here." is not the end of "There.".
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'Nobody knows',
+      before: lines(no, mined),
+      after: lines(mined),
+      format: false,
+    }),
+    'Nobody knows',
+  );
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'Over There.',
+      before: lines(mined, here),
+      after: lines(mined),
+      format: false,
+    }),
+    'Over There.',
+  );
+  // Spacing and case inside the dropped line do not matter.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'no,  my wording\nHERE.',
+      before: lines({ ...no, text: 'No,' }, mined, here),
+      after: lines(mined),
+      format: false,
+    }),
+    'my wording',
+  );
+  // Text written without spaces is still cut where the line ends.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: '你好我的翻译',
+      before: lines({ ...no, text: '你好' }, mined),
+      after: lines(mined),
+      format: false,
+    }),
+    '我的翻译',
+  );
+});
+
+test('an edit that no longer starts or ends with a dropped line stays exactly as typed', () => {
+  const before = { text: 'Before,', startTime: 6, endTime: 8 };
+  const mined = { text: 'the mined line', startTime: 8, endTime: 10 };
+  const lines = (...run: (typeof before)[]) => ({ leadingLines: run, trailingLines: run });
+  // Formatting would capitalize this and mark the comma; nothing was cut, so it stays.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'something else entirely,  ',
+      before: lines(before, mined),
+      after: lines(mined),
+      format: true,
+    }),
+    'something else entirely,  ',
+  );
+});
+
+test('pressing minus after plus takes the added line back out of an edited translation', () => {
+  const lines = [
+    { text: 'one before,', startTime: 6, endTime: 8 },
+    { text: 'the mined line', startTime: 8, endTime: 10 },
+    { text: 'and after,', startTime: 10, endTime: 12 },
+  ];
+  const base = {
+    previousLines: [{ text: '前の行', startTime: 6, endTime: 8 }],
+    nextLines: [{ text: '次の行', startTime: 10, endTime: 12 }],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'The mined line',
+    initialTranslationLines: [lines[1]!],
+    translationLines: lines,
+    format: true,
+  };
+  // Mirrors the modal: each press rebuilds the preview, and an edited text only takes the
+  // lines that came or went since the last press.
+  const press = (
+    state: { text: string; lines: ReturnType<typeof buildMediaTimingReviewTranslationPreview> },
+    change: Partial<typeof base> & {
+      translationPreviousShift?: number;
+      translationNextShift?: number;
+    },
+  ) => {
+    const lines = buildMediaTimingReviewTranslationPreview({ ...base, ...change });
+    return {
+      text: applyTranslationLineChanges({
+        text: state.text,
+        before: state.lines,
+        after: lines,
+        format: base.format,
+      }),
+      lines,
+    };
+  };
+  const opened = { text: 'My own wording', lines: buildMediaTimingReviewTranslationPreview(base) };
+
+  // The translation's own buttons.
+  const withPrevious = press(opened, { translationPreviousShift: 1 });
+  assert.equal(withPrevious.text, 'One before, My own wording');
+  assert.equal(press(withPrevious, { translationPreviousShift: 0 }).text, 'My own wording');
+  const withNext = press(opened, { translationNextShift: 1 });
+  assert.equal(withNext.text, 'My own wording and after, (...)');
+  assert.equal(press(withNext, { translationNextShift: 0 }).text, 'My own wording');
+
+  // The sentence buttons bring the added line's translation along.
+  const withLine = press(opened, { nextCount: 1 });
+  assert.equal(withLine.text, 'My own wording and after, (...)');
+  assert.equal(press(withLine, { nextCount: 0 }).text, 'My own wording');
+
+  // A line added before the edit is taken out the same way.
+  const followed = buildMediaTimingReviewTranslationPreview({
+    ...base,
+    translationPreviousShift: 1,
+  });
+  assert.equal(followed.text, 'One before, the mined line');
+  const tweaked = { text: 'One before, the line I mined', lines: followed };
+  assert.equal(press(tweaked, { translationPreviousShift: 0 }).text, 'The line I mined');
+
+  // Once the added part is rewritten, minus leaves the text alone.
+  const rewritten = { ...withPrevious, text: 'Just before, My own wording' };
+  assert.equal(
+    press(rewritten, { translationPreviousShift: 0 }).text,
+    'Just before, My own wording',
+  );
+});
+
 test('an edited screen translation gets lines on the side they belong to', () => {
   const before = { text: 'Earlier', startTime: 4, endTime: 6 };
   const after = { text: 'later', startTime: 12, endTime: 14 };

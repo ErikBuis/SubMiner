@@ -222,22 +222,53 @@ export type MediaTimingReviewTranslationPreview = {
 
 const CONTINUATION_MARK_PATTERN = /\s*\(\.\.\.\)$/;
 
-/** Cuts `prefix` off the start of `text`, matching case and spacing loosely. */
-function cutLoosePrefix(text: string, prefix: string): string | null {
-  const words = prefix.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return text;
-  const escaped = words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const match = text.match(new RegExp(`^\\s*${escaped.join('\\s+')}\\s*`, 'iu'));
-  return match ? text.slice(match[0].length) : null;
+/**
+ * A letter or digit that only joins a word next to another one, so a cut must not end
+ * between the two. Scripts written without spaces between words have no such boundary.
+ */
+const SPACED_WORD_CHAR =
+  /^(?![\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}])[\p{L}\p{N}]$/u;
+
+function splitsWord(left: string | undefined, right: string | undefined): boolean {
+  return (
+    left !== undefined &&
+    right !== undefined &&
+    SPACED_WORD_CHAR.test(left) &&
+    SPACED_WORD_CHAR.test(right)
+  );
 }
 
-/** Cuts `suffix` off the end of `text`, matching case and spacing loosely. */
+function loosePattern(piece: string): string | null {
+  const words = piece.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  return words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+}
+
+/**
+ * Cuts `prefix` off the start of `text`, ignoring case and how the words are spaced.
+ * Null when the text does not start with it as whole words: "No" is not cut from "Nobody".
+ */
+function cutLoosePrefix(text: string, prefix: string): string | null {
+  const pattern = loosePattern(prefix);
+  if (pattern === null) return text;
+  const match = text.match(new RegExp(`^\\s*${pattern}`, 'iu'));
+  if (!match) return null;
+  const cut = match[0];
+  if (splitsWord(cut.charAt(cut.length - 1), text.charAt(cut.length) || undefined)) return null;
+  return text.slice(cut.length).trimStart();
+}
+
+/**
+ * Cuts `suffix` off the end of `text`, ignoring case and how the words are spaced.
+ * Null when the text does not end with it as whole words: "here." is not cut from "There.".
+ */
 function cutLooseSuffix(text: string, suffix: string): string | null {
-  const words = suffix.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return text;
-  const escaped = words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const match = text.match(new RegExp(`\\s*${escaped.join('\\s+')}\\s*$`, 'iu'));
-  return match ? text.slice(0, text.length - match[0].length) : null;
+  const pattern = loosePattern(suffix);
+  if (pattern === null) return text;
+  const match = text.match(new RegExp(`${pattern}\\s*$`, 'iu'));
+  if (!match || match.index === undefined) return null;
+  if (splitsWord(text.charAt(match.index - 1) || undefined, match[0].charAt(0))) return null;
+  return text.slice(0, match.index).trimEnd();
 }
 
 /**
@@ -286,12 +317,23 @@ export function applyTranslationLineChanges(options: {
   let text = (
     options.format ? options.text.replace(CONTINUATION_MARK_PATTERN, '') : options.text
   ).trim();
-  if (removedStart.length > 0)
-    text = cutLoosePrefix(text, joinSubtitleLineTexts(removedStart)) ?? text;
-  if (removedEnd.length > 0) text = cutLooseSuffix(text, joinSubtitleLineTexts(removedEnd)) ?? text;
-  text = [joinSubtitleLineTexts(addedStart), text.trim(), joinSubtitleLineTexts(addedEnd)]
-    .filter(Boolean)
-    .join(' ');
+  let changed = false;
+  // A line that went away leaves only while the edit still starts or ends with it.
+  for (const [lines, cut] of [
+    [removedStart, cutLoosePrefix],
+    [removedEnd, cutLooseSuffix],
+  ] as const) {
+    if (lines.length === 0) continue;
+    const rest = cut(text, joinSubtitleLineTexts(lines));
+    if (rest === null) continue;
+    text = rest;
+    changed = true;
+  }
+  const start = joinSubtitleLineTexts(addedStart);
+  const end = joinSubtitleLineTexts(addedEnd);
+  // Nothing to put in or cut: the edit stays exactly as typed.
+  if (!changed && !start && !end) return options.text;
+  text = [start, text, end].filter(Boolean).join(' ');
   return options.format ? formatCardTranslation(text) : text;
 }
 
