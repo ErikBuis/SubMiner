@@ -1691,12 +1691,14 @@ body:focus-visible,
 }
 
 /* Each edge keeps one color everywhere: its time, its handle and its buttons. */
-.media-timing-review-timeline-shell .is-start,
+.media-timing-review-readout-edge.is-start,
+.media-timing-review-nudge-group.is-start,
 .media-timing-review-handle-start {
   --edge-color: var(--ctp-yellow);
 }
 
-.media-timing-review-timeline-shell .is-end,
+.media-timing-review-readout-edge.is-end,
+.media-timing-review-nudge-group.is-end,
 .media-timing-review-handle-end {
   --edge-color: var(--ctp-lavender);
 }

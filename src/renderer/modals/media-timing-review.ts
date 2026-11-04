@@ -637,13 +637,6 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewStartValue.textContent = formatMediaTimingTimestamp(selectionStart);
     ctx.dom.mediaTimingReviewEndValue.textContent = formatMediaTimingTimestamp(selectionEnd);
     ctx.dom.mediaTimingReviewDuration.textContent = `${(selectionEnd - selectionStart).toFixed(2)}s`;
-    const mediaEnd = payload?.mediaDuration ?? Number.POSITIVE_INFINITY;
-    const startAtMediaStart = selectionStart <= 0;
-    const endAtMediaEnd = selectionEnd >= mediaEnd;
-    ctx.dom.mediaTimingReviewStartBackCoarse.disabled = startAtMediaStart;
-    ctx.dom.mediaTimingReviewStartBack.disabled = startAtMediaStart;
-    ctx.dom.mediaTimingReviewEndForward.disabled = endAtMediaEnd;
-    ctx.dom.mediaTimingReviewEndForwardCoarse.disabled = endAtMediaEnd;
   }
 
   /**
@@ -992,18 +985,27 @@ export function createMediaTimingReviewModal(
    */
   function nudgeEdge(edge: 'start' | 'end', delta: number): void {
     if (!payload || resolveInFlight) return;
-    const target = (edge === 'start' ? selectionStart : selectionEnd) + delta;
-    const view = revealMediaTimingEdge({
-      target,
-      timelineStart,
-      timelineEnd,
-      mediaEnd: payload.mediaDuration ?? Number.POSITIVE_INFINITY,
+    const mediaEnd = payload.mediaDuration ?? Number.POSITIVE_INFINITY;
+    const current = edge === 'start' ? selectionStart : selectionEnd;
+    // Apply the clip rules (minimum length, length cap, media bounds) before widening,
+    // so a move that gets clamped does not widen the view for nothing.
+    const next = constrainMediaTimingSelection({
+      nextStart: edge === 'start' ? current + delta : selectionStart,
+      nextEnd: edge === 'end' ? current + delta : selectionEnd,
+      currentStart: selectionStart,
+      timelineStart: 0,
+      timelineEnd: mediaEnd,
+      mediaEnd,
+      maxMediaDuration: payload.maxMediaDuration,
     });
+    const target = edge === 'start' ? next.start : next.end;
+    if (Math.abs(target - current) < 0.0005) return;
+    const view = revealMediaTimingEdge({ target, timelineStart, timelineEnd, mediaEnd });
     const timelineChanged =
       view.timelineStart !== timelineStart || view.timelineEnd !== timelineEnd;
     timelineStart = view.timelineStart;
     timelineEnd = view.timelineEnd;
-    setEdge(edge, target);
+    updateSelection(next.start, next.end);
     highlightEdge(edge, true);
     if (timelineChanged) queueWaveformLoad(120);
   }
@@ -1096,10 +1098,11 @@ export function createMediaTimingReviewModal(
     const step = event.shiftKey ? COARSE_ADJUST_SECONDS : FINE_ADJUST_SECONDS;
     if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') nudgeEdge(edge, -step);
     else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') nudgeEdge(edge, step);
-    else if (event.key === 'Home') setEdge(edge, timelineStart);
-    else if (event.key === 'End') setEdge(edge, timelineEnd);
-    else return;
-    highlightEdge(edge, true);
+    else if (event.key === 'Home' || event.key === 'End') {
+      if (!payload || resolveInFlight) return;
+      setEdge(edge, event.key === 'Home' ? timelineStart : timelineEnd);
+      highlightEdge(edge, true);
+    } else return;
     event.preventDefault();
   }
 
