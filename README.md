@@ -25,7 +25,7 @@ Look up words with Yomitan or Hachidori, mine them to Anki, and track your immer
 
 Hover over any word in the subtitles to open the full Yomitan popup with definitions, pitch accent, and frequency data. SubMiner bundles its own Yomitan, separate from any browser install.
 
-Yomitan remains the default. Select the bundled Hachidori backend with `dictionaryBackend: "hachidori"` and restart SubMiner. The tray opens the selected backend's settings. See [dictionary setup](https://docs.subminer.moe/usage#hachidori-setup) for importing dictionaries, linking an external Hachidori host, and configuring Anki.
+Yomitan remains the default. Select the bundled [Hachidori](https://github.com/bee-san/hachidori) backend with `dictionaryBackend: "hachidori"` and restart SubMiner. The tray opens the selected backend's settings. See [dictionary setup](https://docs.subminer.moe/usage#hachidori-setup) for importing dictionaries, linking an external Hachidori host, and configuring Anki.
 
 <div align="center">
   <img src="docs-site/public/screenshots/yomitan-lookup.png" width="800" alt="Yomitan dictionary popup over annotated subtitles in mpv">
@@ -38,7 +38,7 @@ Yomitan remains the default. Select the bundled Hachidori backend with `dictiona
 Create an Anki card from the exact playback moment with one key press, click, or controller input. SubMiner fills in the sentence, an audio clip, and a screenshot or animated image.
 
 <div align="center">
-  <img src="docs-site/public/screenshots/one-key-mining.png" width="800" alt="Anki card created from SubMiner with sentence, audio, and screenshot">
+  <img src="docs-site/public/screenshots/one-key-mining.png" width="800" alt="Yomitan lookup over an anime scene with Anki mining controls">
 </div>
 
 <br>
@@ -48,7 +48,7 @@ Create an Anki card from the exact playback moment with one key press, click, or
 Subtitles are annotated as they play with frequency highlighting, JLPT tags, N+1 targeting, and character names from a generated dictionary. Particles and grammar-only tokens stay plain so the words worth learning stand out.
 
 <div align="center">
-  <img src="docs-site/public/screenshots/annotations.png" width="800" alt="Annotated subtitles with frequency coloring, JLPT underlines, and N+1 targets">
+  <img src="docs-site/public/screenshots/annotations.png" width="800" alt="Annotated subtitles with frequency colors, character portraits, and JLPT underlines">
 </div>
 
 <br>
@@ -101,6 +101,10 @@ A stats dashboard tracks watch time, vocabulary growth, mining throughput, sessi
   <tr>
     <td><b>WebSocket</b></td>
     <td>Plain subtitle feed plus a dedicated annotated feed for texthooker pages and custom tools</td>
+  </tr>
+  <tr>
+    <td><b>Plugins</b></td>
+    <td>Load your own JavaScript at startup to react to playback, run timers, add key-bound actions, and show results in an overlay panel. The bundled example explains the current line with Codex. <a href="https://docs.subminer.moe/plugins">Plugin guide</a></td>
   </tr>
 </table>
 
@@ -267,7 +271,7 @@ SubMiner builds on the work of these open-source projects:
 | [jellyfin-mpv-shim](https://github.com/jellyfin/jellyfin-mpv-shim)                          | Jellyfin integration                                                    |
 | [Jimaku.cc](https://jimaku.cc)                                                              | Japanese subtitle search and downloads                                  |
 | [Renji's Texthooker Page](https://github.com/Renji-XD/texthooker-ui)                        | Base for the WebSocket texthooker integration                           |
-| [Yomitan](https://github.com/yomidevs/yomitan)                                              | Default dictionary engine and morphological parser                     |
+| [Yomitan](https://github.com/yomidevs/yomitan)                                              | Default dictionary engine and morphological parser                      |
 | [Hachidori](https://github.com/bee-san/hachidori)                                           | Alternative dictionary backend, powered by HoshiDicts                   |
 | [yomitan-jlpt-vocab](https://github.com/stephenmk/yomitan-jlpt-vocab)                       | JLPT level tags for vocabulary                                          |
 
