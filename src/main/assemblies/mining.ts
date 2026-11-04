@@ -44,7 +44,7 @@ import { openMediaTimingReviewModal } from '../runtime/media-timing-review-open'
 import { findMpvExecutablePath } from '../runtime/mpv-process';
 import type { createOverlayNotificationsRuntime } from '../runtime/overlay-notifications-runtime';
 import { resolvePrimarySubtitle } from '../runtime/primary-subtitle-text';
-import { selectAlignableSubtitleCues } from '../runtime/secondary-subtitle-track';
+import { buildSubtitleTracksForTranslation } from '../runtime/secondary-subtitle-track';
 import type { AppState } from '../state';
 import type { OverlayModalsAssembly } from './overlay-modals';
 import type { CliSlice, IpcSlice } from './slices';
@@ -93,11 +93,8 @@ export interface MiningAssemblyDeps {
   >;
   getOverlayModals: () => Pick<OverlayModalsAssembly, 'createOverlayHostedModalOpenDeps'>;
   setVisibleOverlayVisible: (visible: boolean) => void;
-  /**
-   * Parsed cues of the selected secondary track, shifted onto the timeline of a track
-   * delayed by `relativeToDelaySeconds`; null when not parsed.
-   */
-  getSecondarySubtitleCues: (relativeToDelaySeconds: number) => SubtitleCue[] | null;
+  /** Parsed cues of the selected secondary track on the video clock; null when not parsed. */
+  getSecondarySubtitleCues: () => readonly SubtitleCue[] | null;
   ensureOverlayStartupPrereqs: () => void;
   ensureOverlayWindowsReadyForVisibilityActions: () => void;
   /** Callbacks the Anki integration reports back through once mining finishes. */
@@ -348,19 +345,14 @@ export function createMiningAssembly(deps: MiningAssemblyDeps) {
     integration.setSubtitleMiningContextConsumer(consumePendingSubtitleMiningContext);
     integration.setMediaTimingReviewCallback(mediaTimingReviewRuntime.requestReview);
     integration.setSentenceFuriganaGenerator(callbacks.generateSentenceFurigana);
-    integration.setSubtitleTracksForTranslationProvider(() => {
-      // Primary cues keep their file timestamps, like the rest of the mining code, so the
-      // secondary track is moved onto the primary track's timeline rather than playback's.
-      const primaryDelay = appState.mpvClient?.currentSubDelay ?? 0;
-      const secondary = deps.getSecondarySubtitleCues(
-        Number.isFinite(primaryDelay) ? primaryDelay : 0,
-      );
-      if (!secondary) return null;
-      return {
-        primary: selectAlignableSubtitleCues(appState.activeParsedSubtitleCues),
-        secondary: selectAlignableSubtitleCues(secondary),
-      };
-    });
+    // Mined ranges are on the video clock, so the tracks are moved there too.
+    integration.setSubtitleTracksForTranslationProvider(() =>
+      buildSubtitleTracksForTranslation({
+        primaryCues: appState.activeParsedSubtitleCues,
+        primarySubDelay: appState.mpvClient?.currentSubDelay ?? 0,
+        secondaryCues: deps.getSecondarySubtitleCues(),
+      }),
+    );
   }
 
   const ipc: IpcSlice<

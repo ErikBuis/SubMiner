@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {
+  resolveTimedSentenceTranslation,
+  type SubtitleTracksForTranslation,
+} from '../../anki-integration/sentence-translation';
 import type { SubtitleMiningContext } from '../../types';
 import type { AppState } from '../state';
 import { createMiningAssembly, type MiningAssemblyDeps } from './mining';
@@ -117,4 +121,60 @@ test('mining without parsed cues falls back to the live mpv line on the video cl
   assert.equal(context?.text, 'こんにちは');
   assert.equal(context?.startTime, 10.5);
   assert.equal(context?.endTime, 12.5);
+});
+
+test('a line mined with sub-delay gets the translation shown beside it', () => {
+  // `sub-delay` 2 plays file line 10-12 at 12-14, beside the secondary line 'First line'.
+  type TracksProvider = () => SubtitleTracksForTranslation | null;
+  let provideTracks: TracksProvider | null = null;
+  const integration = new Proxy(
+    {},
+    {
+      get: (_target, name: string) => (callback: unknown) => {
+        if (name === 'setSubtitleTracksForTranslationProvider') {
+          provideTracks = callback as TracksProvider;
+        }
+      },
+    },
+  ) as AnkiIntegrationLike;
+  const mpvClient = {
+    currentSubText: '一行目',
+    currentSubStart: 10,
+    currentSubEnd: 12,
+    currentSubDelay: 2,
+    currentTimePos: 13,
+  } as MpvClientLike;
+  const mining = createMiningAssembly(
+    makeDeps({
+      appState: {
+        ...makeDeps().appState,
+        mpvClient,
+        activeParsedSubtitleCues: [
+          { text: '一行目', startTime: 10, endTime: 12 },
+          { text: '二行目', startTime: 12, endTime: 14 },
+        ],
+      },
+      // The secondary track has no delay of its own: its file times are where mpv plays it.
+      getSecondarySubtitleCues: () => [
+        { text: 'Line before', startTime: 10, endTime: 12 },
+        { text: 'First line', startTime: 12, endTime: 14 },
+        { text: 'Second line', startTime: 14, endTime: 16 },
+      ],
+    }),
+  );
+  mining.attachToAnkiIntegration(integration);
+
+  const context = mining.captureCurrentPrimarySubtitleMiningContext();
+  assert.deepEqual([context?.text, context?.startTime, context?.endTime], ['一行目', 12, 14]);
+  assert.ok(provideTracks);
+  const tracks = (provideTracks as TracksProvider)();
+  assert.equal(
+    resolveTimedSentenceTranslation({
+      text: context!.text,
+      startTime: context!.startTime,
+      endTime: context!.endTime,
+      tracks,
+    })?.translation,
+    'First line',
+  );
 });
