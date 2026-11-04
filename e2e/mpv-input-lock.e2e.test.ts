@@ -166,6 +166,11 @@ after(async () => {
   }
 });
 
+/** A probe value, or null until the probe has set it (mpv reports a missing one as an error). */
+function readProbe(mpv: MpvClient, name: string): Promise<unknown> {
+  return mpv.command('get_property', `user-data/probe/${name}`).catch(() => null);
+}
+
 async function snapshot(mpv: MpvClient): Promise<Record<string, unknown>> {
   const values: Record<string, unknown> = {};
   for (const name of WATCHED_PROPERTIES) {
@@ -225,12 +230,9 @@ test(
     await lock(mpv);
     // Changing bindings re-enables the probe's sections on top of the lock.
     await mpv.command('script-message', 'probe-rebind');
-    await waitUntil(
-      async () => (await mpv.command('get_property', 'user-data/probe/rebound')) === true,
-      {
-        description: 'the probe to change its bindings',
-      },
-    );
+    await waitUntil(async () => (await readProbe(mpv, 'rebound')) === true, {
+      description: 'the probe to change its bindings',
+    });
     // The plugin puts the lock back on top within its keep-on-top interval.
     await new Promise((resolve) => setTimeout(resolve, 600));
     const before = await snapshot(mpv);
@@ -249,12 +251,9 @@ test(
     const { mpv, child } = await useMpv();
     await lock(mpv);
     await mpv.command('script-message', 'probe-app-gone');
-    await waitUntil(
-      async () => (await mpv.command('get_property', 'user-data/probe/app-gone')) === true,
-      {
-        description: 'the stand-in app to stop answering',
-      },
-    );
+    await waitUntil(async () => (await readProbe(mpv, 'app-gone')) === true, {
+      description: 'the stand-in app to stop answering',
+    });
     const volume = (await mpv.command('get_property', 'volume')) as number;
 
     await press(mpv, ['9']);

@@ -96,9 +96,30 @@ async function pressMpvKeys(session: E2eSession, keys: readonly string[]): Promi
   await new Promise((resolve) => setTimeout(resolve, 300));
 }
 
+// The app ignores a mining command while it is still adding media to the previous card (it
+// only shows "Anki update already in progress" on the OSD), and on slower runners that update
+// outlasts the mining command. So before mining, wait for the last card's media update.
+async function waitForPreviousCardMedia(session: E2eSession): Promise<void> {
+  const requests = session.anki.requests;
+  const lastAdd = requests.map((request) => request.action).lastIndexOf('addNote');
+  if (lastAdd < 0) return;
+  await waitUntil(
+    () =>
+      requests
+        .slice(lastAdd)
+        .some(
+          (request) =>
+            request.action === 'updateNoteFields' &&
+            /\[sound:|<img /.test(JSON.stringify(request.params)),
+        ),
+    { description: "the previous card's media update", timeoutMs: 30_000 },
+  );
+}
+
 async function openSentenceReview(
   session: E2eSession,
 ): Promise<{ review: CdpPage; mining: Promise<void> }> {
+  await waitForPreviousCardMedia(session);
   await session.mpv.command('seek', FIXTURE_CUES[1].at, 'absolute+exact');
   await session.mpv.command('set_property', 'pause', true);
   session.anki.requests.length = 0;
