@@ -93,6 +93,15 @@ const CORE_TEMPLATE_SECTIONS: ConfigTemplateSection[] = [
     key: 'notifications',
   },
   {
+    title: 'Plugins',
+    description: [
+      'JavaScript plugins loaded from <config dir>/plugins/<id>/ at startup.',
+      'Plugins run inside SubMiner with full access to your system. Only enable code you trust.',
+    ],
+    notes: ['Restart SubMiner after changing plugins.'],
+    key: 'plugins',
+  },
+  {
     title: 'Keyboard Shortcuts',
     description: ['Overlay keyboard shortcuts. Set a shortcut to null to disable.'],
     notes: ['Hot-reload: shortcut changes apply live and update the session help modal on reopen.'],
@@ -143,6 +152,15 @@ const SUBTITLE_TEMPLATE_SECTIONS: ConfigTemplateSection[] = [
     description: ['Parsed-subtitle sidebar cue list styling, behavior, and toggle key.'],
     notes: ['Hot-reload: subtitle sidebar changes apply live without restarting SubMiner.'],
     key: 'subtitleSidebar',
+  },
+  {
+    title: 'Subtitle Filters',
+    description: [
+      'Remove unwanted text from primary subtitles, such as speaker names, readings and sound descriptions.',
+      'Applies to the overlay, sidebar, mined sentences and stats.',
+    ],
+    notes: ['Hot-reload: filter changes apply to the current subtitle file immediately.'],
+    key: 'subtitleFilter',
   },
 ];
 

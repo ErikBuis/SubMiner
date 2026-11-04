@@ -84,6 +84,27 @@ export interface SecondarySubConfig {
   defaultMode?: SecondarySubMode;
 }
 
+/** Built-in subtitle text filters; `subtitle-text-filter.ts` holds their patterns. */
+export type SubtitleFilterPresetId = 'parentheses' | 'brackets' | 'speakerPrefix' | 'musicSymbols';
+
+/** A user regex rule. Patterns compile with the `gmu` flags, so `^`/`$` match per line. */
+export interface SubtitleFilterRule {
+  name: string;
+  pattern: string;
+  replacement: string;
+  enabled: boolean;
+}
+
+export interface SubtitleFilterConfig {
+  presets?: Partial<Record<SubtitleFilterPresetId, boolean>>;
+  customRules?: Partial<SubtitleFilterRule>[];
+}
+
+export interface ResolvedSubtitleFilterConfig {
+  presets: Record<SubtitleFilterPresetId, boolean>;
+  customRules: SubtitleFilterRule[];
+}
+
 export type NPlusOneMatchMode = 'headword' | 'surface';
 export type FrequencyDictionaryMatchMode = 'headword' | 'surface';
 
@@ -94,6 +115,7 @@ export interface SubtitleStyleConfig {
   preserveLineBreaks?: boolean;
   autoPauseVideoOnHover?: boolean;
   autoPauseVideoOnYomitanPopup?: boolean;
+  autoPauseVideoOnKeyboardMode?: boolean;
   primaryVisibleOnYomitanPopup?: boolean;
   hoverTokenColor?: string;
   hoverTokenBackgroundColor?: string;
@@ -236,7 +258,10 @@ export interface SubtitleSidebarPlaybackState {
   sourceKey: string | null;
   /** Bumps whenever main swaps in a different parsed cue array. */
   cuesRevision: number;
+  /** Playback position on the subtitle clock (`time-pos` minus `sub-delay`), like cue times. */
   currentTimeSec: number | null;
+  /** mpv `sub-delay`: cue times plus this give the video-clock seek target. */
+  subDelay: number;
   currentSubtitle: {
     text: string;
     startTime: number | null;
@@ -252,6 +277,7 @@ export interface SubtitleSidebarSnapshot extends SubtitleSidebarPlaybackState {
 export interface SubtitleMiningContext {
   source: 'subtitle-sidebar' | 'overlay';
   text: string;
+  /** Video-clock seconds: subtitle timings plus mpv `sub-delay` at capture time. */
   startTime: number;
   endTime: number;
   capturedAtMs?: number;
