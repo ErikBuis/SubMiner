@@ -8,7 +8,7 @@ import {
   createHarness,
   type FakeOverlayWindowInit,
 } from './overlay-runtime-test-harness';
-import type { OverlayHostedModal } from '../shared/ipc/contracts';
+import { IPC_CHANNELS, type OverlayHostedModal } from '../shared/ipc/contracts';
 
 const SUBSYNC_PAYLOAD = {
   ffsubsyncAvailable: true,
@@ -221,6 +221,32 @@ test('primeModalWindow leaves Linux modal creation lazy', () => {
 
   assert.equal(h.runtime.primeModalWindow(), false);
   assert.equal(h.createCalls, 0);
+});
+
+test('a cancelled queued plugin panel cannot replace its successor when the window loads', () => {
+  const modal = new FakeOverlayWindow({ ...LOADING_BLANK_WINDOW, documentLoaded: false });
+  const h = createHarness({ modal });
+  const first = new AbortController();
+  h.runtime.sendToActiveOverlayWindow(
+    'plugin-panel:open',
+    { panelId: 1 },
+    {
+      restoreOnModalClose: 'plugin-panel',
+      preferModalWindow: true,
+      signal: first.signal,
+    },
+  );
+  first.abort();
+  h.runtime.sendToActiveOverlayWindow(
+    'plugin-panel:open',
+    { panelId: 2 },
+    {
+      restoreOnModalClose: 'plugin-panel',
+      preferModalWindow: true,
+    },
+  );
+  modal.finishLoad();
+  assert.deepEqual(modal.sent, [['plugin-panel:open', { panelId: 2 }]]);
 });
 
 test('sendToActiveOverlayWindow does not retain restore state when modal creation fails', () => {
@@ -787,4 +813,43 @@ test('Linux keeps the dedicated modal window unmapped until the renderer opens t
   assert.equal(main.isVisible(), false);
   assert.equal(modal.isVisible(), true);
   assert.equal(modal.ignoreMouseEvents, false);
+});
+
+test('modal window path suspends the main overlay controller until the last modal closes', () => {
+  const main = new FakeOverlayWindow({ visible: true });
+  const h = createHarness({ main, modal: new FakeOverlayWindow() });
+  const suspendMessages = () =>
+    main.sent.filter(([channel]) => channel === IPC_CHANNELS.event.controllerSuspendedChanged);
+
+  h.runtime.sendToActiveOverlayWindow(
+    'media-timing-review:open',
+    { reviewId: 'r-1' },
+    { restoreOnModalClose: 'media-timing-review', preferModalWindow: true },
+  );
+  h.runtime.notifyOverlayModalOpened('media-timing-review');
+  assert.deepEqual(suspendMessages(), [[IPC_CHANNELS.event.controllerSuspendedChanged, true]]);
+
+  h.runtime.handleOverlayModalClosed('media-timing-review');
+  assert.deepEqual(suspendMessages(), [
+    [IPC_CHANNELS.event.controllerSuspendedChanged, true],
+    [IPC_CHANNELS.event.controllerSuspendedChanged, false],
+  ]);
+});
+
+test('a modal hosted in the main overlay keeps that overlay controller active', () => {
+  const main = new FakeOverlayWindow({ visible: true });
+  const h = createHarness({ main, createModal: () => new FakeOverlayWindow() });
+
+  h.runtime.sendToActiveOverlayWindow(
+    'media-timing-review:open',
+    { reviewId: 'r-1' },
+    { restoreOnModalClose: 'media-timing-review' },
+  );
+  h.runtime.notifyOverlayModalOpened('media-timing-review');
+  h.runtime.handleOverlayModalClosed('media-timing-review');
+
+  assert.equal(
+    main.sent.some(([channel]) => channel === IPC_CHANNELS.event.controllerSuspendedChanged),
+    false,
+  );
 });
