@@ -7,6 +7,11 @@ import type {
   MediaTimingReviewPreviewPosition,
 } from '../../types/anki';
 import type { ModalStateReader, RendererContext } from '../context';
+import type {
+  MediaTimingReviewControllerAction,
+  MediaTimingReviewStep,
+} from '../handlers/media-timing-review-controller.js';
+import type { RendererDom } from '../utils/dom';
 import { createModalFocusGuard } from './modal-focus-guard';
 import {
   findBestOverlappingLine,
@@ -30,6 +35,41 @@ const SPEECH_TAIL_SECONDS = 0.15;
 const MINIMUM_TRAILING_TRIM_SECONDS = 0.1;
 /** Allow buffering and output-device delays without cutting off an advancing preview. */
 const PREVIEW_STALL_TIMEOUT_MS = 15_000;
+
+type ButtonDomKey = {
+  [Key in keyof RendererDom]: RendererDom[Key] extends HTMLButtonElement ? Key : never;
+}[keyof RendererDom];
+
+/** The on-screen button each controller action presses. */
+export const MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS: Record<
+  MediaTimingReviewControllerAction,
+  ButtonDomKey
+> = {
+  confirm: 'mediaTimingReviewConfirm',
+  cancel: 'mediaTimingReviewCancel',
+  play: 'mediaTimingReviewPlay',
+  resetTiming: 'mediaTimingReviewReset',
+  showEarlier: 'mediaTimingReviewShowEarlier',
+  showLater: 'mediaTimingReviewShowLater',
+  startBack: 'mediaTimingReviewStartBack',
+  startForward: 'mediaTimingReviewStartForward',
+  endBack: 'mediaTimingReviewEndBack',
+  endForward: 'mediaTimingReviewEndForward',
+  previousLineAdd: 'mediaTimingReviewPrevAdd',
+  previousLineRemove: 'mediaTimingReviewPrevRemove',
+  nextLineAdd: 'mediaTimingReviewNextAdd',
+  nextLineRemove: 'mediaTimingReviewNextRemove',
+  framePrevious: 'mediaTimingReviewFramePrevious',
+  frameNext: 'mediaTimingReviewFrameNext',
+  frameReset: 'mediaTimingReviewFrameReset',
+  keepEditing: 'mediaTimingReviewCancelBack',
+  discard: 'mediaTimingReviewDiscard',
+};
+
+/** A controller press only counts when a mouse click could have reached the button. */
+export function isMediaTimingReviewButtonAvailable(button: HTMLButtonElement): boolean {
+  return !button.disabled && button.closest('.hidden') === null;
+}
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
@@ -428,7 +468,9 @@ export function createMediaTimingReviewModal(
       state.timestamp >= timelineEnd - 0.001;
     dom.mediaTimingReviewFrameSlider.disabled = resolveInFlight;
     dom.mediaTimingReviewFrameReset.disabled = resolveInFlight || !state.manual;
-    dom.mediaTimingReviewConfirm.disabled = resolveInFlight || state.blockConfirm;
+    dom.mediaTimingReviewConfirm.disabled =
+      resolveInFlight || (state.blockConfirm && !dom.mediaTimingReviewWithoutMedia.checked);
+    dom.mediaTimingReviewWithoutMedia.disabled = resolveInFlight;
   }
 
   function setStatus(message: string, isError = false): void {
@@ -724,10 +766,9 @@ export function createMediaTimingReviewModal(
 
   /**
    * The reviewed translation, sent only when it differs from what main would write on its
-   * own: typed by the user, or (`includeFollowed`) following added lines. Cancel paths keep
-   * the original sentence, so they only carry a typed translation.
+   * own: typed by the user, or following added lines.
    */
-  function reviewedTranslation(includeFollowed: boolean): { translation?: string } {
+  function reviewedTranslation(): { translation?: string } {
     const initial = payload?.card?.translation;
     if (!initial) return {};
     const value = ctx.dom.mediaTimingReviewTranslation.value.replace(/\s+/g, ' ').trim();
@@ -736,8 +777,7 @@ export function createMediaTimingReviewModal(
     // With lines added, main would resolve the translation anew (and lose one taken from
     // the screen), so the displayed one goes along unless it is the field's own content.
     const linesAdded = previousCount > 0 || nextCount > 0;
-    const followedChange =
-      includeFollowed && (value !== initialValue || (linesAdded && !initial.fromField));
+    const followedChange = value !== initialValue || (linesAdded && !initial.fromField);
     return translationEdited || followedChange ? { translation: value } : {};
   }
 
@@ -967,6 +1007,19 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewResetAll.classList.remove('hidden');
   }
 
+  /** An audio card is made from a note mined earlier, so cancelling leaves that note alone. */
+  function discardChoice(review: MediaTimingReviewOpenPayload): { label: string; message: string } {
+    if (review.kind === 'audio') {
+      return {
+        label: 'Leave card unchanged',
+        message: 'Keep editing, or leave this card as it was.',
+      };
+    }
+    return review.noteId !== undefined
+      ? { label: 'Delete card', message: 'Keep editing, or delete this card.' }
+      : { label: "Don't create card", message: 'Keep editing, or do not create this card.' };
+  }
+
   function requestCancel(): void {
     if (!ctx.state.mediaTimingReviewModalOpen || !payload || resolveInFlight) return;
     stopPreview();
@@ -974,14 +1027,9 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewCancel.classList.add('hidden');
     ctx.dom.mediaTimingReviewResetAll.classList.add('hidden');
     ctx.dom.mediaTimingReviewCancelStep.classList.remove('hidden');
-    ctx.dom.mediaTimingReviewCancelMessage.textContent =
-      payload.noteId !== undefined
-        ? 'Keep editing, keep this card without media, use its original timing, or delete it.'
-        : 'Keep editing, create this card without media, use its original timing, or do not create it.';
-    ctx.dom.mediaTimingReviewSkipMedia.textContent =
-      payload.noteId !== undefined ? 'Keep without media' : 'Create without media';
-    ctx.dom.mediaTimingReviewDiscard.textContent =
-      payload.noteId !== undefined ? 'Delete card' : "Don't create card";
+    const discard = discardChoice(payload);
+    ctx.dom.mediaTimingReviewCancelMessage.textContent = discard.message;
+    ctx.dom.mediaTimingReviewDiscard.textContent = discard.label;
     ctx.dom.mediaTimingReviewCancelBack.focus();
   }
 
@@ -1047,8 +1095,10 @@ export function createMediaTimingReviewModal(
   }
 
   function confirmSelection(): void {
-    if (!payload || framePicker.getState().blockConfirm) return;
-    const screenshotTime = framePicker.getScreenshotTime();
+    const withoutMedia = ctx.dom.mediaTimingReviewWithoutMedia.checked;
+    // A screenshot that failed to load only blocks exports that include media.
+    if (!payload || (framePicker.getState().blockConfirm && !withoutMedia)) return;
+    const screenshotTime = withoutMedia ? undefined : framePicker.getScreenshotTime();
     const includesAdjacentLines = previousCount > 0 || nextCount > 0;
     const lines = currentLineSelection();
     void resolveReview({
@@ -1063,7 +1113,8 @@ export function createMediaTimingReviewModal(
             sentenceEndTime: lines.rangeEnd,
           }
         : {}),
-      ...reviewedTranslation(true),
+      ...(withoutMedia ? { skipMedia: true } : {}),
+      ...reviewedTranslation(),
     });
   }
 
@@ -1131,6 +1182,7 @@ export function createMediaTimingReviewModal(
     trailingTrimPending = true;
     resolveInFlight = false;
     setPreviewPlaying(false);
+    ctx.dom.mediaTimingReviewWithoutMedia.checked = false;
     ctx.dom.mediaTimingReviewKind.textContent =
       nextPayload.kind === 'word'
         ? 'Word card'
@@ -1138,8 +1190,7 @@ export function createMediaTimingReviewModal(
           ? 'Audio card'
           : 'Sentence card';
     ctx.dom.mediaTimingReviewKind.dataset.kind = nextPayload.kind;
-    ctx.dom.mediaTimingReviewDiscard.textContent =
-      nextPayload.noteId !== undefined ? 'Delete card' : "Don't create card";
+    ctx.dom.mediaTimingReviewDiscard.textContent = discardChoice(nextPayload).label;
     renderCard();
     setTranslation(nextPayload.card?.translation?.text ?? '', false);
     setStatus('');
@@ -1201,7 +1252,7 @@ export function createMediaTimingReviewModal(
     if (
       event.code === 'Space' &&
       event.target instanceof Element &&
-      !event.target.closest('button')
+      !event.target.closest('button, input[type="checkbox"]')
     ) {
       event.preventDefault();
       void togglePreview();
@@ -1231,6 +1282,44 @@ export function createMediaTimingReviewModal(
       return true;
     }
     return false;
+  }
+
+  function getControllerStep(): MediaTimingReviewStep {
+    return ctx.dom.mediaTimingReviewCancelStep.classList.contains('hidden') ? 'editor' : 'cancel';
+  }
+
+  /** Presses the on-screen button for a controller action, so every guard it has applies. */
+  function handleControllerAction(action: MediaTimingReviewControllerAction): boolean {
+    if (!ctx.state.mediaTimingReviewModalOpen) return false;
+    const button = ctx.dom[MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS[action]];
+    if (!isMediaTimingReviewButtonAvailable(button)) return false;
+    button.click();
+    return true;
+  }
+
+  /**
+   * Hints live in a data attribute drawn by CSS, so they survive code that rewrites a
+   * button's text (Skip media / Discard labels change with the card). Unbound actions
+   * show no tag. Only changed attributes are written, since this runs every frame.
+   */
+  function setControllerHints(
+    hints: Record<MediaTimingReviewControllerAction, string | null>,
+  ): void {
+    for (const [action, domKey] of Object.entries(MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS) as Array<
+      [MediaTimingReviewControllerAction, ButtonDomKey]
+    >) {
+      const button = ctx.dom[domKey];
+      const hint = hints[action];
+      if (hint === null || hint === undefined) {
+        if (button.dataset.controllerHint !== undefined) delete button.dataset.controllerHint;
+      } else if (button.dataset.controllerHint !== hint) {
+        button.dataset.controllerHint = hint;
+      }
+    }
+  }
+
+  function setControllerHintsVisible(visible: boolean): void {
+    ctx.dom.mediaTimingReviewModal.classList.toggle('controller-hints-visible', visible);
   }
 
   function wireDomEvents(): void {
@@ -1299,14 +1388,7 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewNextRemove.addEventListener('click', () => adjustLines('next', -1));
     ctx.dom.mediaTimingReviewCancel.addEventListener('click', requestCancel);
     ctx.dom.mediaTimingReviewCancelBack.addEventListener('click', showEditor);
-    ctx.dom.mediaTimingReviewUseOriginal.addEventListener(
-      'click',
-      () => void resolveReview({ action: 'use-original', ...reviewedTranslation(false) }),
-    );
-    ctx.dom.mediaTimingReviewSkipMedia.addEventListener(
-      'click',
-      () => void resolveReview({ action: 'skip-media', ...reviewedTranslation(false) }),
-    );
+    ctx.dom.mediaTimingReviewWithoutMedia.addEventListener('change', () => renderFramePicker());
     ctx.dom.mediaTimingReviewDiscard.addEventListener(
       'click',
       () => void resolveReview({ action: 'discard' }),
@@ -1321,5 +1403,9 @@ export function createMediaTimingReviewModal(
     requestCancel,
     handleMediaTimingReviewKeydown,
     wireDomEvents,
+    getControllerStep,
+    handleControllerAction,
+    setControllerHints,
+    setControllerHintsVisible,
   };
 }

@@ -119,7 +119,7 @@ export function buildIntegrationConfigOptionRegistry(
       kind: 'string',
       defaultValue: defaultConfig.ankiConnect.fields.wordCardTranslation,
       description:
-        'Card field that word cards mined from the dictionary popup fill with the secondary subtitle translating the mined sentence (for example SentenceTranslation in Kiku). Empty: word cards get no translation.',
+        'Card field that word cards mined from the dictionary popup fill with the secondary subtitle translating the mined sentence (for example SentenceTranslation in Kiku, or SelectionText to fill it like sentence card mining). Empty: word cards get no translation.',
     },
     {
       path: 'ankiConnect.fields.definition',
@@ -494,6 +494,13 @@ export function buildIntegrationConfigOptionRegistry(
       kind: 'number',
       defaultValue: defaultConfig.jimaku.maxEntryResults,
       description: 'Maximum Jimaku search results returned.',
+    },
+    {
+      path: 'jimaku.autoOpenWhenPrimarySubtitleMissing',
+      kind: 'boolean',
+      defaultValue: defaultConfig.jimaku.autoOpenWhenPrimarySubtitleMissing,
+      description:
+        'Pause playback and open the Jimaku modal when a local video has no subtitle track in youtube.primarySubLanguages (Japanese by default).',
     },
     {
       path: 'tsukihime.apiBaseUrl',

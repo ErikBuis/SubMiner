@@ -1,4 +1,5 @@
 import type { SubtitleCue } from '../../types/subtitle';
+import type { SubtitleTracksForTranslation } from '../../anki-integration/sentence-translation';
 import { flattenedSecondarySubtitleLineIdentity } from '../../core/services/secondary-subtitle-line-identity';
 import {
   removeAssControlDebrisLines,
@@ -230,6 +231,43 @@ export function selectAlignableSubtitleCues(cues: readonly SubtitleCue[]): Subti
   });
 }
 
+/** A parsed cue moved by `delaySeconds`, from the subtitle file's clock onto the video's. */
+function shiftCueToVideoClock(cue: SubtitleCue, delaySeconds: number): SubtitleCue {
+  if (delaySeconds === 0) return cue;
+  const shifted: SubtitleCue = {
+    ...cue,
+    startTime: cue.startTime + delaySeconds,
+    endTime: cue.endTime + delaySeconds,
+  };
+  // The parser stores the layout as a non-enumerable property, which a spread drops.
+  if (cue.assLayout) {
+    Object.defineProperty(shifted, 'assLayout', { value: cue.assLayout, enumerable: false });
+  }
+  return shifted;
+}
+
+/**
+ * The parsed tracks a card's translation is picked from, on the video clock like every
+ * mined range (`SubtitleMiningContext`, sentence and word card ranges, the media timing
+ * review). Parsed primary cues keep the subtitle file's timestamps, so they move by the
+ * primary `sub-delay`; `secondaryCues` come from `getTimelineCues`, already on the video
+ * clock. Null without a parsed secondary track.
+ */
+export function buildSubtitleTracksForTranslation(input: {
+  primaryCues: readonly SubtitleCue[];
+  primarySubDelay: number;
+  secondaryCues: readonly SubtitleCue[] | null;
+}): SubtitleTracksForTranslation | null {
+  if (!input.secondaryCues) return null;
+  const primaryDelay = Number.isFinite(input.primarySubDelay) ? input.primarySubDelay : 0;
+  return {
+    primary: selectAlignableSubtitleCues(input.primaryCues).map((cue) =>
+      shiftCueToVideoClock(cue, primaryDelay),
+    ),
+    secondary: selectAlignableSubtitleCues(input.secondaryCues),
+  };
+}
+
 export function createSecondarySubtitleTrackController(deps: {
   getMpvClient: () => SecondarySubtitleMpvClient | null;
   getCurrentTimePos: () => number;
@@ -377,25 +415,12 @@ export function createSecondarySubtitleTrackController(deps: {
     refresh,
     scheduleRefresh,
     /**
-     * Parsed cues of the selected secondary track, shifted onto the timeline of a track
-     * delayed by `relativeToDelaySeconds` (0: the playback timeline).
+     * Parsed cues of the selected secondary track on the video clock: moved by
+     * `secondary-sub-delay` to where mpv plays them.
      */
-    getTimelineCues(relativeToDelaySeconds = 0): SubtitleCue[] | null {
+    getTimelineCues(): SubtitleCue[] | null {
       if (!parsedCues) return null;
-      const shift = secondaryDelaySeconds - relativeToDelaySeconds;
-      if (shift === 0) return parsedCues;
-      return parsedCues.map((cue) => {
-        const shifted: SubtitleCue = {
-          ...cue,
-          startTime: cue.startTime + shift,
-          endTime: cue.endTime + shift,
-        };
-        // The parser stores the layout as a non-enumerable property, which a spread drops.
-        if (cue.assLayout) {
-          Object.defineProperty(shifted, 'assLayout', { value: cue.assLayout, enumerable: false });
-        }
-        return shifted;
-      });
+      return parsedCues.map((cue) => shiftCueToVideoClock(cue, secondaryDelaySeconds));
     },
     handleLiveText(text: string): void {
       lastLiveText = removeLiveGlyphFragmentLines(
