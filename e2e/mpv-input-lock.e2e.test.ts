@@ -214,7 +214,19 @@ test(
     assert.deepEqual(await snapshot(mpv), before);
     assert.deepEqual(fs.readdirSync(screenshotDir), [], 's must not take a screenshot');
     // Every key went to the lock instead, and each report got the stand-in app's answer.
-    assert.equal(await mpv.command('get_property', 'user-data/probe/blocked'), BLOCKED_KEYS.length);
+    // mpv runs the lock's script messages asynchronously, so give the last ones a moment.
+    let blocked: unknown;
+    await waitUntil(
+      async () => (blocked = await readProbe(mpv, 'blocked')) === BLOCKED_KEYS.length,
+      {
+        description: 'all keys to reach the lock',
+        timeoutMs: 5_000,
+      },
+    ).catch(() => {
+      assert.fail(
+        `${BLOCKED_KEYS.length} keys were pressed but the lock reported ${String(blocked)}`,
+      );
+    });
 
     await unlock(mpv);
     await press(mpv, ['9', 'k']);
