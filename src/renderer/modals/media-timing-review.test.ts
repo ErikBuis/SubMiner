@@ -13,6 +13,7 @@ import {
   formatMediaTimingTimestamp,
   mediaTimingTimeFromPointer,
   resolveMediaTimingReset,
+  revealMediaTimingEdge,
   slideMediaTimingSelection,
   trimMediaTimingSelectionEnd,
 } from './media-timing-review';
@@ -376,6 +377,32 @@ test('an added line whose secondary text is its own text adds no translation', (
     }),
     '',
   );
+});
+
+test('moving an edge past the visible timeline widens the view with a margin', () => {
+  const view = { timelineStart: 10, timelineEnd: 20, mediaEnd: 60 };
+
+  assert.deepEqual(revealMediaTimingEdge({ target: 15, ...view }), {
+    timelineStart: 10,
+    timelineEnd: 20,
+  });
+  assert.deepEqual(revealMediaTimingEdge({ target: 8.5, ...view }), {
+    timelineStart: 7.5,
+    timelineEnd: 20,
+  });
+  assert.deepEqual(revealMediaTimingEdge({ target: 21.5, ...view }), {
+    timelineStart: 10,
+    timelineEnd: 22.5,
+  });
+  // The view stops at the media bounds.
+  assert.deepEqual(revealMediaTimingEdge({ target: 0.4, ...view }), {
+    timelineStart: 0,
+    timelineEnd: 20,
+  });
+  assert.deepEqual(revealMediaTimingEdge({ target: 59.8, ...view }), {
+    timelineStart: 10,
+    timelineEnd: 60,
+  });
 });
 
 test('timing reset restores the mined clip and view for the lines on the card', () => {

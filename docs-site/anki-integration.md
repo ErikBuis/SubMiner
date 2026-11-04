@@ -144,7 +144,7 @@ With `media.reviewTiming` on, SubMiner pauses before making media for word, sent
 
 Playback stays paused while the dialog is open, even if the popup or hover that paused it goes away. When the dialog closes, playback resumes if it was playing before, or if the popup closed in the meantime. A popup that is still open keeps it paused.
 
-The dialog shows the clip over a speech waveform. When the waveform loads, an untouched clip end moves back to just after the last speech in the line. The orange bars still mark the subtitle's original start and end. The clip's start, length and end sit on top of the waveform, and the time of the edge you are dragging or nudging lights up. The times next to Earlier and Later show the visible part of the timeline.
+The dialog shows the clip over a speech waveform. When the waveform loads, an untouched clip end moves back to just after the last speech in the line. The orange bars still mark the subtitle's original start and end. The clip's start, length and end sit on top of the waveform. The start is always yellow and the end purple, on the times, the handles and the buttons under the waveform. The edge you are dragging or nudging lights up.
 
 During preview, the yellow cursor follows the audio player's position through the selected range and stays at the end when playback finishes. Buffering pauses the cursor too. If the player stops reporting progress for 15 seconds, the preview stops so you can retry.
 
@@ -152,8 +152,9 @@ During preview, the yellow cursor follows the audio player's position through th
 | ------------------------ | --------------------------------------------------------------------- |
 | Trim                     | Drag either edge, or click the waveform to move the nearer edge there |
 | Nudge an edge            | Arrow keys on a focused edge (100 ms, `Shift` for 500 ms)             |
+| Move an edge by buttons  | −2.0s / −0.1s / +0.1s / +2.0s for the start (left) and end (right)    |
 | Slide the clip           | Drag the middle                                                       |
-| Show more timeline       | Earlier / Later                                                       |
+| Reach past the view      | Move an edge past it; the timeline widens to keep the edge in view    |
 | Pick the screenshot      | Screenshot slider or Frame buttons (static images only)               |
 | Add previous / next line | `P` / `N` (`Shift+P` / `Shift+N` removes)                             |
 | Preview                  | `Space` or Play selection                                             |
@@ -162,9 +163,9 @@ During preview, the yellow cursor follows the audio player's position through th
 
 The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. `Enter` in the translation still exports the card, and line breaks are written as spaces. Your edit is kept when you export without media.
 
-Play selection, Export card and the key hints stay at the bottom of the dialog, so they never scroll away. The exported range is used as is, with no extra padding. Added lines go into the sentence field. Reset timing, next to the 0.1 s buttons, restores the mined clip and timeline view for the lines on the card. Added lines, the translation and the screenshot stay as they are. Reset all, next to Cancel, undoes every change, unticks Without media and returns the review to how it opened.
+Play selection, Export card and the key hints stay at the bottom of the dialog, so they never scroll away. The exported range is used as is, with no extra padding. Added lines go into the sentence field. Reset, between the start and end buttons, restores the mined clip and timeline view for the lines on the card. Added lines, the translation and the screenshot stay as they are. Reset all, next to Cancel, undoes every change, unticks Without media and returns the review to how it opened.
 
-Tick Without media, next to Export card, to export the sentence and translation with no audio or image. When you cancel, you can go back to editing or drop the card: a new word card is deleted, a sentence card is not created, and an audio card leaves the earlier note unchanged. To keep the mined timing, use Reset timing and export.
+Tick Without media, next to Export card, to export the sentence and translation with no audio or image. When you cancel, you can go back to editing or drop the card: a new word card is deleted, a sentence card is not created, and an audio card leaves the earlier note unchanged. To keep the mined timing, use Reset and export.
 
 #### With a controller
 
@@ -172,7 +173,7 @@ With [controller support](/usage#controller-support) on, the dialog has its own 
 
 `A`, `B`, `X` and `Y` mean the letters printed on your controller. Pick your controller's **Button Style** in `Alt+C`: choose Nintendo if A is on the right and B at the bottom (Switch-style and many 8BitDo pads). On PlayStation, `A` is ╳, `B` ○, `X` □ and `Y` △, and the shortcuts on screen show those symbols.
 
-Hold `L1` or `R1` and press the D-pad for the combos. `L1` covers the clip start and the lines before it, and `R1` the clip end and the lines after it. D-pad actions repeat while held.
+Hold a shoulder button and press the D-pad for the combos. `L1` and `L2` cover the clip start (`L1` also the lines before it), and `R1` and `R2` the clip end (`R1` also the lines after it). D-pad actions repeat while held.
 
 This is the default layout:
 
@@ -182,17 +183,18 @@ This is the default layout:
 | `B`                     | Cancel                           | Keep editing |
 | `X`                     | Play selection                   |              |
 | `Y`                     | Reset timing                     | Discard      |
-| D-pad left / right      | Earlier −2s / Later +2s          |              |
 | D-pad up / down         | Previous / next screenshot frame |              |
 | `L1` + D-pad left/right | Start −0.1s / +0.1s              |              |
+| `L2` + D-pad left/right | Start −2.0s / +2.0s              |              |
 | `L1` + D-pad up/down    | Add / remove a previous line     |              |
 | `R1` + D-pad left/right | End −0.1s / +0.1s                |              |
+| `R2` + D-pad left/right | End −2.0s / +2.0s                |              |
 | `R1` + D-pad up/down    | Add / remove a next line         |              |
 | `L1` + `R1`             | Reset the screenshot frame       |              |
 
 To change it, open `Alt+C` and expand **Review media timing**. Click an action's pencil, then press a button, or hold one button and press another to make a combo; the first button becomes the one you hold. Any button can be a hold button. Changes are saved per controller, and **Reset all** brings back the default layout.
 
-Nudges, Earlier/Later, lines and frames repeat while held whichever buttons they are on. A row warns you when two actions on the same step share an input, or when an action uses a button alone that other actions hold.
+Nudges, lines and frames repeat while held whichever buttons they are on. A row warns you when two actions on the same step share an input, or when an action uses a button alone that other actions hold.
 
 ### Update behavior
 
