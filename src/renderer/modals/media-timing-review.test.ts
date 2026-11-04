@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { CONTROLLER_REVIEW_ACTIONS } from '../../shared/controller-review';
 import {
   buildMediaTimingReviewTranslation,
+  MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS,
+  isMediaTimingReviewButtonAvailable,
   buildMediaTimingLineSelection,
   buildMediaTimingWaveformPath,
   constrainMediaTimingSelection,
@@ -403,4 +407,22 @@ test('timing reset restores the mined clip and view for the lines on the card', 
   const capped = resolveMediaTimingReset({ ...base, linesAdded: true, maxMediaDuration: 5 });
   assert.equal(capped.start, 9.8);
   assert.equal(capped.end, 14.8);
+});
+
+test('every controller action presses a real button on the review screen', () => {
+  const html = readFileSync('src/renderer/index.html', 'utf8');
+  const actions = new Set<string>(CONTROLLER_REVIEW_ACTIONS.map((action) => action.id));
+  assert.deepEqual(new Set(Object.keys(MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS)), actions);
+  for (const domId of Object.values(MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS)) {
+    assert.match(html, new RegExp(`<button\\s+id="${domId}"`), `missing <button id="${domId}">`);
+  }
+});
+
+test('controller presses skip disabled buttons and buttons on the hidden step', () => {
+  const button = (disabled: boolean, insideHidden: boolean) =>
+    ({ disabled, closest: () => (insideHidden ? {} : null) }) as unknown as HTMLButtonElement;
+
+  assert.equal(isMediaTimingReviewButtonAvailable(button(false, false)), true);
+  assert.equal(isMediaTimingReviewButtonAvailable(button(true, false)), false);
+  assert.equal(isMediaTimingReviewButtonAvailable(button(false, true)), false);
 });
