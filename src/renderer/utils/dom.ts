@@ -4,7 +4,6 @@ export type RendererDom = {
   overlay: HTMLElement;
   overlayNotificationStack: HTMLDivElement;
   overlayNotificationHistory: HTMLElement;
-  controllerStatusToast: HTMLDivElement;
   overlayErrorToast: HTMLDivElement;
   secondarySubContainer: HTMLElement;
   secondarySubRoot: HTMLElement;
@@ -117,6 +116,11 @@ export type RendererDom = {
   kikuCard2Sentence: HTMLDivElement;
   kikuCard1Meta: HTMLDivElement;
   kikuCard2Meta: HTMLDivElement;
+  kikuCard1Label: HTMLDivElement;
+  kikuCard2Label: HTMLDivElement;
+  kikuDeleteToggle: HTMLLabelElement;
+  kikuPreviewToggle: HTMLDivElement;
+  kikuPreviewScrollHint: HTMLSpanElement;
   kikuConfirmButton: HTMLButtonElement;
   kikuCancelButton: HTMLButtonElement;
   kikuDeleteDuplicateCheckbox: HTMLInputElement;
@@ -164,6 +168,7 @@ export type RendererDom = {
   controllerSelectModal: HTMLDivElement;
   controllerSelectClose: HTMLButtonElement;
   controllerSelectPicker: HTMLSelectElement;
+  controllerSelectFaceButtonStyle: HTMLSelectElement;
   controllerSelectSummary: HTMLDivElement;
   controllerSelectStatus: HTMLDivElement;
   controllerConfigList: HTMLDivElement;
@@ -193,6 +198,11 @@ export type RendererDom = {
   changelogWarning: HTMLDivElement;
   changelogStatus: HTMLDivElement;
   changelogList: HTMLDivElement;
+
+  pluginPanelModal: HTMLDivElement;
+  pluginPanelTitle: HTMLDivElement;
+  pluginPanelClose: HTMLButtonElement;
+  pluginPanelBody: HTMLDivElement;
 
   sessionHelpModal: HTMLDivElement;
   sessionHelpClose: HTMLButtonElement;
@@ -225,7 +235,6 @@ export function resolveRendererDom(): RendererDom {
     overlay: getRequiredElement<HTMLElement>('overlay'),
     overlayNotificationStack: getRequiredElement<HTMLDivElement>('overlayNotificationStack'),
     overlayNotificationHistory: getRequiredElement<HTMLElement>('overlayNotificationHistory'),
-    controllerStatusToast: getRequiredElement<HTMLDivElement>('controllerStatusToast'),
     overlayErrorToast: getRequiredElement<HTMLDivElement>('overlayErrorToast'),
     secondarySubContainer: getRequiredElement<HTMLElement>('secondarySubContainer'),
     secondarySubRoot: getRequiredElement<HTMLElement>('secondarySubRoot'),
@@ -398,6 +407,11 @@ export function resolveRendererDom(): RendererDom {
     kikuCard2Sentence: getRequiredElement<HTMLDivElement>('kikuCard2Sentence'),
     kikuCard1Meta: getRequiredElement<HTMLDivElement>('kikuCard1Meta'),
     kikuCard2Meta: getRequiredElement<HTMLDivElement>('kikuCard2Meta'),
+    kikuCard1Label: getRequiredElement<HTMLDivElement>('kikuCard1Label'),
+    kikuCard2Label: getRequiredElement<HTMLDivElement>('kikuCard2Label'),
+    kikuDeleteToggle: getRequiredElement<HTMLLabelElement>('kikuDeleteToggle'),
+    kikuPreviewToggle: getRequiredElement<HTMLDivElement>('kikuPreviewToggle'),
+    kikuPreviewScrollHint: getRequiredElement<HTMLSpanElement>('kikuPreviewScrollHint'),
     kikuConfirmButton: getRequiredElement<HTMLButtonElement>('kikuConfirmButton'),
     kikuCancelButton: getRequiredElement<HTMLButtonElement>('kikuCancelButton'),
     kikuDeleteDuplicateCheckbox: getRequiredElement<HTMLInputElement>('kikuDeleteDuplicate'),
@@ -461,6 +475,9 @@ export function resolveRendererDom(): RendererDom {
     controllerSelectModal: getRequiredElement<HTMLDivElement>('controllerSelectModal'),
     controllerSelectClose: getRequiredElement<HTMLButtonElement>('controllerSelectClose'),
     controllerSelectPicker: getRequiredElement<HTMLSelectElement>('controllerSelectPicker'),
+    controllerSelectFaceButtonStyle: getRequiredElement<HTMLSelectElement>(
+      'controllerSelectFaceButtonStyle',
+    ),
     controllerSelectSummary: getRequiredElement<HTMLDivElement>('controllerSelectSummary'),
     controllerSelectStatus: getRequiredElement<HTMLDivElement>('controllerSelectStatus'),
     controllerConfigList: getRequiredElement<HTMLDivElement>('controllerConfigList'),
@@ -492,6 +509,10 @@ export function resolveRendererDom(): RendererDom {
     changelogWarning: getRequiredElement<HTMLDivElement>('changelogWarning'),
     changelogStatus: getRequiredElement<HTMLDivElement>('changelogStatus'),
     changelogList: getRequiredElement<HTMLDivElement>('changelogList'),
+    pluginPanelModal: getRequiredElement<HTMLDivElement>('pluginPanelModal'),
+    pluginPanelTitle: getRequiredElement<HTMLDivElement>('pluginPanelTitle'),
+    pluginPanelClose: getRequiredElement<HTMLButtonElement>('pluginPanelClose'),
+    pluginPanelBody: getRequiredElement<HTMLDivElement>('pluginPanelBody'),
     sessionHelpModal: getRequiredElement<HTMLDivElement>('sessionHelpModal'),
     sessionHelpClose: getRequiredElement<HTMLButtonElement>('sessionHelpClose'),
     sessionHelpShortcut: getRequiredElement<HTMLDivElement>('sessionHelpShortcut'),
