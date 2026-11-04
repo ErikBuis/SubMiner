@@ -24,6 +24,7 @@ local recorded = {
 	mpv_commands = {},
 	osd = {},
 	overlay_toggles = 0,
+	input_lock_keep_on_top = 0,
 }
 
 local mp = {}
@@ -358,10 +359,19 @@ local ctx = {
 			recorded.osd[#recorded.osd + 1] = message
 		end,
 	},
+	input_lock = {
+		keep_on_top = function()
+			recorded.input_lock_keep_on_top = recorded.input_lock_keep_on_top + 1
+		end,
+	},
 }
 
 local bindings = session_bindings.create(ctx)
 assert_true(bindings.register_bindings(), "session bindings should register")
+assert_true(
+	recorded.input_lock_keep_on_top == 1,
+	"registering bindings should put a held input lock back on top"
+)
 
 local function find_binding(keys)
 	for _, binding in ipairs(recorded.bindings) do
@@ -516,3 +526,11 @@ for _, case in ipairs({
 end
 assert_true(#recorded.osd > 0, "native prefix conflicts should be visible")
 print("plugin sequence conflict tests: OK")
+
+local keep_on_top_before_clear = recorded.input_lock_keep_on_top
+bindings.clear_bindings()
+assert_true(
+	recorded.input_lock_keep_on_top == keep_on_top_before_clear + 1,
+	"clearing bindings should put a held input lock back on top"
+)
+print("plugin session binding input lock tests: OK")
