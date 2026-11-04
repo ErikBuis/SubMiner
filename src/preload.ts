@@ -105,6 +105,7 @@ import type {
   OverlayNotificationEventPayload,
   OverlayNotificationPosition,
   ChangelogSnapshot,
+  PluginPanelSnapshot,
   MediaTimingReviewActionResult,
   MediaTimingReviewOpenPayload,
   MediaTimingReviewPreviewPosition,
@@ -140,6 +141,20 @@ const onOpenSessionHelpEvent = createQueuedIpcListenerWithPayload<SessionHelpOpe
   }),
 );
 const onOpenChangelogEvent = createQueuedIpcListener(IPC_CHANNELS.event.changelogOpen);
+function toPluginPanelSnapshot(payload: unknown): PluginPanelSnapshot {
+  const value = (typeof payload === 'object' && payload !== null ? payload : {}) as Partial<
+    Record<keyof PluginPanelSnapshot, unknown>
+  >;
+  return {
+    panelId: typeof value.panelId === 'number' ? value.panelId : -1,
+    title: typeof value.title === 'string' ? value.title : '',
+    markdown: typeof value.markdown === 'string' ? value.markdown : '',
+  };
+}
+const onOpenPluginPanelEvent = createQueuedIpcListenerWithPayload(
+  IPC_CHANNELS.event.pluginPanelOpen,
+  toPluginPanelSnapshot,
+);
 const onOpenCharacterDictionaryManagerEvent = createQueuedIpcListener(
   IPC_CHANNELS.event.characterDictionaryManagerOpen,
 );
@@ -171,6 +186,21 @@ const onSessionNumericSelectionStartEvent =
     IPC_CHANNELS.event.sessionNumericSelectionStart,
     (payload) => payload as SessionNumericSelectionStartPayload,
   );
+const onControllerSuspendedChangedEvent = createQueuedIpcListenerWithPayload<boolean>(
+  IPC_CHANNELS.event.controllerSuspendedChanged,
+  (payload) => payload === true,
+);
+const onPlaybackPauseChangedEvent = createQueuedIpcListenerWithPayload<boolean>(
+  IPC_CHANNELS.event.playbackPauseChanged,
+  (payload) => payload === true,
+);
+const onControllerConfigChangedEvent = createQueuedIpcListener(
+  IPC_CHANNELS.event.controllerConfigChanged,
+);
+const onControllerBackgroundPressEvent = createQueuedIpcListenerWithPayload<number>(
+  IPC_CHANNELS.event.controllerBackgroundPress,
+  (payload) => (typeof payload === 'number' && Number.isInteger(payload) ? payload : -1),
+);
 const onKeyboardModeToggleRequestedEvent = createQueuedIpcListener(
   IPC_CHANNELS.event.keyboardModeToggleRequested,
 );
@@ -327,6 +357,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(IPC_CHANNELS.request.getControllerConfig),
   saveControllerConfig: (update: ControllerConfigUpdate): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.command.saveControllerConfig, update),
+  reportActiveController: (gamepadId: string | null): void => {
+    ipcRenderer.send(IPC_CHANNELS.command.reportActiveController, gamepadId);
+  },
+  notifyControllerStatus: (message: string): void => {
+    ipcRenderer.send(IPC_CHANNELS.command.notifyControllerStatus, message);
+  },
+  getActiveControllerId: (): Promise<string | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.request.getActiveControllerId),
 
   getJimakuMediaInfo: (): Promise<JimakuMediaInfo> =>
     ipcRenderer.invoke(IPC_CHANNELS.request.jimakuGetMediaInfo),
@@ -415,6 +453,17 @@ const electronAPI: ElectronAPI = {
   onOpenChangelog: onOpenChangelogEvent,
   getChangelogSnapshot: (options?: { refresh?: boolean }): Promise<ChangelogSnapshot> =>
     ipcRenderer.invoke(IPC_CHANNELS.request.getChangelogSnapshot, options),
+  onOpenPluginPanel: onOpenPluginPanelEvent,
+  onPluginPanelUpdate: (callback: (snapshot: PluginPanelSnapshot) => void): void => {
+    ipcRenderer.on(IPC_CHANNELS.event.pluginPanelUpdate, (_event, payload: unknown) => {
+      callback(toPluginPanelSnapshot(payload));
+    });
+  },
+  onPluginPanelClose: (callback: (panelId: number) => void): void => {
+    ipcRenderer.on(IPC_CHANNELS.event.pluginPanelClose, (_event, panelId: unknown) => {
+      if (typeof panelId === 'number') callback(panelId);
+    });
+  },
   onOpenControllerSelect: onOpenControllerSelectEvent,
   onOpenControllerDebug: onOpenControllerDebugEvent,
   onOpenJimaku: onOpenJimakuEvent,
@@ -465,6 +514,10 @@ const electronAPI: ElectronAPI = {
   onCancelYoutubeTrackPicker: onCancelYoutubeTrackPickerEvent,
   onSessionNumericSelectionStart: onSessionNumericSelectionStartEvent,
   onKeyboardModeToggleRequested: onKeyboardModeToggleRequestedEvent,
+  onControllerSuspendedChanged: onControllerSuspendedChangedEvent,
+  onControllerConfigChanged: onControllerConfigChangedEvent,
+  onControllerBackgroundPress: onControllerBackgroundPressEvent,
+  onPlaybackPauseChanged: onPlaybackPauseChangedEvent,
   onLookupWindowToggleRequested: onLookupWindowToggleRequestedEvent,
   getPlaylistBrowserSnapshot: (): Promise<PlaylistBrowserSnapshot> =>
     ipcRenderer.invoke(IPC_CHANNELS.request.getPlaylistBrowserSnapshot),
@@ -506,8 +559,8 @@ const electronAPI: ElectronAPI = {
       mediaId,
       direction,
     ),
-  notifyOverlayModalClosed: (modal) => {
-    ipcRenderer.send(IPC_CHANNELS.command.overlayModalClosed, modal);
+  notifyOverlayModalClosed: (modal, instanceId) => {
+    ipcRenderer.send(IPC_CHANNELS.command.overlayModalClosed, modal, instanceId);
   },
   notifyOverlayModalOpened: (modal) => {
     ipcRenderer.send(IPC_CHANNELS.command.overlayModalOpened, modal);
