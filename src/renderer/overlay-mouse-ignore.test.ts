@@ -119,6 +119,7 @@ const toggleCases: Array<{
       'playlistBrowserModalOpen',
       'characterDictionaryModalOpen',
       'changelogModalOpen',
+      'pluginPanelModalOpen',
     ] as const
   ).map((flag) => ({
     name: `${flag} keeps overlay interactive`,

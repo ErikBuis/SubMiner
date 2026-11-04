@@ -20,7 +20,8 @@ function isBlockingOverlayModalOpen(state: RendererState): boolean {
     state.subsyncModalOpen ||
     state.subtitleGenerationModalOpen ||
     state.sessionHelpModalOpen ||
-    state.changelogModalOpen,
+    state.changelogModalOpen ||
+    state.pluginPanelModalOpen,
   );
 }
 
