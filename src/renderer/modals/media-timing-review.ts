@@ -1338,8 +1338,10 @@ export function createMediaTimingReviewModal(
       event.shiftKey,
     );
     if (target === null) return;
-    event.preventDefault();
     target.focus();
+    // Only take over Tab when the wrap target really took focus; otherwise the browser's
+    // own move is better than a key that does nothing.
+    if (document.activeElement === target) event.preventDefault();
   }
 
   function handleMediaTimingReviewKeydown(event: KeyboardEvent): boolean {
