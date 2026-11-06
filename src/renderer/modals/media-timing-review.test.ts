@@ -382,27 +382,81 @@ test('an added line whose secondary text is its own text adds no translation', (
 test('moving an edge past the visible timeline widens the view with a margin', () => {
   const view = { timelineStart: 10, timelineEnd: 20, mediaEnd: 60 };
 
-  assert.deepEqual(revealMediaTimingEdge({ target: 15, ...view }), {
+  assert.deepEqual(revealMediaTimingEdge({ target: 15, from: 16, ...view }), {
     timelineStart: 10,
     timelineEnd: 20,
   });
-  assert.deepEqual(revealMediaTimingEdge({ target: 8.5, ...view }), {
+  assert.deepEqual(revealMediaTimingEdge({ target: 8.5, from: 12, ...view }), {
     timelineStart: 7.5,
     timelineEnd: 20,
   });
-  assert.deepEqual(revealMediaTimingEdge({ target: 21.5, ...view }), {
+  assert.deepEqual(revealMediaTimingEdge({ target: 21.5, from: 18, ...view }), {
     timelineStart: 10,
     timelineEnd: 22.5,
   });
   // The view stops at the media bounds.
-  assert.deepEqual(revealMediaTimingEdge({ target: 0.4, ...view }), {
+  assert.deepEqual(revealMediaTimingEdge({ target: 0.4, from: 12, ...view }), {
     timelineStart: 0,
     timelineEnd: 20,
   });
-  assert.deepEqual(revealMediaTimingEdge({ target: 59.8, ...view }), {
+  assert.deepEqual(revealMediaTimingEdge({ target: 59.8, from: 18, ...view }), {
     timelineStart: 10,
     timelineEnd: 60,
   });
+});
+
+test('an edge moved onto or near the view edge also widens the view', () => {
+  const view = { timelineStart: 10, timelineEnd: 20, mediaEnd: 60 };
+
+  // The review opens with a 2 s margin, so the first -2.0s / +2.0s press lands on the edge.
+  assert.deepEqual(revealMediaTimingEdge({ target: 10, from: 12, ...view }), {
+    timelineStart: 9,
+    timelineEnd: 20,
+  });
+  assert.deepEqual(revealMediaTimingEdge({ target: 20, from: 18, ...view }), {
+    timelineStart: 10,
+    timelineEnd: 21,
+  });
+  // Small nudges inside the margin keep a full second of room.
+  assert.deepEqual(revealMediaTimingEdge({ target: 10.9, from: 11, ...view }), {
+    timelineStart: 9.9,
+    timelineEnd: 20,
+  });
+  // Exactly a second of room is enough.
+  assert.deepEqual(revealMediaTimingEdge({ target: 11, from: 11.1, ...view }), {
+    timelineStart: 10,
+    timelineEnd: 20,
+  });
+});
+
+test('moving an edge away from the view edge never widens the view', () => {
+  const view = { timelineStart: 10, timelineEnd: 20, mediaEnd: 60 };
+
+  // A start sitting near the left edge that moves right, or a short clip near the right edge
+  // whose start moves left, leaves the view as it is.
+  assert.deepEqual(revealMediaTimingEdge({ target: 10.4, from: 10.3, ...view }), {
+    timelineStart: 10,
+    timelineEnd: 20,
+  });
+  assert.deepEqual(revealMediaTimingEdge({ target: 19.5, from: 19.6, ...view }), {
+    timelineStart: 10,
+    timelineEnd: 20,
+  });
+  assert.deepEqual(revealMediaTimingEdge({ target: 10.5, from: 10.4, ...view }), {
+    timelineStart: 10,
+    timelineEnd: 20,
+  });
+  // At the start of the media there is nothing more to show.
+  assert.deepEqual(
+    revealMediaTimingEdge({
+      target: 0,
+      from: 0.1,
+      timelineStart: 0,
+      timelineEnd: 20,
+      mediaEnd: 60,
+    }),
+    { timelineStart: 0, timelineEnd: 20 },
+  );
 });
 
 test('timing reset restores the mined clip and view for the lines on the card', () => {
