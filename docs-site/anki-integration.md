@@ -106,7 +106,7 @@ Hachidori prepares downloadable word audio before it saves a note through the pr
 
 `fields.audio` gets sentence audio, not word audio. Yomitan writes its own dictionary audio into your note (often `ExpressionAudio`), so keep `fields.audio` pointed at a separate field such as the default `SentenceAudio`. Pointing it at Yomitan's word-audio field would overwrite that audio.
 
-`fields.wordCardTranslation` gives word cards the translation of their sentence, picked by timing like on sentence cards. Point it at the note type's translation field, for example `SentenceTranslation` in Kiku, or the field your sentence cards put their translation in. With field grouping, the translations of grouped cards are merged like their sentences.
+`fields.wordCardTranslation` gives word cards the translation of their sentence, picked by timing like on sentence cards. Point it at the note type's translation field, for example `SentenceTranslation` in Kiku, or the field your sentence cards put their translation in. With field grouping, the translations of grouped cards are merged like their sentences. Audio cards (`Ctrl/Cmd+Shift+A`) write it too, for the line they replace the sentence with. When that line has no translation, they clear the old one, which belonged to the previous sentence.
 
 `ankiConnect.tags` adds tags to every mined or updated card. Set it to `[]` to add none.
 

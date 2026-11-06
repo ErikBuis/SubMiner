@@ -115,6 +115,8 @@ interface CardCreationDeps {
     | Promise<SubtitleTracksForTranslation | null>
     | SubtitleTracksForTranslation
     | null;
+  /** Live secondary subtitle, only when the on-screen primary line matches `primaryText`. */
+  getLiveSecondarySubtitleFor?: (primaryText: string) => string | undefined;
   getAiConfig: () => AiConfig;
   getTimingTracker: () => SubtitleTimingTracker;
   getMpvClient: () => MpvClient;
@@ -425,6 +427,47 @@ export class CardCreationService {
     }
   }
 
+  /**
+   * The word-card translation an audio card writes for its new sentence, picked by timing like
+   * on word cards. Without a match the field is cleared when the sentence changed, since the
+   * old translation belongs to the old line. Null when no translation field is configured.
+   */
+  private async resolveAudioCardTranslation(
+    noteInfo: CardCreationNoteInfo,
+    sentenceText: string,
+    sentenceRange: { startTime: number; endTime: number },
+    sentenceField: string | null | undefined,
+  ): Promise<{ name: string; value: string } | null> {
+    const configuredField = this.deps.getConfig().fields?.wordCardTranslation;
+    const name = configuredField
+      ? this.deps.resolveConfiguredFieldName(noteInfo, configuredField)
+      : null;
+    if (!name) return null;
+
+    const tracks = (await this.deps.getSubtitleTracksForTranslation?.()) ?? null;
+    const timedTranslation = resolveTimedSentenceTranslation({
+      text: sentenceText,
+      ...sentenceRange,
+      tracks,
+    });
+    // A parsed secondary track without a match means no translation; the line on screen
+    // only stands in when the tracks are unavailable.
+    const translation =
+      timedTranslation?.translation ??
+      (tracks && tracks.secondary.length > 0
+        ? undefined
+        : this.deps.getLiveSecondarySubtitleFor?.(sentenceText));
+    if (translation) return { name, value: translation };
+
+    const normalize = (text: string) =>
+      text
+        .replace(/<[^>]*>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const oldSentence = sentenceField ? (noteInfo.fields[sentenceField]?.value ?? '') : '';
+    return normalize(oldSentence) === normalize(sentenceText) ? null : { name, value: '' };
+  }
+
   async markLastCardAsAudioCard(): Promise<void> {
     if (this.deps.isUpdateInProgress()) {
       this.deps.showOsdNotification('Anki update already in progress');
@@ -455,6 +498,8 @@ export class CardCreationService {
         endTime = currentTime + fallback;
       }
 
+      // The cap limits the media only; the translation still covers the whole line.
+      let sentenceRange = { startTime, endTime };
       const maxMediaDuration = this.deps.getConfig().media?.maxMediaDuration ?? 30;
       endTime = clampMediaEndTime(startTime, endTime, maxMediaDuration);
 
@@ -506,6 +551,17 @@ export class CardCreationService {
           startTime = timingDecision.startTime;
           endTime = timingDecision.endTime;
           sentenceText = timingDecision.text?.trim() || sentenceText;
+          // Lines the review added widen the sentence; the clip bounds are padded or
+          // trimmed audio and say nothing about which lines the card covers.
+          if (
+            timingDecision.sentenceStartTime !== undefined &&
+            timingDecision.sentenceEndTime !== undefined
+          ) {
+            sentenceRange = {
+              startTime: Math.min(sentenceRange.startTime, timingDecision.sentenceStartTime),
+              endTime: Math.max(sentenceRange.endTime, timingDecision.sentenceEndTime),
+            };
+          }
         }
 
         const updatedFields: Record<string, string> = {};
@@ -519,6 +575,16 @@ export class CardCreationService {
         if (sentenceField) {
           const processedSentence = this.deps.processSentence(sentenceText, fields);
           updatedFields[sentenceField] = processedSentence;
+        }
+
+        const translationField = await this.resolveAudioCardTranslation(
+          noteInfo,
+          sentenceText,
+          sentenceRange,
+          sentenceField,
+        );
+        if (translationField) {
+          updatedFields[translationField.name] = translationField.value;
         }
 
         const audioFieldName = sentenceCardConfig.audioField;
