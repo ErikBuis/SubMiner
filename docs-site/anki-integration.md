@@ -81,15 +81,15 @@ If cards are not getting filled:
 
 `ankiConnect.fields` maps SubMiner's data to fields on your note type.
 
-| Key                          | Receives                                                                                                                |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `fields.word`                | The mined word                                                                                                          |
-| `fields.audio`               | Sentence audio cut from the video                                                                                       |
-| `fields.wordAudio`           | Read only: Yomitan's word audio, used to time animated images (see below)                                               |
-| `fields.image`               | Screenshot or animated clip                                                                                             |
-| `fields.sentence`            | Subtitle text                                                                                                           |
-| `fields.miscInfo`            | Text from `ankiConnect.metadata.pattern`                                                                                |
-| `fields.wordCardTranslation` | Word cards only: the secondary subtitle translating the mined sentence. Empty by default (no translation on word cards) |
+| Key                          | Receives                                                                                                                     |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `fields.word`                | The mined word                                                                                                               |
+| `fields.audio`               | Sentence audio cut from the video                                                                                            |
+| `fields.wordAudio`           | Read only: Yomitan's word audio, used to time animated images (see below)                                                    |
+| `fields.image`               | Screenshot or animated clip                                                                                                  |
+| `fields.sentence`            | Subtitle text                                                                                                                |
+| `fields.miscInfo`            | Text from `ankiConnect.metadata.pattern`                                                                                     |
+| `fields.wordCardTranslation` | Word and audio cards: the secondary subtitle translating the mined sentence. Empty by default (no translation on word cards) |
 
 ```jsonc
 "ankiConnect": {
@@ -106,7 +106,7 @@ Hachidori prepares downloadable word audio before it saves a note through the pr
 
 `fields.audio` gets sentence audio, not word audio. Yomitan writes its own dictionary audio into your note (often `ExpressionAudio`), so keep `fields.audio` pointed at a separate field such as the default `SentenceAudio`. Pointing it at Yomitan's word-audio field would overwrite that audio.
 
-`fields.wordCardTranslation` gives word cards the translation of their sentence, picked by timing like on sentence cards. Point it at the note type's translation field, for example `SentenceTranslation` in Kiku, or the field your sentence cards put their translation in. With field grouping, the translations of grouped cards are merged like their sentences. Audio cards (`Ctrl/Cmd+Shift+A`) write it too, for the line they replace the sentence with. When that line has no translation, they clear the old one, which belonged to the previous sentence.
+`fields.wordCardTranslation` gives word cards the translation of their sentence, picked by timing like on sentence cards. Point it at the note type's translation field, for example `SentenceTranslation` in Kiku, or the field your sentence cards put their translation in. With field grouping, the translations of grouped cards are merged like their sentences. Audio cards (`Ctrl/Cmd+Shift+A`) write it too, for the line they replace the sentence with. When that line has no translation and replaces a different sentence, they clear the old translation, which belonged to the previous sentence.
 
 `ankiConnect.tags` adds tags to every mined or updated card. Set it to `[]` to add none.
 

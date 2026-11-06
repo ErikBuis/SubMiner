@@ -430,7 +430,7 @@ export class CardCreationService {
   /**
    * The word-card translation an audio card writes for its new sentence, picked by timing like
    * on word cards. Without a match the field is cleared when the sentence changed, since the
-   * old translation belongs to the old line. Null when no translation field is configured.
+   * old translation belongs to the old line. Null when the field is left alone.
    */
   private async resolveAudioCardTranslation(
     noteInfo: CardCreationNoteInfo,
@@ -459,12 +459,16 @@ export class CardCreationService {
         : this.deps.getLiveSecondarySubtitleFor?.(sentenceText));
     if (translation) return { name, value: translation };
 
+    // Without the sentence field the sentence is not replaced, so its translation still fits.
+    const oldSentence = sentenceField ? noteInfo.fields[sentenceField]?.value : undefined;
+    if (oldSentence === undefined) return null;
     const normalize = (text: string) =>
       text
+        .replace(/<br\s*\/?>/gi, ' ')
         .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/gi, ' ')
         .replace(/\s+/g, ' ')
         .trim();
-    const oldSentence = sentenceField ? (noteInfo.fields[sentenceField]?.value ?? '') : '';
     return normalize(oldSentence) === normalize(sentenceText) ? null : { name, value: '' };
   }
 

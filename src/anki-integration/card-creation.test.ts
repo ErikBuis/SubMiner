@@ -727,7 +727,7 @@ function createAudioCardTranslationService(options: {
   wordCardTranslation?: string;
   tracks?: typeof AUDIO_CARD_TRACKS | null;
   liveSecondary?: string;
-  oldSentence?: string;
+  oldSentence?: string | null;
   subtitle?: { text: string; start: number; end: number };
   reviewMediaTiming?: CardCreationDeps['reviewMediaTiming'];
   updates: Array<Record<string, string>>;
@@ -759,7 +759,9 @@ function createAudioCardTranslationService(options: {
           {
             noteId: 42,
             fields: {
-              Sentence: { value: options.oldSentence ?? '一' },
+              ...(options.oldSentence === null
+                ? {}
+                : { Sentence: { value: options.oldSentence ?? '一' } }),
               SentenceTranslation: { value: 'Old translation.' },
             },
           },
@@ -852,6 +854,33 @@ test('audio card keeps the translation when the line is unchanged and has none',
   const service = createAudioCardTranslationService({
     wordCardTranslation: 'SentenceTranslation',
     oldSentence: '<b>二</b>',
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal('SentenceTranslation' in updates[0]!, false);
+});
+
+test('audio card keeps the translation when only markup differs from the old line', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardTranslationService({
+    wordCardTranslation: 'SentenceTranslation',
+    subtitle: { text: '一 二', start: 2, end: 4 },
+    oldSentence: '一<br>二',
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal('SentenceTranslation' in updates[0]!, false);
+});
+
+test('audio card keeps the translation when the note has no sentence field', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardTranslationService({
+    wordCardTranslation: 'SentenceTranslation',
+    oldSentence: null,
     updates,
   });
 
