@@ -3,7 +3,7 @@ import { getPreferredWordValueFromExtractedFields } from '../anki-field-config';
 import type { SubtitleMiningContext } from '../types/subtitle';
 import type {
   CardKind,
-  MediaTimingReviewDecision,
+  MediaTimingReviewOutcome,
   MediaTimingReviewRequest,
   WordCardKind,
 } from '../types/anki';
@@ -117,7 +117,7 @@ export interface NoteUpdateWorkflowDeps {
   logError: (message: string, ...args: unknown[]) => void;
   reviewMediaTiming?: (
     request: Omit<MediaTimingReviewRequest, 'audioPadding' | 'maxMediaDuration'>,
-  ) => Promise<MediaTimingReviewDecision>;
+  ) => Promise<MediaTimingReviewOutcome>;
 }
 
 function normalizeSubtitleContextText(text: string): string {
@@ -253,6 +253,15 @@ export class NoteUpdateWorkflow {
           }
           this.deps.removeKnownWordNote(noteId);
           this.deps.showOsdNotification('Card deleted.');
+          return;
+        }
+        if (timingDecision.action === 'media-closed') {
+          // The note stays as it was added; only its media and source info would be wrong.
+          this.deps.appendKnownWordsFromNoteInfo(noteInfo);
+          this.deps.logInfo('Media closed during the card review; left card unchanged:', noteLabel);
+          this.deps.showOsdNotification(
+            'Card left unchanged: mpv closed or changed video during the review.',
+          );
           return;
         }
         if (timingDecision.action === 'confirm') {

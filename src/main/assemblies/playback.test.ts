@@ -71,6 +71,7 @@ function makeDeps(recorder: Recorder): PlaybackAssemblyDeps {
     mediaTimingReviewRuntime: {
       deferPlaybackResume: spy('timingReview.deferPlaybackResume', () => false),
       cancelPlaybackResume: spy('timingReview.cancelPlaybackResume', noop),
+      handleMediaClosed: spy('timingReview.handleMediaClosed', noop),
     },
     discordPresenceRuntime: { publishDiscordPresence: spy('discord.publish', noop) },
     immersionMediaRuntime: { syncFromCurrentMediaState: spy('immersion.sync', noop) },
@@ -541,4 +542,29 @@ test('autoplay ignores an untokenized line during tokenization warmup but releas
 
   playback.autoplayReadyGate.maybeSignalPluginAutoplayReady(TOKENIZED_LINE);
   assert.equal(released(), true);
+});
+
+test('mpv closing or loading other media lets an open card review end itself', (t) => {
+  const { recorder, appState, playback, emit } = setup();
+  t.after(() => playback.subtitlePrefetchRuntime.clearScheduledSubtitlePrefetchRefresh());
+  appState.currentMediaPath = '/videos/a.mkv';
+  // The review compares the recorded media path, so it must look after the update.
+  const reviewCheckFollowsPathUpdate = () => {
+    const names = recorder.names();
+    const update = names.indexOf('media.updateCurrentMediaPath');
+    const check = names.indexOf('timingReview.handleMediaClosed');
+    return update >= 0 && check > update;
+  };
+
+  recorder.calls.length = 0;
+  emit('media-path-change', { path: '/videos/b.mkv' });
+  assert.ok(reviewCheckFollowsPathUpdate());
+
+  recorder.calls.length = 0;
+  emit('connection-change', { connected: false });
+  assert.ok(reviewCheckFollowsPathUpdate());
+  assert.deepEqual(
+    recorder.calls.find((call) => call.name === 'media.updateCurrentMediaPath')?.args,
+    [''],
+  );
 });

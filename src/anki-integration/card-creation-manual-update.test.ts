@@ -608,6 +608,54 @@ test('discarding an audio-card timing review deletes the note before evicting it
   assert.deepEqual(statusMessages, ['Card deleted.']);
 });
 
+test('closing mpv during an audio-card review leaves the earlier card unchanged', async () => {
+  const statusMessages: string[] = [];
+  const updates: Array<Record<string, string>> = [];
+  let deleted = false;
+  const { service, storedMedia } = createManualUpdateService({
+    getMpvClient: () =>
+      ({
+        currentVideoPath: '/video.mp4',
+        currentSubText: '字幕',
+        currentSubStart: 4,
+        currentSubEnd: 6,
+        currentTimePos: 5,
+      }) as never,
+    client: {
+      addNote: async () => 0,
+      addTags: async () => undefined,
+      notesInfo: async () => [
+        {
+          noteId: 42,
+          fields: { Expression: { value: '単語' }, Sentence: { value: '' } },
+        },
+      ],
+      updateNoteFields: async (_noteId, fields) => {
+        updates.push(fields);
+      },
+      storeMediaFile: async () => undefined,
+      findNotes: async () => [42],
+      retrieveMediaFile: async () => '',
+      deleteNotes: async () => {
+        deleted = true;
+      },
+    },
+    reviewMediaTiming: async () => ({ action: 'media-closed' }),
+    showStatusNotification: (message) => {
+      statusMessages.push(message);
+    },
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.deepEqual(updates, []);
+  assert.deepEqual(storedMedia, []);
+  assert.equal(deleted, false);
+  assert.deepEqual(statusMessages, [
+    'Card left unchanged: mpv closed or changed video during the review.',
+  ]);
+});
+
 test('keeping an audio card without media skips generation and preserves the note', async () => {
   let generatedAudio = false;
   let deleted = false;

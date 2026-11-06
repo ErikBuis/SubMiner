@@ -6,7 +6,7 @@ import {
 import {
   AnkiConnectConfig,
   type CardKind,
-  type MediaTimingReviewDecision,
+  type MediaTimingReviewOutcome,
   type MediaTimingReviewRequest,
   type WordCardKind,
 } from '../types/anki';
@@ -160,7 +160,7 @@ interface CardCreationDeps {
   onCardsReady?: (noteIds: number[]) => void;
   reviewMediaTiming?: (
     request: Omit<MediaTimingReviewRequest, 'audioPadding' | 'maxMediaDuration'>,
-  ) => Promise<MediaTimingReviewDecision>;
+  ) => Promise<MediaTimingReviewOutcome>;
 }
 
 export class CardCreationService {
@@ -490,6 +490,12 @@ export class CardCreationService {
           this.deps.showStatusNotification('Card deleted.');
           return;
         }
+        if (timingDecision.action === 'media-closed') {
+          this.deps.showStatusNotification(
+            'Card left unchanged: mpv closed or changed video during the review.',
+          );
+          return;
+        }
         const skipMedia = timingDecision.action === 'skip-media';
         const exactReviewedRange = timingDecision.action === 'confirm';
         let sentenceText = mpvClient.currentSubText;
@@ -638,6 +644,12 @@ export class CardCreationService {
           : ({ action: 'use-original' } as const);
         if (timingDecision.action === 'discard') {
           this.deps.showStatusNotification('Card creation cancelled.');
+          return false;
+        }
+        if (timingDecision.action === 'media-closed') {
+          this.deps.showStatusNotification(
+            'Card not created: mpv closed or changed video during the review.',
+          );
           return false;
         }
         const skipMedia = timingDecision.action === 'skip-media';
