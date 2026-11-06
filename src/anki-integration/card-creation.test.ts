@@ -432,6 +432,7 @@ function createAudioCardService(options: {
   updates: Array<Record<string, string>>;
   notifications?: Array<string | undefined>;
   lapisEnabled?: boolean;
+  kikuEnabled?: boolean;
 }): CardCreationService {
   const defaults = createCardCreationDeps();
   return new CardCreationService(
@@ -458,6 +459,7 @@ function createAudioCardService(options: {
       getEffectiveSentenceCardConfig: () => ({
         ...defaults.getEffectiveSentenceCardConfig(),
         lapisEnabled: options.lapisEnabled === true,
+        kikuEnabled: options.kikuEnabled === true,
       }),
     }),
   );
@@ -506,6 +508,23 @@ test('audio card with Lapis enabled uses the configured names when the note lack
 
   assert.equal(updates[0]!.Context, '字幕');
   assert.match(updates[0]!.ContextAudio ?? '', /^\[sound:.+\]$/);
+});
+
+test('audio card with only Kiku enabled prefers Sentence and SentenceAudio', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardService({
+    fields: { sentence: 'Context', audio: 'ContextAudio' },
+    noteFields: ['Sentence', 'SentenceAudio', 'Context', 'ContextAudio'],
+    updates,
+    kikuEnabled: true,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(updates[0]!.Sentence, '字幕');
+  assert.match(updates[0]!.SentenceAudio ?? '', /^\[sound:.+\]$/);
+  assert.equal('Context' in updates[0]!, false);
+  assert.equal('ContextAudio' in updates[0]!, false);
 });
 
 test('audio card falls back to the Lapis field names the note has', async () => {
