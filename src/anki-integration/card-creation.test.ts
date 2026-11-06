@@ -425,3 +425,134 @@ for (const c of DUPLICATE_TRACKING_CASES) {
     assert.deepEqual(trackedDuplicates, c.expected);
   });
 }
+
+function createAudioCardService(options: {
+  fields?: Record<string, string>;
+  noteFields: string[];
+  updates: Array<Record<string, string>>;
+  notifications?: Array<string | undefined>;
+  lapisEnabled?: boolean;
+  kikuEnabled?: boolean;
+}): CardCreationService {
+  const defaults = createCardCreationDeps();
+  return new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () => createAnkiConfig({ fields: options.fields, media: { generateAudio: true } }),
+      client: createFakeClient({
+        findNotes: async () => [42],
+        notesInfo: async () => [
+          {
+            noteId: 42,
+            fields: Object.fromEntries(options.noteFields.map((name) => [name, { value: 'old' }])),
+          },
+        ],
+        updateNoteFields: async (_noteId, fields) => {
+          options.updates.push(fields);
+        },
+      }),
+      mediaGenerator: createFakeMediaGenerator({
+        generateAudio: async () => Buffer.from('audio'),
+      }),
+      showNotification: async (_noteId, _label, errorSuffix) => {
+        options.notifications?.push(errorSuffix);
+      },
+      getEffectiveSentenceCardConfig: () => ({
+        ...defaults.getEffectiveSentenceCardConfig(),
+        lapisEnabled: options.lapisEnabled === true,
+        kikuEnabled: options.kikuEnabled === true,
+      }),
+    }),
+  );
+}
+
+test('audio card writes the sentence and audio to the configured field names', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardService({
+    fields: { sentence: 'Context', audio: 'ContextAudio' },
+    noteFields: ['Sentence', 'SentenceAudio', 'Context', 'ContextAudio'],
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0]!.Context, '字幕');
+  assert.match(updates[0]!.ContextAudio ?? '', /^\[sound:.+\]$/);
+  assert.equal('Sentence' in updates[0]!, false);
+  assert.equal('SentenceAudio' in updates[0]!, false);
+});
+
+test('audio card keeps writing Sentence and SentenceAudio with the default mapping', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardService({
+    noteFields: ['Sentence', 'SentenceAudio', 'Picture'],
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(updates[0]!.Sentence, '字幕');
+  assert.match(updates[0]!.SentenceAudio ?? '', /^\[sound:.+\]$/);
+});
+
+test('audio card with Lapis enabled uses the configured names when the note lacks the Lapis ones', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardService({
+    fields: { sentence: 'Context', audio: 'ContextAudio' },
+    noteFields: ['Context', 'ContextAudio'],
+    updates,
+    lapisEnabled: true,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(updates[0]!.Context, '字幕');
+  assert.match(updates[0]!.ContextAudio ?? '', /^\[sound:.+\]$/);
+});
+
+test('audio card with only Kiku enabled prefers Sentence and SentenceAudio', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardService({
+    fields: { sentence: 'Context', audio: 'ContextAudio' },
+    noteFields: ['Sentence', 'SentenceAudio', 'Context', 'ContextAudio'],
+    updates,
+    kikuEnabled: true,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(updates[0]!.Sentence, '字幕');
+  assert.match(updates[0]!.SentenceAudio ?? '', /^\[sound:.+\]$/);
+  assert.equal('Context' in updates[0]!, false);
+  assert.equal('ContextAudio' in updates[0]!, false);
+});
+
+test('audio card falls back to the Lapis field names the note has', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardService({
+    fields: { sentence: 'Context', audio: 'ContextAudio' },
+    noteFields: ['Sentence', 'SentenceAudio'],
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(updates[0]!.Sentence, '字幕');
+  assert.match(updates[0]!.SentenceAudio ?? '', /^\[sound:.+\]$/);
+});
+
+test('audio card skips a sentence or audio field the note does not have', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const notifications: Array<string | undefined> = [];
+  const service = createAudioCardService({
+    fields: { sentence: 'Context', audio: 'ContextAudio' },
+    noteFields: ['Picture'],
+    updates,
+    notifications,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.deepEqual(updates, [{}]);
+  assert.deepEqual(notifications, [undefined]);
+});
