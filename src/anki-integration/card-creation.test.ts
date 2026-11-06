@@ -880,6 +880,7 @@ test('audio card keeps the translation when the note has no sentence field', asy
   const updates: Array<Record<string, string>> = [];
   const service = createAudioCardTranslationService({
     wordCardTranslation: 'SentenceTranslation',
+    tracks: AUDIO_CARD_TRACKS,
     oldSentence: null,
     updates,
   });

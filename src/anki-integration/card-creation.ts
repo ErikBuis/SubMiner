@@ -443,6 +443,9 @@ export class CardCreationService {
       ? this.deps.resolveConfiguredFieldName(noteInfo, configuredField)
       : null;
     if (!name) return null;
+    // Without the sentence field the sentence is not replaced, so its translation still fits.
+    const oldSentence = sentenceField ? noteInfo.fields[sentenceField]?.value : undefined;
+    if (oldSentence === undefined) return null;
 
     const tracks = (await this.deps.getSubtitleTracksForTranslation?.()) ?? null;
     const timedTranslation = resolveTimedSentenceTranslation({
@@ -459,9 +462,6 @@ export class CardCreationService {
         : this.deps.getLiveSecondarySubtitleFor?.(sentenceText));
     if (translation) return { name, value: translation };
 
-    // Without the sentence field the sentence is not replaced, so its translation still fits.
-    const oldSentence = sentenceField ? noteInfo.fields[sentenceField]?.value : undefined;
-    if (oldSentence === undefined) return null;
     const normalize = (text: string) =>
       text
         .replace(/<br\s*\/?>/gi, ' ')
