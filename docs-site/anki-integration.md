@@ -214,7 +214,7 @@ Manual clipboard updates (`Ctrl/Cmd+V`) always replace the sentence audio, whate
 }
 ```
 
-Sentence cards and audio cards (`Ctrl/Cmd+Shift+A`) always write to the `Sentence` and `SentenceAudio` fields. Normal word cards keep using your `ankiConnect.fields` mapping.
+Sentence cards always write to the `Sentence` and `SentenceAudio` fields. Audio cards (`Ctrl/Cmd+Shift+A`) update the last-added word note: with `isLapis` or `isKiku` enabled they write to `Sentence` and `SentenceAudio`, otherwise to your `ankiConnect.fields.sentence` and `fields.audio` mapping. If the note has no field by the preferred name, the other one is used. Normal word cards keep using your `ankiConnect.fields` mapping.
 
 ## Word card type (Kiku/Lapis)
 
