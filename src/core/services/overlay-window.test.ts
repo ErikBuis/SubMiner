@@ -4,6 +4,7 @@ import { ensureOverlayWindowLevel, updateOverlayWindowBounds } from './overlay-w
 import {
   handleOverlayWindowBeforeInputEvent,
   handleOverlayWindowBlurred,
+  handleOverlayWindowRendererGone,
   isTabInputForMpvForwarding,
 } from './overlay-window-input';
 
@@ -244,4 +245,22 @@ test('updateOverlayWindowBounds aligns Linux overlay content bounds to mpv geome
   }
 
   assert.deepEqual(calls, [{ x: 0, y: -14, width: 3440, height: 1454 }]);
+});
+
+test('a crashed modal renderer destroys its window so the open review can end', () => {
+  const destroyed: string[] = [];
+  const handle = (kind: 'visible' | 'modal', reason: string, windowDestroyed = false) =>
+    handleOverlayWindowRendererGone({
+      kind,
+      reason,
+      windowDestroyed,
+      destroyWindow: () => destroyed.push(`${kind}:${reason}`),
+    });
+
+  assert.equal(handle('modal', 'crashed'), true);
+  assert.equal(handle('modal', 'oom'), true);
+  assert.equal(handle('modal', 'clean-exit'), false);
+  assert.equal(handle('modal', 'crashed', true), false);
+  assert.equal(handle('visible', 'crashed'), false);
+  assert.deepEqual(destroyed, ['modal:crashed', 'modal:oom']);
 });

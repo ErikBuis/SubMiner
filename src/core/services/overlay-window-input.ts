@@ -86,3 +86,21 @@ export function handleOverlayWindowBlurred(options: {
   options.ensureOverlayWindowLevel();
   return true;
 }
+
+/**
+ * A crashed modal renderer can never answer the modal it was showing, such as a card review
+ * waiting for Export. Destroying the window runs the normal modal-window close path, which
+ * ends that review; the next modal opens in a fresh window.
+ */
+export function handleOverlayWindowRendererGone(options: {
+  kind: OverlayWindowKind;
+  reason: string;
+  windowDestroyed: boolean;
+  destroyWindow: () => void;
+}): boolean {
+  if (options.kind !== 'modal' || options.windowDestroyed) return false;
+  // A clean exit only happens while the window is already being torn down.
+  if (options.reason === 'clean-exit') return false;
+  options.destroyWindow();
+  return true;
+}

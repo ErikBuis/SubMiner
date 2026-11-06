@@ -25,7 +25,6 @@ import {
 import type { MediaInput, MediaInputOptions } from '../../media-input';
 
 const INITIAL_TIMELINE_MARGIN_SECONDS = 2;
-const REVIEW_DECISION_TIMEOUT_MS = 5 * 60_000;
 const CONTEXT_LINE_LIMIT = 12;
 const CONTEXT_LINE_EPSILON_SECONDS = 0.05;
 
@@ -105,7 +104,6 @@ export interface MediaTimingReviewRuntimeDeps {
     previous: MediaTimingReviewContextLine[];
     next: MediaTimingReviewContextLine[];
   };
-  decisionTimeoutMs?: number;
   openModal: (payload: MediaTimingReviewOpenPayload, signal: AbortSignal) => Promise<boolean>;
   /** Tells the modal that the hidden player finished the previewed clip. */
   onPreviewEnded?: (reviewId: string) => void;
@@ -203,9 +201,9 @@ export function collectMediaTimingContextLines(options: {
 }
 
 /**
- * Result for requests that name a review main has already resolved or disposed (decision
- * watchdog, overlay teardown, duplicate modal). The renderer closes on it instead of
- * leaving the user with controls that can never succeed.
+ * Result for requests that name a review main has already resolved or disposed (overlay
+ * teardown, duplicate modal). The renderer closes on it instead of leaving the user with
+ * controls that can never succeed.
  */
 function staleReviewResult(): MediaTimingReviewActionResult {
   return { ok: false, stale: true, message: 'This timing review is no longer active.' };
@@ -537,24 +535,14 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
       return { action: 'use-original' };
     }
 
-    const decisionWatchdog = setTimeout(
-      () => resolveDecision({ action: 'use-original' }),
-      Math.max(0, deps.decisionTimeoutMs ?? REVIEW_DECISION_TIMEOUT_MS),
-    );
-    let decision: MediaTimingReviewDecision = { action: 'use-original' };
-    try {
-      const decisionResult = await Promise.race([
-        decisionPromise.then((value) => ({ kind: 'decided' as const, value })),
-        lifecycle.cancelled.then(() => ({ kind: 'cancelled' as const })),
-      ]);
-      if (decisionResult.kind === 'decided') {
-        decision = decisionResult.value;
-      }
-    } finally {
-      clearTimeout(decisionWatchdog);
-    }
+    // No time limit: the dialog stays open, so giving up here would drop the user's edits.
+    // A closed or crashed review window ends the review through dispose() instead.
+    const decisionResult = await Promise.race([
+      decisionPromise.then((value) => ({ kind: 'decided' as const, value })),
+      lifecycle.cancelled.then(() => ({ kind: 'cancelled' as const })),
+    ]);
     await cleanupActiveReview(review);
-    return decision;
+    return decisionResult.kind === 'decided' ? decisionResult.value : { action: 'use-original' };
   }
 
   async function requestReview(
@@ -599,8 +587,8 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
         return staleReviewResult();
       }
       await previewSession.play(request.startTime, request.endTime);
-      // Playback spans the whole clip, so the review can end (watchdog, teardown) while
-      // it runs; reporting success would leave the modal open on a dead review.
+      // Playback spans the whole clip, so the review can end (teardown) while it runs;
+      // reporting success would leave the modal open on a dead review.
       if (active !== current) {
         return staleReviewResult();
       }

@@ -7,6 +7,7 @@ import { IPC_CHANNELS } from '../../shared/ipc/contracts';
 import {
   handleOverlayWindowBeforeInputEvent,
   handleOverlayWindowBlurred,
+  handleOverlayWindowRendererGone,
   type OverlayWindowKind,
 } from './overlay-window-input';
 import {
@@ -156,6 +157,16 @@ export function createOverlayWindow(
     window.setTitle(OVERLAY_WINDOW_TITLES[kind]);
     options.onRuntimeOptionsChanged();
     options.onWindowDidFinishLoad?.();
+  });
+
+  window.webContents.on('render-process-gone', (_event, details) => {
+    logger.warn(`Overlay ${kind} renderer gone: ${details.reason} (exit code ${details.exitCode})`);
+    handleOverlayWindowRendererGone({
+      kind,
+      reason: details.reason,
+      windowDestroyed: window.isDestroyed(),
+      destroyWindow: () => window.destroy(),
+    });
   });
 
   window.webContents.on('did-start-loading', () => {
