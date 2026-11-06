@@ -823,6 +823,11 @@ function registerModalOpenHandlers(): void {
       mediaTimingReviewModal.handlePreviewEnded(reviewId);
     });
   });
+  window.electronAPI.onMediaTimingReviewEnded((reviewId) => {
+    runGuarded('media-timing-review:ended', () => {
+      mediaTimingReviewModal.handleReviewEnded(reviewId);
+    });
+  });
   window.electronAPI.onMediaTimingReviewPreviewPosition((position) => {
     mediaTimingReviewModal.handlePreviewPosition(position);
   });

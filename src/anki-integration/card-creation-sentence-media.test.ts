@@ -117,6 +117,10 @@ test('sentence card writes generated audio only to sentence audio field', async 
   assert.equal(await service.createSentenceCard('作らない', 20, 22), false);
   assert.equal(addedFields.length, 1);
 
+  review = { action: 'media-closed' };
+  assert.equal(await service.createSentenceCard('閉じた', 25, 27), false);
+  assert.equal(addedFields.length, 1);
+
   review = { action: 'skip-media' };
   assert.equal(await service.createSentenceCard('メディアなし', 30, 32), true);
   assert.equal(addedFields.length, 2);

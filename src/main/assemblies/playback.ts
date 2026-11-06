@@ -115,7 +115,7 @@ export interface PlaybackAssemblyDeps {
   >;
   mediaTimingReviewRuntime: Pick<
     ReturnType<typeof createMediaTimingReviewRuntime>,
-    'deferPlaybackResume' | 'cancelPlaybackResume'
+    'deferPlaybackResume' | 'cancelPlaybackResume' | 'handleMediaClosed'
   >;
   discordPresenceRuntime: Pick<
     ReturnType<typeof createDiscordPresenceRuntime>,
@@ -817,6 +817,9 @@ export function createPlaybackAssembly(deps: PlaybackAssemblyDeps) {
           subtitlePrefetchRuntime.scheduleSubtitlePrefetchRefresh(500);
         }
         mediaRuntime.updateCurrentMediaPath(path);
+        // Also runs with an empty path when mpv disconnects, before a quit on disconnect
+        // closes the overlay: an open card review ends and leaves its card unchanged.
+        mediaTimingReviewRuntime.handleMediaClosed();
       },
       restoreMpvSubVisibility: () => {
         deps.restoreOverlayMpvSubtitles();

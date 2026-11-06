@@ -1187,3 +1187,171 @@ test('waveform reports a stale review when the review ends during analysis', asy
   );
   await pendingDecision;
 });
+
+function createMediaClosedRuntime() {
+  const commands: Array<Array<string | number>> = [];
+  const endedReviews: string[] = [];
+  const mpv = {
+    connected: true,
+    currentVideoPath: '/video/show.mkv',
+    requestProperty: async (name: string) => (name === 'pause' ? false : null),
+    send: ({ command }: { command: Array<string | number> }) => {
+      commands.push(command);
+    },
+  };
+  const state = { mediaPath: '/video/show.mkv' };
+  let publishPayload!: (payload: MediaTimingReviewOpenPayload) => void;
+  const openedPayload = new Promise<MediaTimingReviewOpenPayload>((resolve) => {
+    publishPayload = resolve;
+  });
+  const runtime = createMediaTimingReviewRuntime({
+    getMpvClient: () => mpv,
+    getCurrentMediaPath: () => state.mediaPath || null,
+    getMpvExecutablePath: () => 'mpv',
+    generateWaveform: async () => [],
+    createPreviewSession: () => ({
+      start: async () => undefined,
+      play: async () => undefined,
+      stop: async () => undefined,
+      onPlaybackEnded: () => undefined,
+      dispose: () => undefined,
+    }),
+    openModal: async (payload) => {
+      publishPayload(payload);
+      return true;
+    },
+    onReviewEnded: (reviewId) => endedReviews.push(reviewId),
+    showStatus: () => undefined,
+  });
+  const pendingDecision = runtime.requestReview({
+    kind: 'word',
+    text: '字幕',
+    startTime: 10,
+    endTime: 12,
+    noteId: 42,
+    audioPadding: 0,
+    maxMediaDuration: 30,
+  });
+  return { runtime, mpv, state, commands, endedReviews, openedPayload, pendingDecision };
+}
+
+test('closing mpv during a review ends it at once and leaves the card unchanged', async () => {
+  const { runtime, mpv, state, commands, endedReviews, openedPayload, pendingDecision } =
+    createMediaClosedRuntime();
+  const payload = await openedPayload;
+
+  mpv.connected = false;
+  state.mediaPath = '';
+  runtime.handleMediaClosed();
+
+  assert.deepEqual(await pendingDecision, { action: 'media-closed' });
+  assert.deepEqual(endedReviews, [payload.reviewId]);
+  // Nothing is left to unpause, and a late click from the dialog is stale.
+  assert.deepEqual(commands, [['set_property', 'pause', 'yes']]);
+  assert.equal(
+    runtime.resolveReview({ reviewId: payload.reviewId, decision: { action: 'use-original' } })
+      .stale,
+    true,
+  );
+});
+
+test('loading other media during a review leaves the card unchanged', async () => {
+  const { runtime, mpv, state, endedReviews, openedPayload, pendingDecision } =
+    createMediaClosedRuntime();
+  const payload = await openedPayload;
+
+  mpv.currentVideoPath = '/video/next.mkv';
+  state.mediaPath = '/video/next.mkv';
+  runtime.handleMediaClosed();
+
+  assert.deepEqual(await pendingDecision, { action: 'media-closed' });
+  assert.deepEqual(endedReviews, [payload.reviewId]);
+});
+
+test('a media path event for the same media keeps the review open', async () => {
+  const { runtime, endedReviews, openedPayload, pendingDecision } = createMediaClosedRuntime();
+  const payload = await openedPayload;
+
+  runtime.handleMediaClosed();
+  assert.deepEqual(endedReviews, []);
+  runtime.resolveReview({
+    reviewId: payload.reviewId,
+    decision: { action: 'confirm', startTime: 9.5, endTime: 12.5 },
+  });
+
+  assert.deepEqual(await pendingDecision, { action: 'confirm', startTime: 9.5, endTime: 12.5 });
+});
+
+test('a decision made after mpv closed still leaves the card unchanged', async () => {
+  const { runtime, mpv, openedPayload, pendingDecision } = createMediaClosedRuntime();
+  const payload = await openedPayload;
+
+  // No disconnect event reached the runtime (e.g. it raced the app quitting).
+  mpv.connected = false;
+  runtime.resolveReview({
+    reviewId: payload.reviewId,
+    decision: { action: 'confirm', startTime: 9.5, endTime: 12.5 },
+  });
+
+  assert.deepEqual(await pendingDecision, { action: 'media-closed' });
+});
+
+test('disposing the review after mpv closed leaves the card unchanged', async () => {
+  const { runtime, mpv, state, openedPayload, pendingDecision } = createMediaClosedRuntime();
+  await openedPayload;
+
+  // mpv unloads the file as it quits; the app then closes the overlay and disposes the review.
+  mpv.currentVideoPath = '';
+  state.mediaPath = '';
+  await runtime.dispose();
+
+  assert.deepEqual(await pendingDecision, { action: 'media-closed' });
+});
+
+test('closing mpv before the review opens leaves the card unchanged', async () => {
+  const mpv = {
+    connected: true,
+    currentVideoPath: '/video/show.mkv',
+    requestProperty: async () => null,
+    send: () => undefined,
+  };
+  const pause = createDeferred<unknown>();
+  let opened = false;
+  const runtime = createMediaTimingReviewRuntime({
+    getMpvClient: () => ({
+      ...mpv,
+      requestProperty: (name: string) => (name === 'pause' ? pause.promise : mpv.requestProperty()),
+    }),
+    getCurrentMediaPath: () => (mpv.connected ? '/video/show.mkv' : null),
+    getMpvExecutablePath: () => 'mpv',
+    generateWaveform: async () => [],
+    createPreviewSession: () => ({
+      start: async () => undefined,
+      play: async () => undefined,
+      stop: async () => undefined,
+      onPlaybackEnded: () => undefined,
+      dispose: () => undefined,
+    }),
+    openModal: async () => {
+      opened = true;
+      return true;
+    },
+    showStatus: () => undefined,
+  });
+  const pending = runtime.requestReview({
+    kind: 'sentence',
+    text: '字幕',
+    startTime: 10,
+    endTime: 12,
+    audioPadding: 0,
+    maxMediaDuration: 30,
+  });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  mpv.connected = false;
+  runtime.handleMediaClosed();
+  pause.resolve(false);
+
+  assert.deepEqual(await pending, { action: 'media-closed' });
+  assert.equal(opened, false);
+});
