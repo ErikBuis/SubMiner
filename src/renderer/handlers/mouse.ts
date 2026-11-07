@@ -301,6 +301,12 @@ export function createMouseHandlers(
     pausedByYomitanPopup = true;
   }
 
+  // The user takes over a pause the popup started, so hiding the popup leaves it paused.
+  function releasePopupPause(): void {
+    popupPauseRequestId += 1;
+    pausedByYomitanPopup = false;
+  }
+
   function enablePopupInteraction(): void {
     sustainPopupInteraction();
     if (ctx.platform.isMacOSPlatform) {
@@ -560,6 +566,7 @@ export function createMouseHandlers(
     handleSecondaryMouseLeave: (event?: MouseEvent) => handleMouseLeave(event, true),
     handleMouseEnter,
     handleMouseLeave,
+    releasePopupPause,
     restorePointerInteractionState,
     setupDragging,
     setupPointerTracking,
