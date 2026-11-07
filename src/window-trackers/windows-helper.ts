@@ -105,6 +105,14 @@ export function findWindowsMpvTargetWindowHandle(result?: MpvPollResult): number
   return best?.hwnd ?? null;
 }
 
+export function activateWindowsWindow(hwnd: number): boolean {
+  try {
+    return loadWin32().activateWindow(hwnd);
+  } catch {
+    return false;
+  }
+}
+
 export function getWindowsForegroundProcessName(): string | null {
   try {
     return loadWin32().getForegroundProcessName();
