@@ -215,6 +215,7 @@ export interface AnkiConnectConfig {
     wordAudio?: string;
     image?: string;
     sentence?: string;
+    sentenceFurigana?: string;
     miscInfo?: string;
     wordCardTranslation?: string;
     definition?: string;
