@@ -137,6 +137,36 @@ test('annotateLineWithFurigana keeps readings at the end of a line joined to the
   assert.equal(annotateLineWithFurigana(parseBracketFurigana('生[い]きる'), '人生'), null);
 });
 
+test('annotateLineWithFurigana keeps a line-end reading when the next space-joined line starts with kana', () => {
+  const segments = parseBracketFurigana('猫[ねこ]。 あの 犬[いぬ]もいる。');
+  assert.deepEqual(annotateLineWithFurigana(segments, '猫。'), [
+    { text: '猫', reading: 'ねこ' },
+    { text: '。' },
+  ]);
+  assert.deepEqual(annotateLineWithFurigana(segments, 'あの犬もいる。'), [
+    { text: 'あの' },
+    { text: '犬', reading: 'いぬ' },
+    { text: 'もいる。' },
+  ]);
+  assert.deepEqual(
+    annotateLineWithFurigana(parseBracketFurigana(' 先生[せんせい] あのさ'), '先生'),
+    [{ text: '先生', reading: 'せんせい' }],
+  );
+  assert.deepEqual(annotateLineWithFurigana(parseBracketFurigana(' 見[み]た あれ'), '見た'), [
+    { text: '見', reading: 'み' },
+    { text: 'た' },
+  ]);
+  // The line must end (or have a space) where the source line does.
+  assert.equal(
+    annotateLineWithFurigana(parseBracketFurigana(' 先生[せんせい] あのさ'), '先生がいる'),
+    null,
+  );
+  assert.equal(
+    annotateLineWithFurigana(parseBracketFurigana('ビールは 生[なま] あと'), '生きる'),
+    null,
+  );
+});
+
 test('escaped literal brackets are not read as reading delimiters', () => {
   const value = protectEscapedBrackets('猫[ねこ]は&#91;音楽&#93;');
   assert.deepEqual(parseBracketFurigana(value), [
