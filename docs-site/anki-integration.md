@@ -24,6 +24,8 @@ Set `ankiConnect.behavior.autoUpdateNewCards` to `false` to stop automatic filli
 
 `ankiConnect.deck` limits enrichment and duplicate checks to one deck. If it is empty, SubMiner uses Yomitan's mining deck when it can read it, and otherwise searches all decks.
 
+If a Yomitan field template uses `{popup-selection-text}` and you select several meanings in the popup, they arrive on separate lines. To get one line instead, turn on **Join selected definitions on one line** in Yomitan's Anki settings. Meanings are then joined with `; ` and synonyms with `, `; both separators can be changed there. Tags and labels next to the definitions are left out.
+
 ### Proxy mode setup (Yomitan / texthooker) {#proxy-mode-setup-yomitan-texthooker}
 
 ```jsonc
