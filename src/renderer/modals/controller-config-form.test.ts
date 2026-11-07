@@ -398,7 +398,7 @@ test('controller config form keeps the review group collapsed until opened', () 
       ['While editing', 'After Cancel'],
     );
     assert.equal(badgeOf(reviewRow('Use this timing')), 'A');
-    assert.equal(badgeOf(reviewRow('Earlier −2s')), 'D-pad ◀');
+    assert.equal(badgeOf(reviewRow('Start −2.0s')), 'L2 + D-pad ◀');
     assert.equal(badgeOf(reviewRow('Start +0.1s')), 'L1 + D-pad ▶');
     assert.equal(badgeOf(reviewRow('Reset screenshot frame')), 'L1 + R1');
     assert.equal(badgeOf(reviewRow('Keep editing')), 'B');

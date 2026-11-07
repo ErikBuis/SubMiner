@@ -79,20 +79,20 @@ export type RendererDom = {
   mediaTimingReviewStartValue: HTMLElement;
   mediaTimingReviewEndValue: HTMLElement;
   mediaTimingReviewDuration: HTMLElement;
-  mediaTimingReviewTimelineStart: HTMLElement;
-  mediaTimingReviewTimelineEnd: HTMLElement;
   mediaTimingReviewSelectionTrack: HTMLDivElement;
   mediaTimingReviewWaveformLabel: HTMLElement;
   mediaTimingReviewWaveformPath: SVGPathElement;
   mediaTimingReviewSelectedRange: HTMLDivElement;
   mediaTimingReviewStartHandle: HTMLDivElement;
   mediaTimingReviewEndHandle: HTMLDivElement;
-  mediaTimingReviewShowEarlier: HTMLButtonElement;
-  mediaTimingReviewShowLater: HTMLButtonElement;
+  mediaTimingReviewStartBackCoarse: HTMLButtonElement;
   mediaTimingReviewStartBack: HTMLButtonElement;
   mediaTimingReviewStartForward: HTMLButtonElement;
+  mediaTimingReviewStartForwardCoarse: HTMLButtonElement;
+  mediaTimingReviewEndBackCoarse: HTMLButtonElement;
   mediaTimingReviewEndBack: HTMLButtonElement;
   mediaTimingReviewEndForward: HTMLButtonElement;
+  mediaTimingReviewEndForwardCoarse: HTMLButtonElement;
   mediaTimingReviewPlay: HTMLButtonElement;
   mediaTimingReviewPlayLabel: HTMLElement;
   mediaTimingReviewReset: HTMLButtonElement;
@@ -346,10 +346,6 @@ export function resolveRendererDom(): RendererDom {
     mediaTimingReviewStartValue: getRequiredElement<HTMLElement>('mediaTimingReviewStartValue'),
     mediaTimingReviewEndValue: getRequiredElement<HTMLElement>('mediaTimingReviewEndValue'),
     mediaTimingReviewDuration: getRequiredElement<HTMLElement>('mediaTimingReviewDuration'),
-    mediaTimingReviewTimelineStart: getRequiredElement<HTMLElement>(
-      'mediaTimingReviewTimelineStart',
-    ),
-    mediaTimingReviewTimelineEnd: getRequiredElement<HTMLElement>('mediaTimingReviewTimelineEnd'),
     mediaTimingReviewSelectionTrack: getRequiredElement<HTMLDivElement>(
       'mediaTimingReviewSelectionTrack',
     ),
@@ -366,10 +362,18 @@ export function resolveRendererDom(): RendererDom {
       'mediaTimingReviewStartHandle',
     ),
     mediaTimingReviewEndHandle: getRequiredElement<HTMLDivElement>('mediaTimingReviewEndHandle'),
-    mediaTimingReviewShowEarlier: getRequiredElement<HTMLButtonElement>(
-      'mediaTimingReviewShowEarlier',
+    mediaTimingReviewStartBackCoarse: getRequiredElement<HTMLButtonElement>(
+      'mediaTimingReviewStartBackCoarse',
     ),
-    mediaTimingReviewShowLater: getRequiredElement<HTMLButtonElement>('mediaTimingReviewShowLater'),
+    mediaTimingReviewStartForwardCoarse: getRequiredElement<HTMLButtonElement>(
+      'mediaTimingReviewStartForwardCoarse',
+    ),
+    mediaTimingReviewEndBackCoarse: getRequiredElement<HTMLButtonElement>(
+      'mediaTimingReviewEndBackCoarse',
+    ),
+    mediaTimingReviewEndForwardCoarse: getRequiredElement<HTMLButtonElement>(
+      'mediaTimingReviewEndForwardCoarse',
+    ),
     mediaTimingReviewStartBack: getRequiredElement<HTMLButtonElement>('mediaTimingReviewStartBack'),
     mediaTimingReviewStartForward: getRequiredElement<HTMLButtonElement>(
       'mediaTimingReviewStartForward',
