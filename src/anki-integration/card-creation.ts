@@ -150,6 +150,14 @@ interface CardCreationDeps {
   getAnimatedImageLeadInSeconds: (noteInfo: CardCreationNoteInfo) => Promise<number>;
   extractFields: (fields: Record<string, { value: string }>) => Record<string, string>;
   processSentence: (mpvSentence: string, noteFields: Record<string, string>) => string;
+  /**
+   * The sentence in Anki bracket furigana, or null when the parser can't read all of it.
+   * Given a note's fields, the note's word is bolded as on its sentence.
+   */
+  generateSentenceFurigana?: (
+    text: string,
+    noteFields?: Record<string, string>,
+  ) => Promise<string | null>;
   setCardTypeFields: (
     updatedFields: Record<string, string>,
     availableFieldNames: string[],
@@ -183,6 +191,12 @@ interface CardCreationDeps {
   isMediaTimingReviewEnabled?: () => boolean;
 }
 
+/** Whether two sentences read the same, ignoring markup such as the word's bold. */
+function sameSentenceText(a: string, b: string): boolean {
+  const normalize = (text: string) => ankiFieldHtmlToPlainText(text).replace(/\s+/g, ' ').trim();
+  return normalize(a) === normalize(b);
+}
+
 export class CardCreationService {
   constructor(private readonly deps: CardCreationDeps) {}
 
@@ -214,6 +228,26 @@ export class CardCreationService {
       : '';
     if (!word && !meaning) return undefined;
     return { ...(word ? { word } : {}), ...(meaning ? { meaning } : {}) };
+  }
+
+  private resolveSentenceFuriganaField(noteInfo: CardCreationNoteInfo): string | null {
+    return this.deps.resolveConfiguredFieldName(
+      noteInfo,
+      this.deps.getConfig().fields?.sentenceFurigana || 'SentenceFurigana',
+    );
+  }
+
+  /** Empty when the parser fails, so card templates fall back to the plain sentence. */
+  private async generateSentenceFurigana(
+    text: string,
+    noteFields?: Record<string, string>,
+  ): Promise<string> {
+    try {
+      return (await this.deps.generateSentenceFurigana?.(text, noteFields)) ?? '';
+    } catch (error) {
+      log.warn('Failed to generate sentence furigana:', (error as Error).message);
+      return '';
+    }
   }
 
   private getConfiguredAnkiTags(): string[] {
@@ -708,6 +742,26 @@ export class CardCreationService {
           }
         }
 
+        // The note's furigana spells the word card's sentence; a new line needs its own.
+        const sentenceFuriganaField = this.resolveSentenceFuriganaField(noteInfo);
+        const noteSentenceField = sentenceField
+          ? this.deps.resolveNoteFieldName(noteInfo, sentenceField)
+          : null;
+        if (
+          sentenceField &&
+          sentenceFuriganaField &&
+          sentenceFuriganaField !== (noteSentenceField ?? sentenceField) &&
+          !sameSentenceText(
+            sentenceText,
+            noteSentenceField ? (noteInfo.fields[noteSentenceField]?.value ?? '') : '',
+          )
+        ) {
+          updatedFields[sentenceFuriganaField] = await this.generateSentenceFurigana(
+            sentenceText,
+            fields,
+          );
+        }
+
         await this.deps.client.updateNoteFields(noteId, updatedFields);
         await this.addConfiguredTagsToNote(noteId);
         const label = expressionText || noteId;
@@ -1015,6 +1069,11 @@ export class CardCreationService {
               Object.keys(createdNoteInfo.fields),
               'sentence',
             );
+            const sentenceFuriganaField = this.resolveSentenceFuriganaField(createdNoteInfo);
+            if (sentenceFuriganaField && sentenceFuriganaField !== sentenceField) {
+              const furigana = await this.generateSentenceFurigana(sentence);
+              if (furigana) cardTypeFields[sentenceFuriganaField] = furigana;
+            }
             if (Object.keys(cardTypeFields).length > 0) {
               await this.deps.client.updateNoteFields(noteId, cardTypeFields);
             }
