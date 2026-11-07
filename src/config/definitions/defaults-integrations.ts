@@ -77,6 +77,7 @@ export const INTEGRATIONS_DEFAULT_CONFIG: Pick<
       overwriteImage: true,
       mediaInsertMode: 'append',
       highlightWord: true,
+      stripSpeakerLabels: true,
       notificationType: 'overlay',
       autoUpdateNewCards: true,
       widenSentenceToTranslation: false,

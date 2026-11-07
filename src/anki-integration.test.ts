@@ -372,6 +372,63 @@ test('AnkiIntegration highlights mined word in sentence furigana field', () => {
   );
 });
 
+test('AnkiIntegration hands the review a sentence without speaker labels', async () => {
+  for (const stripSpeakerLabels of [true, false]) {
+    const integration = createIntegration({
+      media: { reviewTiming: true },
+      behavior: { stripSpeakerLabels },
+    });
+    const requests: Array<{ text: string; stripSpeakerLabels?: boolean }> = [];
+    integration.setMediaTimingReviewCallback(async (request) => {
+      requests.push(request);
+      return { action: 'use-original' };
+    });
+
+    await (
+      integration as unknown as {
+        reviewMediaTiming: (request: {
+          kind: 'word';
+          text: string;
+          startTime: number;
+          endTime: number;
+        }) => Promise<unknown>;
+      }
+    ).reviewMediaTiming({
+      kind: 'word',
+      text: '（ひとり）\n部活も入らず',
+      startTime: 1,
+      endTime: 2,
+    });
+
+    assert.equal(
+      requests[0]?.text,
+      stripSpeakerLabels ? '部活も入らず' : '（ひとり）\n部活も入らず',
+    );
+    assert.equal(requests[0]?.stripSpeakerLabels, stripSpeakerLabels);
+  }
+});
+
+test('AnkiIntegration drops speaker labels from kept sentence furigana', () => {
+  const integration = createIntegration({
+    fields: { word: 'Expression', sentence: 'Sentence' },
+    behavior: { highlightWord: false },
+  });
+
+  assert.equal(
+    internalsOf(integration).processSentenceFurigana('（ひとり）スマホに 届[とど]くのは', {}),
+    'スマホに 届[とど]くのは',
+  );
+});
+
+test('AnkiIntegration.cleanSubtitleBlock follows the stripSpeakerLabels option', () => {
+  const enabled = createIntegration({ behavior: {} });
+  const disabled = createIntegration({ behavior: { stripSpeakerLabels: false } });
+
+  assert.equal(enabled.cleanSubtitleBlock('（B）こんばんは'), 'こんばんは');
+  assert.equal(enabled.cleanSubtitleBlock('（拍手）'), '');
+  assert.equal(disabled.cleanSubtitleBlock('（B）こんばんは'), '（B）こんばんは');
+});
+
 // --- Proxy, field grouping, notifications -----------------------------------
 
 test('AnkiIntegration reports an occupied proxy address through its notification seam', async () => {

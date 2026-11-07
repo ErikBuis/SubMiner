@@ -29,6 +29,7 @@ import {
   REVIEW_CONTEXT_LINE_LIMIT as CONTEXT_LINE_LIMIT,
 } from '../../shared/sentence-translation-alignment';
 import { protectEscapedBrackets } from '../../shared/furigana-markup';
+import { removeSpeakerLabels } from '../../shared/subtitle-speaker-labels';
 
 const INITIAL_TIMELINE_MARGIN_SECONDS = 2;
 const REVIEW_DECISION_TIMEOUT_MS = 5 * 60_000;
@@ -284,6 +285,19 @@ function isValidMediaTimingRange(
   );
 }
 
+function cleanContextLines(
+  lines: MediaTimingReviewContextLine[] | undefined,
+  strip: boolean | undefined,
+): MediaTimingReviewContextLine[] {
+  if (!lines) return [];
+  if (!strip) return lines;
+  // A cue holding only a label has nothing to add to the sentence, and composing it
+  // after dialogue would leave the label mid-line where the card cleanup cannot see it.
+  return lines
+    .map((line) => ({ ...line, text: removeSpeakerLabels(line.text) }))
+    .filter((line) => line.text.length > 0);
+}
+
 export function buildMediaTimingReviewPayload(
   request: MediaTimingReviewRequest,
   options: {
@@ -317,8 +331,9 @@ export function buildMediaTimingReviewPayload(
     reviewId: options.reviewId,
     kind: request.kind,
     text: request.text,
-    previousLines: options.contextLines?.previous ?? [],
-    nextLines: options.contextLines?.next ?? [],
+    previousLines: cleanContextLines(options.contextLines?.previous, request.stripSpeakerLabels),
+    nextLines: cleanContextLines(options.contextLines?.next, request.stripSpeakerLabels),
+    ...(request.stripSpeakerLabels ? { stripSpeakerLabels: true } : {}),
     ...(request.noteId !== undefined ? { noteId: request.noteId } : {}),
     originalStartTime: request.startTime,
     originalEndTime: request.endTime,

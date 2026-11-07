@@ -25,6 +25,7 @@ import {
   annotateLineWithFurigana,
   type FuriganaSegment,
 } from '../../shared/furigana-markup';
+import { removeSpeakerLabels } from '../../shared/subtitle-speaker-labels';
 
 const MINIMUM_CLIP_SECONDS = 0.1;
 const FINE_ADJUST_SECONDS = 0.1;
@@ -96,6 +97,17 @@ export function formatMediaTimingTimestamp(seconds: number, includeMilliseconds 
 }
 
 /**
+ * A line holding only a speaker label (a sound cue like （歓声）) adds nothing to the card
+ * sentence and would sit mid-line where the later label cleanup cannot see it.
+ */
+function composeSentence(lineTexts: string[], stripSpeakerLabels: boolean): string {
+  const spoken = stripSpeakerLabels
+    ? lineTexts.filter((text) => removeSpeakerLabels(text).length > 0)
+    : lineTexts;
+  return (spoken.length > 0 ? spoken : lineTexts).join(' ');
+}
+
+/**
  * Resolves which subtitle lines the card sentence currently includes. The counts say
  * how many adjacent lines were pulled in on each side; the range covers those lines'
  * subtitle timings so the clip edges can follow them.
@@ -108,6 +120,7 @@ export function buildMediaTimingLineSelection(options: {
   originalEndTime: number;
   previousCount: number;
   nextCount: number;
+  stripSpeakerLabels?: boolean;
 }): {
   previous: MediaTimingReviewContextLine[];
   next: MediaTimingReviewContextLine[];
@@ -130,7 +143,7 @@ export function buildMediaTimingLineSelection(options: {
     next,
     lineTexts,
     currentLineIndex: previous.length,
-    sentence: lineTexts.join(' '),
+    sentence: composeSentence(lineTexts, options.stripSpeakerLabels === true),
     rangeStart: previous[0]?.startTime ?? options.originalStartTime,
     // The latest end, not the last cue's: an earlier added cue can run longer.
     rangeEnd: Math.max(options.originalEndTime, ...next.map((line) => line.endTime)),
@@ -684,6 +697,7 @@ export function createMediaTimingReviewModal(
       originalEndTime: payload?.originalEndTime ?? 0,
       previousCount,
       nextCount,
+      stripSpeakerLabels: payload?.stripSpeakerLabels,
     });
   }
 

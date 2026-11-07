@@ -23,6 +23,8 @@ export interface MediaTimingReviewRequest {
   maxMediaDuration: number;
   /** Still screenshots only; animated images continue to follow the audio range. */
   screenshotEnabled?: boolean;
+  /** Strip leading speaker labels from the adjacent lines offered by the review. */
+  stripSpeakerLabels?: boolean;
   /** What else the card will get, so the review covers the whole export. */
   card?: MediaTimingReviewCardPreview;
 }
@@ -91,6 +93,8 @@ export interface MediaTimingReviewOpenPayload {
   /** Lines before/after the mined one, both chronological: nearest previous line is last, nearest next line is first. */
   previousLines: MediaTimingReviewContextLine[];
   nextLines: MediaTimingReviewContextLine[];
+  /** Leave label-only lines out of the sentence composed from several lines. */
+  stripSpeakerLabels?: boolean;
   noteId?: number;
   originalStartTime: number;
   originalEndTime: number;
@@ -263,6 +267,7 @@ export interface AnkiConnectConfig {
     formatTranslation?: boolean;
     mediaInsertMode?: 'append' | 'prepend';
     highlightWord?: boolean;
+    stripSpeakerLabels?: boolean;
     notificationType?: NotificationType;
     autoUpdateNewCards?: boolean;
   };
