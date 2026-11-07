@@ -41,7 +41,7 @@ Sentence cards use the note type named in `ankiConnect.isLapis.sentenceCardModel
 
 ## Mark an audio card
 
-After adding a word, press `Ctrl/Cmd+Shift+A`. SubMiner sets the Lapis/Kiku `IsAudioCard` flag on the last-added card and fills `Sentence`, `SentenceAudio`, the image, and MiscInfo.
+After adding a word, press `Ctrl/Cmd+Shift+A`. SubMiner sets the Lapis/Kiku `IsAudioCard` flag on the last-added card and fills the sentence, sentence audio, image, and MiscInfo. On Lapis/Kiku notes the sentence goes to `Sentence` and `SentenceAudio`; other note types use your `ankiConnect.fields` mapping. See [sentence cards](/anki-integration#sentence-cards-lapis).
 
 ## Merge repeated words
 

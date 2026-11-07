@@ -543,15 +543,39 @@ export class CardCreationService {
 
         this.deps.setCardTypeFields(updatedFields, Object.keys(noteInfo.fields), 'audio');
 
+        // Lapis and Kiku templates read the audio card from Sentence and SentenceAudio. Other
+        // note types use the configured mapping, as word cards do. Each falls back to the other
+        // when the note has no field by that name.
+        const config = this.deps.getConfig();
         const sentenceCardConfig = this.deps.getEffectiveSentenceCardConfig();
-        const sentenceField = sentenceCardConfig.sentenceField;
+        const preferLapisFields = sentenceCardConfig.lapisEnabled || sentenceCardConfig.kikuEnabled;
+        const resolveAudioCardField = (configured: string, lapis: string): string | null =>
+          preferLapisFields
+            ? this.deps.resolveConfiguredFieldName(noteInfo, lapis, configured)
+            : this.deps.resolveConfiguredFieldName(noteInfo, configured, lapis);
+        const configuredSentenceField =
+          config.fields?.sentence ?? DEFAULT_ANKI_CONNECT_CONFIG.fields.sentence;
+        const sentenceField = resolveAudioCardField(
+          configuredSentenceField,
+          sentenceCardConfig.sentenceField,
+        );
         if (sentenceField) {
           const processedSentence = this.deps.processSentence(sentenceText, fields);
           updatedFields[sentenceField] = processedSentence;
+        } else {
+          log.warn(`Audio card note has no sentence field "${configuredSentenceField}"`);
         }
 
-        const audioFieldName = sentenceCardConfig.audioField;
-        if (!skipMedia) {
+        const configuredAudioField =
+          config.fields?.audio ?? DEFAULT_ANKI_CONNECT_CONFIG.fields.audio;
+        const audioFieldName = resolveAudioCardField(
+          configuredAudioField,
+          sentenceCardConfig.audioField,
+        );
+        if (!skipMedia && !audioFieldName) {
+          log.warn(`Audio card note has no audio field "${configuredAudioField}"`);
+        }
+        if (!skipMedia && audioFieldName) {
           try {
             const audioFilename = this.generateAudioFilename();
             const audioBuffer = await this.mediaGenerateAudio(

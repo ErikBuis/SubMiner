@@ -223,7 +223,7 @@ Manual clipboard updates (`Ctrl/Cmd+V`) always replace the sentence audio, whate
 }
 ```
 
-Sentence cards and audio cards (`Ctrl/Cmd+Shift+A`) always write to the `Sentence` and `SentenceAudio` fields. Normal word cards keep using your `ankiConnect.fields` mapping.
+Sentence cards always write to the `Sentence` and `SentenceAudio` fields. Audio cards (`Ctrl/Cmd+Shift+A`) update the last-added word note: with `isLapis` or `isKiku` enabled they write to `Sentence` and `SentenceAudio`, otherwise to your `ankiConnect.fields.sentence` and `fields.audio` mapping. If the note has no field by the preferred name, the other one is used. Normal word cards keep using your `ankiConnect.fields` mapping.
 
 The card's translation is the secondary subtitle line that translates the mined line(s), picked by timing from the parsed subtitle tracks, as mpv plays them after `sub-delay` and `secondary-sub-delay`. A secondary line that only overlaps the dialogue, such as a sign or a TV in the background, is left out, and a mined line the parsed track has no translation for gets none. Without a readable secondary subtitle file or embedded text track, the secondary subtitle on screen is used.
 
