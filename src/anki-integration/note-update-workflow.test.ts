@@ -864,6 +864,38 @@ test('NoteUpdateWorkflow regenerates furigana into the configured sentenceFuriga
   assert.equal(harness.updates[0]?.fields.SentenceFurigana, undefined);
 });
 
+function createWordCardTranslationHarness(wordCardTranslation = 'SentenceTranslation') {
+  const harness = createWorkflowHarness();
+  harness.deps.client.notesInfo = async () => [
+    {
+      noteId: 42,
+      fields: {
+        Expression: { value: '野菜' },
+        Sentence: { value: '' },
+        SentenceTranslation: { value: '' },
+      },
+    },
+  ];
+  harness.deps.captureSubtitleMediaContext = () => ({
+    source: 'overlay',
+    text: '野菜もいっぱい入ってるよ',
+    startTime: 36.4,
+    endTime: 39.2,
+  });
+  harness.deps.getSubtitleTracksForTranslation = () => ({
+    primary: [{ text: '野菜もいっぱい入ってるよ', startTime: 36.4, endTime: 39.2 }],
+    secondary: [
+      { text: "There's a lot of vegetables,", startTime: 34.1, endTime: 37 },
+      { text: 'I put lots of vegetables in it.', startTime: 36.3, endTime: 39.4 },
+    ],
+  });
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Sentence', wordCardTranslation },
+    media: { generateAudio: false, generateImage: false },
+  });
+  return harness;
+}
+
 test('NoteUpdateWorkflow widens the word card sentence and formats its translation', async () => {
   const harness = createWordCardTranslationHarness();
   const reviewTexts: string[] = [];
