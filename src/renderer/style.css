@@ -1659,26 +1659,30 @@ body:focus-visible,
   color: var(--ctp-subtext1);
 }
 
+.media-timing-review-timeline-shell {
+  padding: 8px 12px;
+  border: 1px solid var(--ctp-surface1);
+  border-radius: 14px;
+  background: var(--ctp-mantle);
+}
+
+/* Fixed spots above the waveform, so the times stay readable while a handle is dragged. */
 .media-timing-review-readout {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  overflow: hidden;
-  margin-bottom: 12px;
-  border: 1px solid var(--ctp-surface1);
-  border-radius: 12px;
-  background: var(--ctp-mantle);
+  align-items: baseline;
+  gap: 12px;
 }
 
 .media-timing-review-readout > div {
   display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-  padding: 8px 12px;
+  align-items: baseline;
+  gap: 6px;
 }
 
-.media-timing-review-readout > div + div {
-  border-left: 1px solid var(--ctp-surface0);
+.media-timing-review-readout .is-end {
+  justify-content: flex-end;
 }
 
 .media-timing-review-readout span {
@@ -1692,49 +1696,54 @@ body:focus-visible,
 .media-timing-review-readout strong {
   color: var(--ctp-lavender);
   font-variant-numeric: tabular-nums;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 720;
-}
-
-.media-timing-review-readout .media-timing-review-duration {
-  align-items: center;
-  min-width: 128px;
-  background: var(--ctp-surface0);
-  text-align: center;
-}
-
-.media-timing-review-readout > div:last-child {
-  align-items: flex-end;
-  text-align: right;
+  transition: color 130ms ease;
 }
 
 .media-timing-review-readout .media-timing-review-duration strong {
   color: var(--ctp-teal);
 }
 
-.media-timing-review-timeline-shell {
-  padding: 10px 12px 8px;
-  border: 1px solid var(--ctp-surface1);
-  border-radius: 14px;
-  background: var(--ctp-mantle);
+/* The time of the edge being dragged or nudged lights up like its handle. */
+.media-timing-review-modal[data-drag-edge='start'] .media-timing-review-readout .is-start strong,
+.media-timing-review-modal[data-drag-edge='end'] .media-timing-review-readout .is-end strong,
+.media-timing-review-modal[data-drag-edge='both'] .media-timing-review-readout-edge strong,
+.media-timing-review-timeline-shell:has(.media-timing-review-handle-start:focus-visible)
+  .media-timing-review-readout
+  .is-start
+  strong,
+.media-timing-review-timeline-shell:has(.media-timing-review-handle-end:focus-visible)
+  .media-timing-review-readout
+  .is-end
+  strong {
+  color: var(--ctp-yellow);
 }
 
-.media-timing-review-timeline-labels,
 .media-timing-review-expand-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   color: var(--ctp-overlay1);
   font-size: 10px;
   font-weight: 650;
   letter-spacing: 0.05em;
 }
 
-.media-timing-review-timeline-labels span:first-child,
-.media-timing-review-timeline-labels span:last-child {
+.media-timing-review-timeline-edge {
   color: var(--ctp-subtext0);
   font-variant-numeric: tabular-nums;
+}
+
+/* Shrinks to an ellipsis instead of wrapping, so the row keeps one line on narrow windows. */
+.media-timing-review-timeline-hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .media-timing-review-track {
@@ -1931,10 +1940,6 @@ body:focus-visible,
 
 .media-timing-review-handle:focus-visible::after {
   background: var(--ctp-yellow);
-}
-
-.media-timing-review-expand-row span {
-  text-align: center;
 }
 
 .media-timing-review-expand-button,
@@ -2266,13 +2271,9 @@ body:focus-visible,
     padding-left: 15px;
   }
 
-  .media-timing-review-readout {
-    grid-template-columns: 1fr;
-  }
-
-  .media-timing-review-readout > div + div {
-    border-top: 1px solid var(--ctp-surface0);
-    border-left: 0;
+  /* Left is the start and right is the end, so the values alone stay clear. */
+  .media-timing-review-readout-edge span {
+    display: none;
   }
 
   .media-timing-review-fine-grid {

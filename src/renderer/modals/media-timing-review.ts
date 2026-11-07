@@ -33,6 +33,8 @@ const MINIMUM_CLIP_SECONDS = 0.1;
 const FINE_ADJUST_SECONDS = 0.1;
 const COARSE_ADJUST_SECONDS = 0.5;
 const TIMELINE_EXPANSION_SECONDS = 2;
+/** Shown under the waveform once it has loaded; matches the hint in index.html. */
+const MEDIA_TIMING_REVIEW_DRAG_HINT = 'Drag an edge to trim, or the clip to move it.';
 const LINE_REVEAL_MARGIN_SECONDS = 1;
 /**
  * Subtitles usually linger past the dialogue for readability, so an untouched clip end
@@ -924,10 +926,10 @@ export function createMediaTimingReviewModal(
     );
     ctx.dom.mediaTimingReviewWaveformLabel.textContent =
       state === 'loading'
-        ? 'isolating dialogue...'
+        ? 'Isolating dialogue...'
         : state === 'ready'
-          ? 'speech-weighted waveform'
-          : 'waveform unavailable';
+          ? MEDIA_TIMING_REVIEW_DRAG_HINT
+          : 'Waveform unavailable. Drag an edge to trim.';
   }
 
   async function loadWaveform(): Promise<void> {
@@ -1362,6 +1364,7 @@ export function createMediaTimingReviewModal(
     };
     track.setPointerCapture(event.pointerId);
     ctx.dom.mediaTimingReviewModal.classList.add(edge === 'both' ? 'is-sliding' : 'is-scrubbing');
+    ctx.dom.mediaTimingReviewModal.dataset.dragEdge = edge;
     if (edge !== 'both') {
       const handle =
         edge === 'start'
@@ -1378,11 +1381,13 @@ export function createMediaTimingReviewModal(
     if (track.hasPointerCapture(event.pointerId)) track.releasePointerCapture(event.pointerId);
     drag = null;
     ctx.dom.mediaTimingReviewModal.classList.remove('is-scrubbing', 'is-sliding');
+    delete ctx.dom.mediaTimingReviewModal.dataset.dragEdge;
   }
 
   function cancelDrag(): void {
     drag = null;
     ctx.dom.mediaTimingReviewModal.classList.remove('is-scrubbing', 'is-sliding');
+    delete ctx.dom.mediaTimingReviewModal.dataset.dragEdge;
   }
 
   function handleEdgeKeydown(event: KeyboardEvent, edge: 'start' | 'end'): void {
