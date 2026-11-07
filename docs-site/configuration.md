@@ -314,7 +314,7 @@ Adds a modal for choosing mpv's primary and secondary subtitle tracks. Open it w
 
 ### Controller support
 
-Gamepad input for the overlay, through the browser Gamepad API. Most actions only work while keyboard-only mode is on; the toggle for that mode, the secondary subtitle hold (`controller.bindings.holdSecondarySub`), pause (`toggleMpvPause`) and the subtitle line actions (`previousSubtitle`, `nextSubtitle`, `replaySubtitle`, `playNextSubtitle`) work either way. Use the `Alt+C` modal to pick a controller and learn bindings, and `Alt+Shift+C` to see raw button and axis values. Default button actions are on [Keyboard shortcuts](/shortcuts).
+Gamepad input for the overlay, through the browser Gamepad API. Most actions only work while keyboard-only mode is on; the toggle for that mode, the secondary subtitle hold (`controller.bindings.holdSecondarySub`), pause (`toggleMpvPause`) and the subtitle line actions (`previousSubtitle`, `nextSubtitle`, `replaySubtitle`, `playNextSubtitle`) work either way. Use the `Alt+C` modal to pick a controller and learn bindings, and `Alt+Shift+C` to see raw button and axis values. Default button actions are in [Controller support](/usage#controller-support).
 
 | Key                                | Default  | What it does                                                                                                                                                                                                                  |
 | ---------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -329,7 +329,11 @@ Gamepad input for the overlay, through the browser Gamepad API. Most actions onl
 | `controller.repeatDelayMs`         | `320`    | Delay before a held button repeats                                                                                                                                                                                            |
 | `controller.repeatIntervalMs`      | `120`    | Repeat interval for held buttons                                                                                                                                                                                              |
 
-Bindings, including the media timing review and duplicate card dialog layouts, are set with `Alt+C` learn mode, which saves them per controller.
+Bindings, including the media timing review and duplicate card dialog layouts, are set with `Alt+C` learn mode, which saves them per controller. Learn can also record a [combo](/usage#controller-support), saved on the binding as an optional `hold` input in the same form:
+
+```jsonc
+"nextAudio": { "kind": "button", "buttonIndex": 15, "hold": { "kind": "button", "buttonIndex": 4 } }
+```
 
 ## Anki integration
 
