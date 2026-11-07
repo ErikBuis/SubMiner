@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { widenSentenceToTranslation } from './sentence-translation';
+import {
+  ankiFieldHtmlToPlainText,
+  plainTextToAnkiFieldHtml,
+  buildReviewTranslationContext,
+  widenSentenceToTranslation,
+} from './sentence-translation';
 
 const tracks = {
   primary: [
@@ -62,4 +67,53 @@ test('widenSentenceToTranslation leaves out a sign the captured sentence lacks',
     }),
     { text: '前半の台詞 後半', startTime: 0, endTime: 6 },
   );
+});
+
+test('buildReviewTranslationContext covers every primary line the review can offer', () => {
+  const context = buildReviewTranslationContext({
+    startTime: 100,
+    endTime: 102,
+    tracks: {
+      primary: [
+        { text: '今', startTime: 100, endTime: 102 },
+        { text: 'ずっと後', startTime: 200, endTime: 202 },
+      ],
+      secondary: [
+        { text: 'Now.', startTime: 100, endTime: 102 },
+        { text: 'Much later.', startTime: 200, endTime: 202 },
+      ],
+    },
+  });
+  assert.deepEqual(
+    context.lines.map((line) => line.text),
+    ['Now.', 'Much later.'],
+  );
+  assert.deepEqual(
+    context.lineTranslations.map((entry) => entry.lines.map((line) => line.text)),
+    [['Now.'], ['Much later.']],
+  );
+});
+
+test('ankiFieldHtmlToPlainText keeps one line per sense', () => {
+  assert.equal(
+    ankiFieldHtmlToPlainText('<ol><li>vegetable</li><li>greens &amp; herbs</li></ol>[sound:a.mp3]'),
+    'vegetable\ngreens & herbs',
+  );
+});
+
+test('character references survive a review edit round trip', () => {
+  const shown = ankiFieldHtmlToPlainText(
+    'It&#x27;s &quot;fine&quot; &amp; &#8212; &lt;b&gt; &copy;&nbsp;ok',
+  );
+  assert.equal(shown, 'It\'s "fine" & — <b> &copy; ok');
+  // The edited text goes back escaped, so the card shows the same characters.
+  assert.equal(
+    ankiFieldHtmlToPlainText(plainTextToAnkiFieldHtml(`${shown}!`)),
+    'It\'s "fine" & — <b> &copy; ok!',
+  );
+  assert.equal(ankiFieldHtmlToPlainText('&amp;lt;'), '&lt;');
+});
+
+test('ankiFieldHtmlToPlainText keeps literal comparison signs', () => {
+  assert.equal(ankiFieldHtmlToPlainText('<i>1 < 2 and 3 > 2</i>'), '1 < 2 and 3 > 2');
 });

@@ -90,6 +90,7 @@ If cards are not getting filled:
 | `fields.sentence`            | Subtitle text                                                                                                           |
 | `fields.miscInfo`            | Text from `ankiConnect.metadata.pattern`                                                                                |
 | `fields.wordCardTranslation` | Word cards only: the secondary subtitle translating the mined sentence. Empty by default (no translation on word cards) |
+| `fields.definition`          | Read only: the dictionary meaning, shown in the timing review                                                           |
 
 ```jsonc
 "ankiConnect": {
@@ -158,6 +159,8 @@ During preview, the yellow cursor follows the audio player's position through th
 | Preview                  | `Space`                                                               |
 | Confirm                  | `Enter`                                                               |
 | Cancel                   | `Escape`                                                              |
+
+The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. `Enter` in the translation still confirms, and line breaks are written as spaces. Your edit is kept when you choose to keep the original timing or skip media.
 
 The confirmed range is used as is, with no extra padding. Added lines go into the sentence field. Reset restores the original timing and removes added lines.
 
