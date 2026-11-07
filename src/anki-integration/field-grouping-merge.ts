@@ -56,6 +56,8 @@ export class FieldGroupingMergeCollaborator {
     const sentenceAudioField = sentenceCardConfig.audioField;
     if (!fields.includes(sentenceAudioField)) fields.push(sentenceAudioField);
     if (config.fields?.miscInfo) fields.push(config.fields?.miscInfo);
+    const translationField = config.fields?.wordCardTranslation;
+    if (translationField && !fields.includes(translationField)) fields.push(translationField);
     fields.push(this.getSentenceFuriganaFieldName());
     return fields;
   }
@@ -339,6 +341,10 @@ export class FieldGroupingMergeCollaborator {
     if (config.fields?.image) strictFields.add(config.fields.image.toLowerCase());
     if (config.fields?.miscInfo) strictFields.add(config.fields.miscInfo.toLowerCase());
     strictFields.add(this.getSentenceFuriganaFieldName().toLowerCase());
+    // Word cards carry the translation of their sentence, so it groups like the sentence.
+    if (config.fields?.wordCardTranslation) {
+      strictFields.add(config.fields.wordCardTranslation.toLowerCase());
+    }
     return strictFields;
   }
 

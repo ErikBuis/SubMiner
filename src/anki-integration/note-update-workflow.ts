@@ -9,6 +9,10 @@ import type {
 } from '../types/anki';
 import { resolveWordCardKind } from './note-field-utils';
 import { STATS_MINING_TAG } from '../shared/anki-source';
+import {
+  resolveTimedSentenceTranslation,
+  type SubtitleTracksForTranslation,
+} from './sentence-translation';
 
 export interface NoteUpdateWorkflowNoteInfo {
   noteId: number;
@@ -31,6 +35,7 @@ export interface NoteUpdateWorkflowDeps {
       audio?: string;
       image?: string;
       miscInfo?: string;
+      wordCardTranslation?: string;
     };
     media?: {
       generateAudio?: boolean;
@@ -45,6 +50,13 @@ export interface NoteUpdateWorkflowDeps {
   };
   getCurrentSubtitleText: () => string | undefined;
   getCurrentSubtitleStart: () => number | undefined;
+  /** Parsed subtitle tracks for picking the translation by timing; null when not parsed. */
+  getSubtitleTracksForTranslation?: () =>
+    | Promise<SubtitleTracksForTranslation | null>
+    | SubtitleTracksForTranslation
+    | null;
+  /** Live secondary subtitle, only when the on-screen primary line matches `primaryText`. */
+  getLiveSecondarySubtitleFor?: (primaryText: string) => string | undefined;
   getEffectiveSentenceCardConfig: () => {
     sentenceField: string;
     lapisEnabled: boolean;
@@ -232,6 +244,11 @@ export class NoteUpdateWorkflow {
       let skipMedia = false;
       let reviewedSentenceText: string | undefined;
       const noteLabel = hasExpressionText ? expressionText : noteId;
+      // The subtitle lines behind the sentence. The reviewed clip is padded or trimmed
+      // audio, so only lines the review adds widen this.
+      let sentenceRange = mediaTimingContext
+        ? { startTime: mediaTimingContext.startTime, endTime: mediaTimingContext.endTime }
+        : null;
 
       if (mediaTimingContext) {
         const timingDecision = this.deps.reviewMediaTiming
@@ -258,6 +275,16 @@ export class NoteUpdateWorkflow {
         }
         if (timingDecision.action === 'confirm') {
           reviewedSentenceText = timingDecision.text?.trim() || undefined;
+          if (
+            sentenceRange &&
+            timingDecision.sentenceStartTime !== undefined &&
+            timingDecision.sentenceEndTime !== undefined
+          ) {
+            sentenceRange = {
+              startTime: Math.min(sentenceRange.startTime, timingDecision.sentenceStartTime),
+              endTime: Math.max(sentenceRange.endTime, timingDecision.sentenceEndTime),
+            };
+          }
           mediaTimingContext = {
             ...mediaTimingContext,
             ...(reviewedSentenceText !== undefined ? { text: reviewedSentenceText } : {}),
@@ -275,8 +302,35 @@ export class NoteUpdateWorkflow {
 
       this.deps.appendKnownWordsFromNoteInfo(noteInfo);
 
+      const translationFieldName = config.fields?.wordCardTranslation
+        ? this.deps.resolveConfiguredFieldName(noteInfo, config.fields.wordCardTranslation)
+        : null;
+      let translatedText: string | undefined;
+      let translation: string | undefined;
+      const minedText = mediaTimingContext?.text ?? this.deps.getCurrentSubtitleText();
+      if (translationFieldName && minedText) {
+        const tracks = sentenceRange
+          ? ((await this.deps.getSubtitleTracksForTranslation?.()) ?? null)
+          : null;
+        const timedTranslation = sentenceRange
+          ? resolveTimedSentenceTranslation({ text: minedText, ...sentenceRange, tracks })
+          : null;
+        // A parsed secondary track without a match means no translation; the line on
+        // screen only stands in when the tracks are unavailable.
+        translation =
+          timedTranslation?.translation ??
+          (tracks && tracks.secondary.length > 0
+            ? undefined
+            : this.deps.getLiveSecondarySubtitleFor?.(minedText));
+        if (translation) translatedText = minedText;
+      }
+
       const currentSubtitleText =
-        reviewedSentenceText ?? subtitleMiningContext?.text ?? this.deps.getCurrentSubtitleText();
+        reviewedSentenceText ??
+        subtitleMiningContext?.text ??
+        // The translation belongs to the captured line, so the sentence must be that line too.
+        translatedText ??
+        this.deps.getCurrentSubtitleText();
       if (sentenceField && currentSubtitleText) {
         const processedSentence = this.deps.processSentence(currentSubtitleText, fields);
         updatedFields[sentenceField] = processedSentence;
@@ -322,6 +376,11 @@ export class NoteUpdateWorkflow {
           updatedFields[sentenceFuriganaField] = processedSentenceFurigana;
           updatePerformed = true;
         }
+      }
+
+      if (translationFieldName && translation) {
+        updatedFields[translationFieldName] = translation;
+        updatePerformed = true;
       }
 
       const generateAudio = !skipMedia && config.media?.generateAudio !== false;

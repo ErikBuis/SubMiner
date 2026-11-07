@@ -16,6 +16,7 @@ export function applyModernFieldsResolution(
     'sentenceFurigana',
     'miscInfo',
     'translation',
+    'wordCardTranslation',
   ] as const) {
     applyModernValue(
       context,

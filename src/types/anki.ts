@@ -170,6 +170,7 @@ export interface AnkiConnectConfig {
     sentence?: string;
     sentenceFurigana?: string;
     miscInfo?: string;
+    wordCardTranslation?: string;
     translation?: string;
   };
   ai?: boolean | AiFeatureConfig;

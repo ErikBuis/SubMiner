@@ -35,6 +35,7 @@ export const INTEGRATIONS_DEFAULT_CONFIG: Pick<
       sentenceFurigana: 'SentenceFurigana',
       miscInfo: 'MiscInfo',
       translation: 'SelectionText',
+      wordCardTranslation: '',
     },
     ai: {
       enabled: false,

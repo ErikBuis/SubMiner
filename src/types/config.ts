@@ -256,6 +256,7 @@ export interface ResolvedConfig {
       sentence: string;
       sentenceFurigana: string;
       miscInfo: string;
+      wordCardTranslation: string;
       translation: string;
     };
     ai: AiFeatureConfig & {
