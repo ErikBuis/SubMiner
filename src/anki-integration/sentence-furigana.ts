@@ -1,3 +1,6 @@
+import { protectEscapedBrackets } from '../shared/furigana-markup';
+import { ankiFieldHtmlToPlainText } from './sentence-translation';
+
 type Segment = { text: string; reading?: string };
 
 function readGroups(value: unknown): Segment[][] | null {
@@ -84,4 +87,23 @@ export function formatSentenceFurigana(
     return output + (bold ? '</b>' : '');
   }
   return null;
+}
+
+/**
+ * A furigana field as plain bracket furigana, as the card review shows it. Fields written
+ * as HTML ruby read the same as bracket furigana once flattened to it, and escaped literal
+ * brackets stay apart from reading delimiters.
+ */
+export function ankiFuriganaFieldToPlainText(html: string): string {
+  return ankiFieldHtmlToPlainText(
+    protectEscapedBrackets(html)
+      .replace(/<rp\b[^>]*>[\s\S]*?<\/rp>/gi, '')
+      .replace(/<ruby\b[^>]*>([\s\S]*?)<\/ruby>/gi, (_match, content: string) =>
+        Array.from(
+          content.matchAll(/([^<]*)<rt\b[^>]*>([\s\S]*?)<\/rt>/gi),
+          ([, base, reading]) =>
+            ` ${(base ?? '').replace(/\s+/g, '')}[${(reading ?? '').replace(/\s+/g, '')}]`,
+        ).join(''),
+      ),
+  );
 }

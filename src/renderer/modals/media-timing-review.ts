@@ -5,6 +5,7 @@ import type {
   MediaTimingReviewLineTranslation,
   MediaTimingReviewOpenPayload,
   MediaTimingReviewPreviewPosition,
+  MediaTimingReviewFurigana,
 } from '../../types/anki';
 import type { ModalStateReader, RendererContext } from '../context';
 import type {
@@ -19,6 +20,11 @@ import {
   formatCardTranslation,
   joinSubtitleLineTexts,
 } from '../../shared/sentence-translation-alignment';
+import {
+  parseBracketFurigana,
+  annotateLineWithFurigana,
+  type FuriganaSegment,
+} from '../../shared/furigana-markup';
 
 const MINIMUM_CLIP_SECONDS = 0.1;
 const FINE_ADJUST_SECONDS = 0.1;
@@ -211,6 +217,25 @@ export function buildMediaTimingReviewTranslation(options: {
   return options.format ? formatCardTranslation(translation) : translation;
 }
 
+/**
+ * The readings over one sentence line of the review. The card's own text prefers the
+ * note's sentence furigana, which is what the card shows; the nearby lines prefer the
+ * readings main generated for them. Either falls back to the other.
+ */
+export function annotateReviewLine(options: {
+  line: string;
+  own: boolean;
+  noteFurigana: FuriganaSegment[] | null;
+  generated: ReadonlyMap<string, FuriganaSegment[]>;
+}): FuriganaSegment[] | null {
+  const generated = options.generated.get(options.line);
+  const fromGenerated = generated ? annotateLineWithFurigana(generated, options.line) : null;
+  const fromNote = options.noteFurigana
+    ? annotateLineWithFurigana(options.noteFurigana, options.line)
+    : null;
+  return options.own ? (fromNote ?? fromGenerated) : (fromGenerated ?? fromNote);
+}
+
 export function createMediaTimingPreviewRequestGuard() {
   let sequence = 0;
   let activeRequestId: number | null = null;
@@ -364,6 +389,7 @@ export function createMediaTimingReviewModal(
   let endPadSeconds = 0;
   /** True until the user moves the clip; the first waveform then trims trailing silence. */
   let trailingTrimPending = false;
+  let generatedFurigana: ReadonlyMap<string, FuriganaSegment[]> = new Map();
   /** Once the user types in the translation it no longer follows added or removed lines. */
   let translationEdited = false;
   let resolveInFlight = false;
@@ -460,6 +486,15 @@ export function createMediaTimingReviewModal(
     if (!playing) return;
     track.style.setProperty('--playhead-position', 'var(--selection-start)');
     armPreviewTimeout();
+  }
+
+  /** Readings main generated for the lines this review can show. */
+  function handleFurigana(update: MediaTimingReviewFurigana): void {
+    if (!payload || payload.reviewId !== update.reviewId) return;
+    generatedFurigana = new Map(
+      update.lines.map((line) => [line.text, parseBracketFurigana(line.furigana)]),
+    );
+    renderSentence();
   }
 
   function handlePreviewPosition(position: MediaTimingReviewPreviewPosition): void {
@@ -652,9 +687,27 @@ export function createMediaTimingReviewModal(
     });
   }
 
+  /** Writes text with its readings as ruby, which the stylesheet reveals on hover. */
+  function setFuriganaText(target: HTMLElement, segments: FuriganaSegment[]): void {
+    target.replaceChildren(
+      ...segments.map((segment) => {
+        if (!segment.reading) return document.createTextNode(segment.text);
+        const ruby = document.createElement('ruby');
+        ruby.className = 'media-timing-review-ruby';
+        const reading = document.createElement('rt');
+        reading.textContent = segment.reading;
+        ruby.append(document.createTextNode(segment.text), reading);
+        return ruby;
+      }),
+    );
+  }
+
   function renderSentence(): void {
     if (!payload) return;
     const selection = currentLineSelection();
+    const furigana = payload.card?.sentenceFurigana
+      ? parseBracketFurigana(payload.card.sentenceFurigana)
+      : null;
     ctx.dom.mediaTimingReviewText.replaceChildren(
       ...selection.lineTexts.map((text, index) => {
         const line = document.createElement('span');
@@ -662,7 +715,14 @@ export function createMediaTimingReviewModal(
           index === selection.currentLineIndex
             ? 'media-timing-review-line is-current'
             : 'media-timing-review-line';
-        line.textContent = text;
+        const segments = annotateReviewLine({
+          line: text,
+          own: index === selection.currentLineIndex,
+          noteFurigana: furigana,
+          generated: generatedFurigana,
+        });
+        if (segments) setFuriganaText(line, segments);
+        else line.textContent = text;
         return line;
       }),
     );
@@ -681,7 +741,7 @@ export function createMediaTimingReviewModal(
     const dom = ctx.dom;
     const word = card?.word?.trim() ?? '';
     const meaning = card?.meaning?.trim() ?? '';
-    dom.mediaTimingReviewWord.textContent = word;
+    setFuriganaText(dom.mediaTimingReviewWord, parseBracketFurigana(word));
     dom.mediaTimingReviewMeaning.textContent = meaning;
     dom.mediaTimingReviewWordRow.classList.toggle('hidden', !word);
     dom.mediaTimingReviewMeaningRow.classList.toggle('hidden', !meaning);
@@ -1073,6 +1133,7 @@ export function createMediaTimingReviewModal(
       previousLines: nextPayload.previousLines ?? [],
       nextLines: nextPayload.nextLines ?? [],
     };
+    generatedFurigana = new Map();
     selectionStart = nextPayload.selectionStartTime;
     selectionEnd = nextPayload.selectionEndTime;
     timelineStart = nextPayload.timelineStartTime;
@@ -1316,6 +1377,7 @@ export function createMediaTimingReviewModal(
     openMediaTimingReviewModal,
     handlePreviewEnded,
     handlePreviewPosition,
+    handleFurigana,
     requestCancel,
     handleMediaTimingReviewKeydown,
     wireDomEvents,

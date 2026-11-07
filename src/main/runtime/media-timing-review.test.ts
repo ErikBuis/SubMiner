@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import type { MediaTimingReviewOpenPayload } from '../../types/anki';
+import type { MediaTimingReviewFurigana, MediaTimingReviewOpenPayload } from '../../types/anki';
+import { parseBracketFurigana } from '../../shared/furigana-markup';
 import type { SpeechWaveformOptions } from '../../core/services/media-timing-waveform';
 import type {
   RemoteMediaWindow,
@@ -15,6 +16,8 @@ import {
   buildMediaTimingReviewPayload,
   collectMediaTimingContextLines,
   createMediaTimingReviewRuntime,
+  generateReviewTextFurigana,
+  reviewFuriganaTexts,
 } from './media-timing-review';
 
 function createDeferred<T>() {
@@ -1185,5 +1188,107 @@ test('waveform reports a stale review when the review ends during analysis', asy
     await runtime.getWaveform({ reviewId: payload.reviewId, startTime: 8, endTime: 14 }),
     { ok: false, stale: true, message: 'This timing review is no longer active.' },
   );
+  await pendingDecision;
+});
+
+test('review furigana covers the card text first, then nearby lines nearest first', () => {
+  const line = (text: string, startTime: number) => ({ text, startTime, endTime: startTime + 1 });
+  assert.deepEqual(
+    reviewFuriganaTexts({
+      text: '今日は晴れ',
+      previousLines: [line('遠い前', 1), line('すぐまえ', 2), line('近い前', 3)],
+      nextLines: [line('次の行', 5), line('ねえ', 6), line('今日は晴れ', 7)],
+    }),
+    // Kana-only lines need no readings, and a repeated text is generated once.
+    ['今日は晴れ', '近い前', '次の行', '遠い前'],
+  );
+});
+
+test('review furigana is generated line by line and keeps the line breaks', async () => {
+  const asked: string[] = [];
+  const furigana = await generateReviewTextFurigana('今日[x]は\nねえ\n明日', async (line) => {
+    asked.push(line);
+    return line === '明日' ? ' 明日[あした]' : null;
+  });
+  assert.deepEqual(asked, ['今日[x]は', '明日']);
+  assert.ok(furigana);
+  const [first, second, third] = furigana.split('\n');
+  // A line without readings keeps its literal brackets out of the reading syntax.
+  assert.deepEqual(parseBracketFurigana(first ?? ''), [{ text: '今日[x]は' }]);
+  assert.equal(second, 'ねえ');
+  assert.equal(third, ' 明日[あした]');
+  assert.equal(
+    await generateReviewTextFurigana('今日', async () => {
+      throw new Error('parser unavailable');
+    }),
+    null,
+  );
+});
+
+test('media timing review sends generated readings once the modal is open', async () => {
+  const sent: MediaTimingReviewFurigana[] = [];
+  let openModal!: (opened: boolean) => void;
+  let publishPayload!: (payload: MediaTimingReviewOpenPayload) => void;
+  const openedPayload = new Promise<MediaTimingReviewOpenPayload>((resolve) => {
+    publishPayload = resolve;
+  });
+  const generated: string[] = [];
+  const runtime = createMediaTimingReviewRuntime({
+    getMpvClient: () => ({
+      connected: true,
+      currentVideoPath: '/video/show.mkv',
+      requestProperty: async (name) => (name === 'duration' ? 100 : null),
+      send: () => undefined,
+    }),
+    getCurrentMediaPath: () => '/video/show.mkv',
+    getMpvExecutablePath: () => 'mpv',
+    generateWaveform: async () => [],
+    createPreviewSession: () => ({
+      start: async () => undefined,
+      play: async () => undefined,
+      stop: async () => undefined,
+      onPlaybackEnded: () => undefined,
+      dispose: () => undefined,
+    }),
+    getSubtitleContextLines: () => ({
+      previous: [{ text: '前の行', startTime: 8, endTime: 10 }],
+      next: [{ text: '次の行', startTime: 12, endTime: 14 }],
+    }),
+    openModal: (payload) => {
+      publishPayload(payload);
+      return new Promise<boolean>((resolve) => {
+        openModal = resolve;
+      });
+    },
+    generateFurigana: async (text) => {
+      generated.push(text);
+      return text.replace(/^(.)/u, ' $1[よみ]');
+    },
+    onFurigana: (furigana) => sent.push(furigana),
+    showStatus: () => undefined,
+  });
+  const pendingDecision = runtime.requestReview({
+    kind: 'sentence',
+    text: '字幕',
+    startTime: 10,
+    endTime: 12,
+    audioPadding: 0,
+    maxMediaDuration: 30,
+  });
+  const payload = await openedPayload;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // Generating starts with the modal, but nothing is sent before it is open.
+  assert.deepEqual(generated, ['字幕']);
+  assert.equal(sent.length, 0);
+  openModal(true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(
+    sent.map((update) => update.lines.map((line) => line.text)),
+    [['字幕'], ['字幕', '前の行', '次の行']],
+  );
+  assert.ok(sent.every((update) => update.reviewId === payload.reviewId));
+  assert.equal(sent[1]?.lines[1]?.furigana, ' 前[よみ]の行');
+
+  runtime.resolveReview({ reviewId: payload.reviewId, decision: { action: 'use-original' } });
   await pendingDecision;
 });

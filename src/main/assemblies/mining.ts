@@ -1,4 +1,5 @@
 import { resolveMediaGenerationInput } from '../../anki-integration/media-source';
+import { ankiFuriganaFieldToPlainText } from '../../anki-integration/sentence-furigana';
 import {
   captureLiveSubtitleMiningContext,
   copyCurrentSubtitle as copyCurrentSubtitleCore,
@@ -271,6 +272,13 @@ export function createMiningAssembly(deps: MiningAssemblyDeps) {
     },
     onPreviewPosition: (position) => {
       sendToOverlayWindows(IPC_CHANNELS.event.mediaTimingReviewPreviewPosition, position);
+    },
+    generateFurigana: async (text) => {
+      const field = await deps.ankiIntegrationCallbacks.generateSentenceFurigana(text);
+      return field ? ankiFuriganaFieldToPlainText(field) : null;
+    },
+    onFurigana: (furigana) => {
+      sendToOverlayWindows(IPC_CHANNELS.event.mediaTimingReviewFurigana, furigana);
     },
     showStatus: (message) =>
       deps
