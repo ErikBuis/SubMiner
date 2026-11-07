@@ -92,6 +92,7 @@ export type RendererDom = {
   mediaTimingReviewPlayLabel: HTMLElement;
   mediaTimingReviewReset: HTMLButtonElement;
   mediaTimingReviewCancel: HTMLButtonElement;
+  mediaTimingReviewResetAll: HTMLButtonElement;
   mediaTimingReviewConfirm: HTMLButtonElement;
   mediaTimingReviewWithoutMedia: HTMLInputElement;
   mediaTimingReviewStatus: HTMLDivElement;
@@ -361,6 +362,7 @@ export function resolveRendererDom(): RendererDom {
     mediaTimingReviewPlayLabel: getRequiredElement<HTMLElement>('mediaTimingReviewPlayLabel'),
     mediaTimingReviewReset: getRequiredElement<HTMLButtonElement>('mediaTimingReviewReset'),
     mediaTimingReviewCancel: getRequiredElement<HTMLButtonElement>('mediaTimingReviewCancel'),
+    mediaTimingReviewResetAll: getRequiredElement<HTMLButtonElement>('mediaTimingReviewResetAll'),
     mediaTimingReviewConfirm: getRequiredElement<HTMLButtonElement>('mediaTimingReviewConfirm'),
     mediaTimingReviewWithoutMedia: getRequiredElement<HTMLInputElement>(
       'mediaTimingReviewWithoutMedia',
