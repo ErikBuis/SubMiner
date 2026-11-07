@@ -867,15 +867,18 @@ export function createMediaTimingReviewModal(
     }, PREVIEW_STALL_TIMEOUT_MS);
   }
 
-  /** Playback position comes from mpv, so stalls and output latency cannot outrun the cursor. */
-  function setPreviewPlaying(playing: boolean, finished = false): void {
+  /**
+   * Playback position comes from mpv, so stalls and output latency cannot outrun the cursor.
+   * The playhead hides as soon as playback stops, including when the clip plays to its end,
+   * so the yellow line never lingers on the purple end handle.
+   */
+  function setPreviewPlaying(playing: boolean): void {
     previewPlaying = playing;
     ctx.dom.mediaTimingReviewPlayLabel.textContent = playing ? 'Stop preview' : 'Play selection';
     ctx.dom.mediaTimingReviewPlay.classList.toggle('is-playing', playing);
     clearPreviewTimer();
     const track = ctx.dom.mediaTimingReviewSelectionTrack;
-    track.classList.toggle('is-previewing', playing || finished);
-    if (finished) track.style.setProperty('--playhead-position', 'var(--selection-end)');
+    track.classList.toggle('is-previewing', playing);
     if (!playing) return;
     track.style.setProperty('--playhead-position', 'var(--selection-start)');
     armPreviewTimeout();
@@ -910,7 +913,7 @@ export function createMediaTimingReviewModal(
   /** The hidden player reached the end of the clip and paused itself. */
   function handlePreviewEnded(reviewId: string): void {
     if (!payload || payload.reviewId !== reviewId || !previewPlaying) return;
-    setPreviewPlaying(false, true);
+    setPreviewPlaying(false);
     setStatus('');
   }
 

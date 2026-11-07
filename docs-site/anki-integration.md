@@ -146,7 +146,7 @@ Playback stays paused while the dialog is open, even if the popup or hover that 
 
 The dialog shows the clip over a speech waveform. When the waveform loads, an untouched clip end moves back to just after the last speech in the line. The orange bars still mark the subtitle's original start and end. The clip's start, length and end sit on top of the waveform. The start is always yellow and the end purple, on the times, the handles and the buttons under the waveform. The edge you are dragging or nudging lights up.
 
-During preview, the yellow cursor follows the audio player's position through the selected range and stays at the end when playback finishes. Buffering pauses the cursor too. If the player stops reporting progress for 15 seconds, the preview stops so you can retry.
+During preview, the yellow cursor follows the audio player's position through the selected range and disappears when playback finishes. Buffering pauses the cursor too. If the player stops reporting progress for 15 seconds, the preview stops so you can retry.
 
 | Action                   | How                                                                   |
 | ------------------------ | --------------------------------------------------------------------- |
