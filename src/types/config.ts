@@ -255,6 +255,7 @@ export interface ResolvedConfig {
       image: string;
       sentence: string;
       miscInfo: string;
+      wordCardTranslation: string;
       translation: string;
     };
     ai: AiFeatureConfig & {
