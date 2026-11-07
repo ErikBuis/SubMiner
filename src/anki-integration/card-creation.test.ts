@@ -483,6 +483,31 @@ test('createSentenceCard picks the translation by timing, not the overlapping on
   assert.equal(addedFields[0]?.Translation, 'I put lots of vegetables in it.');
 });
 
+test('createSentenceCard translates a mined line whose speaker label the sentence dropped', async () => {
+  // Bocchi the Rock! ep. 1 around 07:00, mined as two lines without the label （ひとり）.
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [
+        { text: '（ひとり）かっ… かっこいい～！', startTime: 419.732, endTime: 422.485 },
+        { text: '一気にバンド女子だ', startTime: 422.569, endTime: 424.279 },
+      ],
+      secondary: [
+        { text: 'I look... super cool!', startTime: 419.78, endTime: 422.62 },
+        { text: "I'm already a total rocker chick!", startTime: 422.62, endTime: 424.54 },
+      ],
+    },
+  });
+
+  assert.equal(
+    await service.createSentenceCard('かっ… かっこいい～！ 一気にバンド女子だ', 419.732, 424.279),
+    true,
+  );
+  assert.equal(
+    addedFields[0]?.Translation,
+    "I look... super cool! I'm already a total rocker chick!",
+  );
+});
+
 test('createSentenceCard keeps the on-screen translation without parsed tracks', async () => {
   const { service, addedFields } = createTimedTranslationService();
 
