@@ -107,6 +107,8 @@ export interface OverlayAssemblyDeps {
     | 'flushQueuedOverlayNotifications'
     | 'maybeStartOverlayLoadingOsd'
   >;
+  /** The visible overlay window has painted and is shown; mpv's own subtitles can stand down. */
+  isVisibleOverlayWindowContentReady: () => boolean;
   /** Runtime option snapshot broadcast to overlay windows when an option changes. */
   getRuntimeOptionsState: () => ReturnType<
     Parameters<
@@ -179,6 +181,15 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
     cancelLinuxMpvFullscreenOverlayRefreshBurst = null;
   }
 
+  // The loading spinner stays up while mpv's subtitles stand in for the overlay, so it ends
+  // with them once the window is shown; hiding the overlay ends it right away.
+  function dismissOverlayLoadingOnceOverlayShown(): void {
+    if (overlayManager.getVisibleOverlayVisible() && !deps.isVisibleOverlayWindowContentReady()) {
+      return;
+    }
+    deps.getOverlayNotifications().dismissOverlayLoadingStatusNotification();
+  }
+
   const overlayVisibilityRuntime = createOverlayVisibilityRuntimeService({
     getMainWindow: () => overlayManager.getMainWindow(),
     getModalActive: () => overlayModalInputState.getModalInputExclusive(),
@@ -217,7 +228,7 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
       deps.getOverlayNotifications().showOverlayLoadingStatusNotification();
     },
     dismissOverlayLoadingOsd: () => {
-      deps.getOverlayNotifications().dismissOverlayLoadingStatusNotification();
+      dismissOverlayLoadingOnceOverlayShown();
     },
     hideNonNativeOverlayWhenTargetUnfocused: () =>
       shouldRunLinuxOverlayZOrderKeepAlive() &&
@@ -247,6 +258,12 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
 
   function createMainWindow(): BrowserWindow {
     const window = createMainWindowHandler();
+    window.on('show', () => {
+      if (overlayManager.getVisibleOverlayVisible()) {
+        void ensureOverlayMpvSubtitlesHidden();
+        dismissOverlayLoadingOnceOverlayShown();
+      }
+    });
     if (process.platform === 'win32') {
       const overlayHwnd = interaction.getWindowsNativeWindowHandleNumber(window);
       if (!ensureWindowsOverlayTransparency(overlayHwnd)) {
@@ -297,9 +314,13 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
           deps.getOverlayNotifications().flushQueuedOverlayNotifications();
         },
         onWindowContentReady: () => {
-          deps.getOverlayNotifications().dismissOverlayLoadingStatusNotification();
+          dismissOverlayLoadingOnceOverlayShown();
           deps.getOverlayNotifications().flushQueuedOverlayNotifications();
           overlayVisibilityRuntime.updateVisibleOverlayVisibility();
+          // mpv showed its own subtitles while the overlay loaded; the overlay draws them now.
+          if (overlayManager.getVisibleOverlayVisible()) {
+            void ensureOverlayMpvSubtitlesHidden();
+          }
           interaction.primeLinuxOverlayPointerInteractionAfterFirstMeasurement();
           deps.getAutoplayReadyGate().flushPendingAutoplayReadySignal();
         },
@@ -564,6 +585,7 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
     setMpvSubVisibility: (visible) => {
       setMpvSubVisibilityRuntime(appState.mpvClient, visible);
     },
+    isOverlayContentReady: () => deps.isVisibleOverlayWindowContentReady(),
     logWarn: (message, error) => {
       logger.warn(message, error);
     },
@@ -581,6 +603,14 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
     shouldKeepSuppressedFromVisibleOverlayBinding: () => overlayManager.getVisibleOverlayVisible(),
     setMpvSubVisibility: (visible) => {
       setMpvSubVisibilityRuntime(appState.mpvClient, visible);
+    },
+    isOverlayContentReady: () => deps.isVisibleOverlayWindowContentReady(),
+    onSubVisibilityRestored: (applied) => {
+      sendMpvCommandRuntime(appState.mpvClient, [
+        'script-message',
+        'subminer-sub-visibility-restored',
+        applied ? 'applied' : 'none',
+      ]);
     },
   });
 

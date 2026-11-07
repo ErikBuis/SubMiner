@@ -11,7 +11,10 @@ type VisibilityState = {
   revision: number;
 };
 
-function makeEnsure(requestProperty: (name: string) => Promise<unknown>) {
+function makeEnsure(
+  requestProperty: (name: string) => Promise<unknown>,
+  isOverlayContentReady?: () => boolean,
+) {
   const state: VisibilityState = { savedSubVisibility: null, revision: 0 };
   const hidden: boolean[] = [];
   const warnings: string[] = [];
@@ -28,6 +31,7 @@ function makeEnsure(requestProperty: (name: string) => Promise<unknown>) {
     setMpvSubVisibility: (visible) => {
       hidden.push(visible);
     },
+    isOverlayContentReady,
     logWarn: (message) => warnings.push(message),
   });
   return { ensureHidden, state, hidden, warnings };
@@ -38,6 +42,7 @@ function makeRestore(initial: {
   revision: number;
   connected: boolean;
   keepSuppressed: boolean;
+  overlayReady?: boolean;
 }) {
   const state: VisibilityState = {
     savedSubVisibility: initial.saved,
@@ -58,6 +63,8 @@ function makeRestore(initial: {
     setMpvSubVisibility: (visible) => {
       calls.push(visible);
     },
+    isOverlayContentReady:
+      initial.overlayReady === undefined ? undefined : () => initial.overlayReady === true,
   });
   return { restore, state, calls };
 }
@@ -107,13 +114,140 @@ test('ensure falls back to visible restore and logs when the visibility read fai
   assert.equal(warnings.length, 1);
 });
 
+test('ensure keeps mpv subtitles visible until the overlay content is ready', async () => {
+  let ready = false;
+  const { ensureHidden, state, hidden } = makeEnsure(
+    async () => 'yes',
+    () => ready,
+  );
+
+  await ensureHidden();
+  ready = true;
+  await ensureHidden();
+
+  assert.equal(state.savedSubVisibility, true);
+  assert.deepEqual(hidden, [true, false]);
+});
+
+test('overlapping ensure calls while the overlay loads keep the original hidden visibility', async () => {
+  // mpv answers property reads in order with its current value, after earlier writes.
+  let mpvSubVisible = false;
+  const writes: boolean[] = [];
+  const state: VisibilityState = { savedSubVisibility: null, revision: 0 };
+  const ensure = createEnsureOverlayMpvSubtitlesHiddenHandler({
+    getMpvClient: () => ({
+      connected: true,
+      requestProperty: () => Promise.resolve(mpvSubVisible ? 'yes' : 'no'),
+    }),
+    getSavedSubVisibility: () => state.savedSubVisibility,
+    setSavedSubVisibility: (visible) => {
+      state.savedSubVisibility = visible;
+    },
+    getRevision: () => state.revision,
+    setRevision: (revision) => {
+      state.revision = revision;
+    },
+    setMpvSubVisibility: (visible) => {
+      mpvSubVisible = visible;
+      writes.push(visible);
+    },
+    isOverlayContentReady: () => false,
+    logWarn: () => {},
+  });
+
+  await Promise.all([ensure(), ensure()]);
+
+  assert.equal(state.savedSubVisibility, false);
+  assert.deepEqual(writes, [true]);
+  assert.equal(mpvSubVisible, true);
+});
+
+test('ensure restores the visibility the plugin saved before its loading fallback', async () => {
+  const { ensureHidden, state } = makeEnsure(async (name) =>
+    name === 'sub-visibility' ? 'yes' : false,
+  );
+
+  await ensureHidden();
+
+  assert.equal(state.savedSubVisibility, false);
+});
+
+test('overlapping ensure calls that hide share the capture of the visible subtitles', async () => {
+  let mpvSubVisible = true;
+  const state: VisibilityState = { savedSubVisibility: null, revision: 0 };
+  const ensure = createEnsureOverlayMpvSubtitlesHiddenHandler({
+    getMpvClient: () => ({
+      connected: true,
+      requestProperty: (name) =>
+        Promise.resolve(name === 'sub-visibility' ? (mpvSubVisible ? 'yes' : 'no') : null),
+    }),
+    getSavedSubVisibility: () => state.savedSubVisibility,
+    setSavedSubVisibility: (visible) => {
+      state.savedSubVisibility = visible;
+    },
+    getRevision: () => state.revision,
+    setRevision: (revision) => {
+      state.revision = revision;
+    },
+    setMpvSubVisibility: (visible) => {
+      mpvSubVisible = visible;
+    },
+    logWarn: () => {},
+  });
+
+  await Promise.all([ensure(), ensure()]);
+
+  assert.equal(state.savedSubVisibility, true);
+  assert.equal(mpvSubVisible, false);
+});
+
+test('a capture from before a restore never overwrites the next cycle', async () => {
+  let mpvSubVisible = true;
+  const resolvers: Array<() => void> = [];
+  const state: VisibilityState = { savedSubVisibility: null, revision: 0 };
+  const ensure = createEnsureOverlayMpvSubtitlesHiddenHandler({
+    getMpvClient: () => ({
+      connected: true,
+      requestProperty: (name) => {
+        if (name !== 'sub-visibility') return Promise.resolve(null);
+        const value = mpvSubVisible ? 'yes' : 'no';
+        return new Promise((resolve) => resolvers.push(() => resolve(value)));
+      },
+    }),
+    getSavedSubVisibility: () => state.savedSubVisibility,
+    setSavedSubVisibility: (visible) => {
+      state.savedSubVisibility = visible;
+    },
+    getRevision: () => state.revision,
+    setRevision: (revision) => {
+      state.revision = revision;
+    },
+    setMpvSubVisibility: (visible) => {
+      mpvSubVisible = visible;
+    },
+    logWarn: () => {},
+  });
+
+  const first = ensure();
+  state.revision += 1; // the overlay is hidden before the first read answers
+  mpvSubVisible = false; // and the user turns mpv's subtitles off
+  const second = ensure();
+  resolvers[0]!();
+  await first;
+  resolvers[1]!();
+  await second;
+
+  assert.equal(state.savedSubVisibility, false);
+});
+
 test('ensure drops a captured visibility when a newer toggle superseded it', async () => {
   let resolveVisibility!: (value: unknown) => void;
-  const { ensureHidden, state } = makeEnsure(
-    () =>
-      new Promise((resolve) => {
-        resolveVisibility = resolve;
-      }),
+  const { ensureHidden, state } = makeEnsure((name) =>
+    name === 'sub-visibility'
+      ? new Promise((resolve) => {
+          resolveVisibility = resolve;
+        })
+      : Promise.reject(new Error('property unavailable')),
   );
 
   const pending = ensureHidden();
@@ -138,7 +272,29 @@ const RESTORE_CASES: Array<{
   {
     name: 'restore keeps mpv subtitles hidden when visible-overlay binding still requires suppression',
     initial: { saved: true, revision: 9, connected: true, keepSuppressed: true },
-    expected: { saved: true, revision: 10, calls: [false] },
+    expected: { saved: true, revision: 9, calls: [false] },
+  },
+  {
+    name: 'restore keeps mpv subtitles visible while the visible overlay is still loading',
+    initial: {
+      saved: true,
+      revision: 9,
+      connected: true,
+      keepSuppressed: true,
+      overlayReady: false,
+    },
+    expected: { saved: true, revision: 9, calls: [true] },
+  },
+  {
+    name: 'restore leaves mpv subtitles alone while loading when their visibility is not captured yet',
+    initial: {
+      saved: null,
+      revision: 3,
+      connected: true,
+      keepSuppressed: true,
+      overlayReady: false,
+    },
+    expected: { saved: null, revision: 3, calls: [] },
   },
   {
     name: 'forced restore ignores visible-overlay suppression during app shutdown',
@@ -152,6 +308,54 @@ const RESTORE_CASES: Array<{
     expected: { saved: true, revision: 3, calls: [] },
   },
 ];
+
+test('restore tells the plugin once it applied the saved visibility', () => {
+  const restoredNotices: boolean[] = [];
+  const calls: boolean[] = [];
+  let saved: boolean | null = false;
+  const restore = createRestoreOverlayMpvSubtitlesHandler({
+    getSavedSubVisibility: () => saved,
+    setSavedSubVisibility: (visible) => {
+      saved = visible;
+    },
+    getRevision: () => 0,
+    setRevision: () => {},
+    isMpvConnected: () => true,
+    shouldKeepSuppressedFromVisibleOverlayBinding: () => true,
+    setMpvSubVisibility: (visible) => calls.push(visible),
+    onSubVisibilityRestored: (applied) => {
+      restoredNotices.push(applied);
+    },
+  });
+
+  restore();
+  assert.deepEqual(restoredNotices, []);
+  restore({ force: true });
+
+  assert.deepEqual(calls, [false, false]);
+  assert.deepEqual(restoredNotices, [true]);
+});
+
+test('quitting before the capture finished still ends the plugin fallback', () => {
+  const restoredNotices: boolean[] = [];
+  const restore = createRestoreOverlayMpvSubtitlesHandler({
+    getSavedSubVisibility: () => null,
+    setSavedSubVisibility: () => {},
+    getRevision: () => 0,
+    setRevision: () => {},
+    isMpvConnected: () => true,
+    shouldKeepSuppressedFromVisibleOverlayBinding: () => true,
+    setMpvSubVisibility: () => {},
+    onSubVisibilityRestored: (applied) => {
+      restoredNotices.push(applied);
+    },
+  });
+
+  restore();
+  assert.deepEqual(restoredNotices, []);
+  restore({ force: true });
+  assert.deepEqual(restoredNotices, [false]);
+});
 
 for (const c of RESTORE_CASES) {
   test(c.name, () => {

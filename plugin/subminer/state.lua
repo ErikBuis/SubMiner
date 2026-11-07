@@ -18,6 +18,9 @@ function M.new()
 		-- reuse that window, so they must not restart the loading spinner (#315).
 		overlay_content_ready_seen = false,
 		overlay_loading_osd_active = false,
+		overlay_loading_pending = false,
+		sub_visibility_saved_before_overlay = false,
+		sub_visibility_before_overlay = nil,
 		overlay_loading_osd_timer = nil,
 		overlay_loading_osd_deadline = nil,
 		overlay_loading_osd_frame = 1,

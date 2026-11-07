@@ -46,12 +46,13 @@ function M.create(ctx)
 	local function show_osd(message, options)
 		if opts.osd_messages or (options and options.force == true) then
 			local payload = "SubMiner: " .. message
+			local duration = (options and options.duration) or 3
 			local sent = false
 			if type(mp.osd_message) == "function" then
-				sent = pcall(mp.osd_message, payload, 3)
+				sent = pcall(mp.osd_message, payload, duration)
 			end
 			if not sent and type(mp.commandv) == "function" then
-				pcall(mp.commandv, "show-text", payload, "3000")
+				pcall(mp.commandv, "show-text", payload, tostring(math.floor(duration * 1000)))
 			end
 		end
 	end

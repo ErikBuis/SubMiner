@@ -153,6 +153,7 @@ function makeDeps(recorder: Recorder): PlaybackAssemblyDeps {
     restoreOverlayMpvSubtitles: spy('restoreOverlayMpvSubtitles', noop),
     syncOverlayMpvSubtitleSuppression: spy('syncOverlayMpvSubtitleSuppression', noop),
     setOverlayVisible: spy('setOverlayVisible', noop),
+    isVisibleOverlayWindowContentReady: spy('isVisibleOverlayWindowContentReady', () => false),
     ensureYomitanExtensionLoaded: spy('ensureYomitanExtensionLoaded', async () => null),
     shouldInitializeMecabForAnnotations: spy('shouldInitializeMecabForAnnotations', () => false),
     // Every annotation off, so tokenization warmups need no MeCab or dictionaries.

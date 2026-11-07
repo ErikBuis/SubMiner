@@ -16,7 +16,6 @@ import {
   sendMpvCommandRuntime,
   type MpvIpcClient,
 } from '../../core/services';
-import { createOverlayLoadingOsdController } from './overlay-loading-osd';
 import { createMaybeStartOverlayLoadingOsdHandler } from './overlay-loading-osd-start';
 import { withConfiguredOverlayNotificationPosition } from './overlay-notification-position';
 import { createOverlayNotificationDelivery } from './overlay-notification-delivery';
@@ -97,8 +96,6 @@ export function createOverlayNotificationsRuntime(deps: OverlayNotificationsRunt
     scheduleFlushRetry: (callback, delayMs) => setTimeout(callback, delayMs),
     clearFlushRetry: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
   });
-  let overlayLoadingOsdController: ReturnType<typeof createOverlayLoadingOsdController> | null =
-    null;
   const queuedConfiguredOsdNotifications = new Map<
     string,
     { message: string; options: ConfiguredStatusNotificationOptions }
@@ -204,30 +201,13 @@ export function createOverlayNotificationsRuntime(deps: OverlayNotificationsRunt
     showConfiguredStatusNotification(message, getYoutubeFlowStatusNotificationOptions(message));
   }
 
-  function getOverlayLoadingOsdController(): ReturnType<typeof createOverlayLoadingOsdController> {
-    if (!overlayLoadingOsdController) {
-      overlayLoadingOsdController = createOverlayLoadingOsdController({
-        showOsd: (message) => {
-          deps.showMpvOsd(message);
-        },
-        clearOsd: () => {
-          sendMpvCommandRuntime(deps.getMpvClient(), ['show-text', '', '1']);
-        },
-        setInterval: (callback, delayMs) => {
-          const timer = setInterval(callback, delayMs);
-          timer.unref?.();
-          return timer;
-        },
-        clearInterval: (timer) => {
-          clearInterval(timer as ReturnType<typeof setInterval>);
-        },
-      });
-    }
-    return overlayLoadingOsdController;
-  }
-
+  // The mpv plugin draws the loading spinner: it starts one before the app runs, and a
+  // second spinner from the app would fight it for the same OSD line.
   function showOverlayLoadingStatusNotification(): void {
-    getOverlayLoadingOsdController().start();
+    sendMpvCommandRuntime(deps.getMpvClient(), [
+      'script-message',
+      'subminer-overlay-loading-start',
+    ]);
   }
 
   function isMainOverlayContentReady(): boolean {
@@ -246,7 +226,6 @@ export function createOverlayNotificationsRuntime(deps: OverlayNotificationsRunt
   // later playlist files, so other dismissals send the stop-only message, which also makes the
   // plugin forget readiness from a replaced window.
   function dismissOverlayLoadingStatusNotification(): void {
-    getOverlayLoadingOsdController().stop();
     sendPluginOverlayLoadingMessage(
       isMainOverlayContentReady()
         ? 'subminer-overlay-loading-ready'
