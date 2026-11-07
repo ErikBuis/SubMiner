@@ -11,7 +11,8 @@ type PollHandle = NonNullable<Parameters<typeof globalThis.clearInterval>[0]>;
 export type WindowsModalFocusHandoffDeps<TWindow extends ModalWindowLike> = {
   platform: NodeJS.Platform;
   getModalWindow: () => TWindow | null;
-  getForegroundProcessName: () => string | null;
+  /** Whether the tracked mpv window (not just any mpv process) is the foreground window. */
+  isMpvFocused: () => boolean;
   /** Raises the window to the foreground at the OS level; Electron's focus() alone can't. */
   activateNativeWindow: (window: TWindow) => boolean;
   setInterval?: (callback: () => void, delayMs: number) => PollHandle;
@@ -31,14 +32,14 @@ export function createWindowsModalFocusHandoff<TWindow extends ModalWindowLike>(
   const setPoll = deps.setInterval ?? globalThis.setInterval;
   const clearPoll = deps.clearInterval ?? globalThis.clearInterval;
   let poll: PollHandle | null = null;
-  let lastForegroundProcessName: string | null = null;
+  let wasMpvFocused = false;
 
   function tick(): void {
-    const processName = deps.getForegroundProcessName()?.trim().toLowerCase() ?? null;
-    const previousProcessName = lastForegroundProcessName;
-    lastForegroundProcessName = processName;
+    const mpvFocused = deps.isMpvFocused();
+    const switchedToMpv = mpvFocused && !wasMpvFocused;
+    wasMpvFocused = mpvFocused;
     // Only on the switch to mpv, so a failed handoff is not retried every tick.
-    if (processName !== 'mpv' || previousProcessName === 'mpv') return;
+    if (!switchedToMpv) return;
 
     const modalWindow = deps.getModalWindow();
     if (!modalWindow || modalWindow.isDestroyed() || !modalWindow.isVisible()) return;
@@ -53,7 +54,7 @@ export function createWindowsModalFocusHandoff<TWindow extends ModalWindowLike>(
     if (deps.platform !== 'win32') return;
     if (active) {
       if (poll !== null) return;
-      lastForegroundProcessName = null;
+      wasMpvFocused = false;
       poll = setPoll(tick, FOREGROUND_POLL_INTERVAL_MS);
       return;
     }
@@ -62,5 +63,5 @@ export function createWindowsModalFocusHandoff<TWindow extends ModalWindowLike>(
     poll = null;
   }
 
-  return { setModalActive, tick };
+  return { setModalActive };
 }

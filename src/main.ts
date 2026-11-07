@@ -85,10 +85,7 @@ import {
   resolveDefaultLogFilePath,
 } from './shared/log-files';
 import { createFatalErrorReporter } from './main/fatal-error';
-import {
-  activateWindowsWindow,
-  getWindowsForegroundProcessName,
-} from './window-trackers/windows-helper';
+import { activateWindowsWindow } from './window-trackers/windows-helper';
 import { createWindowsModalFocusHandoff } from './main/runtime/windows-modal-focus-handoff';
 import {
   commandNeedsOverlayStartupPrereqs,
@@ -302,6 +299,15 @@ type BootServices = MainBootServicesResult<
     whenReady: () => Promise<void>;
   }
 >;
+
+// Declared before the boot services so the modal state callback below can always reach it.
+const windowsModalFocusHandoff = createWindowsModalFocusHandoff({
+  platform: process.platform,
+  getModalWindow: () => overlayManager.getModalWindow(),
+  isMpvFocused: () => appState.windowTracker?.isTargetWindowFocused() ?? false,
+  activateNativeWindow: (window) =>
+    activateWindowsWindow(overlay.interaction.getWindowsNativeWindowHandleNumber(window)),
+});
 
 const bootServices = createMainBootServices({
   platform: process.platform,
@@ -1070,14 +1076,6 @@ const characterDictionary = createCharacterDictionaryAssembly({
   },
   refreshCurrentSubtitleAnnotations: () => refreshCurrentSubtitleAnnotations(),
   resetAnilistMediaGuessState: () => anilist.resetAnilistMediaGuessState(),
-});
-
-const windowsModalFocusHandoff = createWindowsModalFocusHandoff({
-  platform: process.platform,
-  getModalWindow: () => overlayManager.getModalWindow(),
-  getForegroundProcessName: () => getWindowsForegroundProcessName(),
-  activateNativeWindow: (window) =>
-    activateWindowsWindow(overlay.interaction.getWindowsNativeWindowHandleNumber(window)),
 });
 
 const getRuntimeOptionsStateHandler = createGetRuntimeOptionsStateHandler({
