@@ -62,6 +62,11 @@ function followsLikeSource(shown: string, source: string): boolean {
   return !/\p{Script=Hiragana}/u.test(extra);
 }
 
+/** Up to the anchor's length of the text from `start`, stopping at whitespace. */
+function untilSpace(value: string, start: number): string {
+  return /^\S*/.exec(value.slice(start, start + ANCHOR_CONTEXT_LENGTH))?.[0] ?? '';
+}
+
 interface ReadingAnchor {
   /** Where the base starts in the line without whitespace. */
   found: number;
@@ -95,19 +100,33 @@ export function annotateLineWithFurigana(
     lineIndexes.push(index);
   }
 
+  // The source with its spacing, for spotting where a space-joined source line ends.
+  const spacedText = segments.map((segment) => segment.text).join('');
+
   // Every place each reading fits.
   const candidates: ReadingAnchor[][] = [];
   let textOffset = 0;
+  let spacedOffset = 0;
   for (const [index, segment] of segments.entries()) {
     const base = text[index] ?? '';
     textOffset += base.length;
+    spacedOffset += segment.text.length;
     if (!segment.reading || !base) continue;
     const following =
       fullText.slice(textOffset, textOffset + ANCHOR_CONTEXT_LENGTH).split('\n')[0] ?? '';
+    // A space in the source may be where one subtitle line was joined to the next, so the
+    // base may also sit where the line ends or has a space at the same point.
+    const followingToSpace = untilSpace(spacedText, spacedOffset);
     const found: ReadingAnchor[] = [];
     for (let at = stripped.indexOf(base); at >= 0; at = stripped.indexOf(base, at + 1)) {
       const shown = stripped.slice(at + base.length, at + base.length + ANCHOR_CONTEXT_LENGTH);
-      if (!followsLikeSource(shown, following)) continue;
+      const shownToSpace = untilSpace(
+        line,
+        (lineIndexes[at + base.length - 1] ?? line.length - 1) + 1,
+      );
+      const endsLikeSource =
+        followingToSpace.length < ANCHOR_CONTEXT_LENGTH && shownToSpace === followingToSpace;
+      if (!endsLikeSource && !followsLikeSource(shown, following)) continue;
       found.push({
         found: at,
         length: base.length,
