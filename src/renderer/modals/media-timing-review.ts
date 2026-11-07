@@ -314,9 +314,9 @@ export function applyTranslationLineChanges(options: {
     return options.text;
   }
   // Formatting marks a comma-ended text; the mark moves with the end of the text.
-  let text = (
-    options.format ? options.text.replace(CONTINUATION_MARK_PATTERN, '') : options.text
-  ).trim();
+  // Trim first: a mark followed by a typed space or newline still counts as the end.
+  let text = options.text.trim();
+  if (options.format) text = text.replace(CONTINUATION_MARK_PATTERN, '');
   let changed = false;
   // A line that went away leaves only while the edit still starts or ends with it.
   for (const [lines, cut] of [

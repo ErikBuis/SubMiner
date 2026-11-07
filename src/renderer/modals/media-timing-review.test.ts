@@ -662,6 +662,21 @@ test('a dropped line is cut from an edit only as whole words at its start or end
   );
 });
 
+test('a continuation mark followed by typed whitespace still moves with the end', () => {
+  const mined = { text: 'the mined line', startTime: 8, endTime: 10 };
+  const after = { text: 'and after,', startTime: 10, endTime: 12 };
+  const lines = (...run: (typeof mined)[]) => ({ leadingLines: run, trailingLines: run });
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'My own wording and after, (...) \n',
+      before: lines(mined, after),
+      after: lines(mined),
+      format: true,
+    }),
+    'My own wording',
+  );
+});
+
 test('an edit that no longer starts or ends with a dropped line stays exactly as typed', () => {
   const before = { text: 'Before,', startTime: 6, endTime: 8 };
   const mined = { text: 'the mined line', startTime: 8, endTime: 10 };
