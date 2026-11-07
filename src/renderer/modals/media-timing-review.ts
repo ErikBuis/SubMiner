@@ -921,6 +921,12 @@ export function createMediaTimingReviewModal(
     setStatus('');
   }
 
+  /** Main ended this review itself (mpv closed or switched files); nothing left to decide. */
+  function handleReviewEnded(reviewId: string): void {
+    if (!payload || payload.reviewId !== reviewId) return;
+    closeResolvedReview();
+  }
+
   /** Callers that need to report a failure set their own status after stopping the preview. */
   function stopPreview(): void {
     previewRequest.invalidate();
@@ -1243,8 +1249,7 @@ export function createMediaTimingReviewModal(
     // With lines added, main would resolve the translation anew (and lose one taken from
     // the screen), so the displayed one goes along unless it is the field's own content.
     const linesAdded = previousCount > 0 || nextCount > 0;
-    const followedChange =
-      includeFollowed && (value !== initialValue || (linesAdded && !initial.fromField));
+    const followedChange = value !== initialValue || (linesAdded && !initial.fromField);
     // Lines added or dropped with the translation's own buttons are an explicit choice too.
     const adjusted = translationPreviousShift !== 0 || translationNextShift !== 0;
     return translationEdited || adjusted || followedChange ? { translation: value } : {};
@@ -1971,6 +1976,7 @@ export function createMediaTimingReviewModal(
   return {
     openMediaTimingReviewModal,
     handlePreviewEnded,
+    handleReviewEnded,
     handlePreviewPosition,
     handleFurigana,
     requestCancel,

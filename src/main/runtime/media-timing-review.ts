@@ -5,6 +5,7 @@ import type {
   MediaTimingReviewDecision,
   MediaTimingReviewFurigana,
   MediaTimingReviewOpenPayload,
+  MediaTimingReviewOutcome,
   MediaTimingReviewPreviewRequest,
   MediaTimingReviewPreviewPosition,
   MediaTimingReviewRequest,
@@ -81,6 +82,10 @@ interface ActiveReview {
 }
 
 interface ReviewRequestLifecycle {
+  /** What mpv played when the request started; the card's media must come from it. */
+  mediaPath: string;
+  /** mpv closed or switched files during the request. */
+  mediaClosed: boolean;
   signal: AbortSignal;
   cancelled: Promise<void>;
   settled: Promise<void>;
@@ -115,6 +120,8 @@ export interface MediaTimingReviewRuntimeDeps {
   openModal: (payload: MediaTimingReviewOpenPayload, signal: AbortSignal) => Promise<boolean>;
   /** Blocks mpv's own key and mouse bindings while the modal is open. */
   inputLock?: Pick<MpvInputLock, 'lock' | 'unlock'>;
+  /** Tells the modal that main ended the review on its own, so it should close. */
+  onReviewEnded?: (reviewId: string) => void;
   /** Tells the modal that the hidden player finished the previewed clip. */
   onPreviewEnded?: (reviewId: string) => void;
   onPreviewPosition?: (position: MediaTimingReviewPreviewPosition) => void;
@@ -186,7 +193,7 @@ function booleanProperty(value: unknown): boolean | null {
   return null;
 }
 
-function createReviewRequestLifecycle(): ReviewRequestLifecycle {
+function createReviewRequestLifecycle(mediaPath: string): ReviewRequestLifecycle {
   const controller = new AbortController();
   let resolveCancellation: (() => void) | null = null;
   let resolveSettled: (() => void) | null = null;
@@ -197,6 +204,8 @@ function createReviewRequestLifecycle(): ReviewRequestLifecycle {
     resolveSettled = resolve;
   });
   return {
+    mediaPath,
+    mediaClosed: false,
     signal: controller.signal,
     cancelled: cancellation,
     settled,
@@ -360,6 +369,20 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
   let resumeDeferred = false;
   /** Set when the overlay pauses during the current request, even before its setup reads the pause state. */
   let restoreCancelled = false;
+
+  function currentMediaPath(): string {
+    return (
+      deps.getCurrentMediaPath()?.trim() || deps.getMpvClient()?.currentVideoPath?.trim() || ''
+    );
+  }
+
+  /** Whether mpv no longer plays the media the request started on. */
+  function hasMediaClosed(lifecycle: ReviewRequestLifecycle): boolean {
+    if (lifecycle.mediaClosed) return true;
+    // Without media at the start the review never opens, and there is nothing to protect.
+    if (!lifecycle.mediaPath) return false;
+    return deps.getMpvClient()?.connected !== true || currentMediaPath() !== lifecycle.mediaPath;
+  }
 
   function restorePendingPlayback(): void {
     const mpvClient = pendingPauseRestore;
@@ -664,19 +687,25 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
 
   async function requestReview(
     request: MediaTimingReviewRequest,
-  ): Promise<MediaTimingReviewDecision> {
+  ): Promise<MediaTimingReviewOutcome> {
     if (active || currentRequest) {
       deps.showStatus('Finish the current timing review before mining another card.');
       return { action: 'use-original' };
     }
-    const lifecycle = createReviewRequestLifecycle();
+    const lifecycle = createReviewRequestLifecycle(
+      deps.getMpvClient()?.connected === true ? currentMediaPath() : '',
+    );
     currentRequest = lifecycle;
     restoreCancelled = false;
     try {
-      return await runReview(request, lifecycle);
+      const decision = await runReview(request, lifecycle);
+      // Whatever ended the review (a decision, the watchdog, the overlay closing as the
+      // app quits), the card would now get media and source info from the wrong player state.
+      return hasMediaClosed(lifecycle) ? { action: 'media-closed' } : decision;
     } catch {
       await cleanupActiveReview();
       restorePendingPlayback();
+      if (hasMediaClosed(lifecycle)) return { action: 'media-closed' };
       deps.showStatus('Timing review failed. Using the original subtitle timing.');
       return { action: 'use-original' };
     } finally {
@@ -888,6 +917,19 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
     }
   }
 
+  /**
+   * mpv disconnected or loaded other media. Ends a pending review right away, so its
+   * dialog closes and the card is left as it was, instead of waiting for the watchdog.
+   */
+  function handleMediaClosed(): void {
+    const request = currentRequest;
+    if (!request || request.mediaClosed || !hasMediaClosed(request)) return;
+    request.mediaClosed = true;
+    const reviewId = active?.payload.reviewId;
+    request.cancel();
+    if (reviewId) deps.onReviewEnded?.(reviewId);
+  }
+
   async function dispose(): Promise<void> {
     const request = currentRequest;
     request?.cancel();
@@ -906,6 +948,7 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
     resolveReview,
     deferPlaybackResume,
     cancelPlaybackResume,
+    handleMediaClosed,
     dispose,
   };
 }

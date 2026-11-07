@@ -277,6 +277,9 @@ export function createMiningAssembly(deps: MiningAssemblyDeps) {
         signal,
       ),
     inputLock: mpvInputLock,
+    onReviewEnded: (reviewId) => {
+      sendToOverlayWindows(IPC_CHANNELS.event.mediaTimingReviewEnded, reviewId);
+    },
     onPreviewEnded: (reviewId) => {
       sendToOverlayWindows(IPC_CHANNELS.event.mediaTimingReviewPreviewEnded, reviewId);
     },

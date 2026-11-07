@@ -7,7 +7,7 @@ import {
   AnkiConnectConfig,
   type CardKind,
   type MediaTimingReviewCardPreview,
-  type MediaTimingReviewDecision,
+  type MediaTimingReviewOutcome,
   type MediaTimingReviewRequest,
   type WordCardKind,
 } from '../types/anki';
@@ -178,7 +178,7 @@ interface CardCreationDeps {
   onCardsReady?: (noteIds: number[]) => void;
   reviewMediaTiming?: (
     request: Omit<MediaTimingReviewRequest, 'audioPadding' | 'maxMediaDuration'>,
-  ) => Promise<MediaTimingReviewDecision>;
+  ) => Promise<MediaTimingReviewOutcome>;
   /** Whether `reviewMediaTiming` opens a review; false skips preparing its preview. */
   isMediaTimingReviewEnabled?: () => boolean;
 }
@@ -574,6 +574,12 @@ export class CardCreationService {
           this.deps.showStatusNotification('Card left unchanged.');
           return;
         }
+        if (timingDecision.action === 'media-closed') {
+          this.deps.showStatusNotification(
+            'Card left unchanged: mpv closed or changed video during the review.',
+          );
+          return;
+        }
         const skipMedia =
           timingDecision.action === 'skip-media' ||
           (timingDecision.action === 'confirm' && timingDecision.skipMedia === true);
@@ -824,6 +830,12 @@ export class CardCreationService {
           : ({ action: 'use-original' } as const);
         if (timingDecision.action === 'discard') {
           this.deps.showStatusNotification('Card creation cancelled.');
+          return false;
+        }
+        if (timingDecision.action === 'media-closed') {
+          this.deps.showStatusNotification(
+            'Card not created: mpv closed or changed video during the review.',
+          );
           return false;
         }
         // A translation from the review is final, even when cleared: no AI fallback.

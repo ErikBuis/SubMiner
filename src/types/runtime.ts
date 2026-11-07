@@ -678,6 +678,8 @@ export interface ElectronAPI {
   onOpenYoutubeTrackPicker: (callback: (payload: YoutubePickerOpenPayload) => void) => void;
   onOpenMediaTimingReview: (callback: (payload: MediaTimingReviewOpenPayload) => void) => void;
   onMediaTimingReviewPreviewEnded: (callback: (reviewId: string) => void) => void;
+  /** Main ended the review on its own (mpv closed or switched files). */
+  onMediaTimingReviewEnded: (callback: (reviewId: string) => void) => void;
   onMediaTimingReviewPreviewPosition: (
     callback: (position: MediaTimingReviewPreviewPosition) => void,
   ) => void;

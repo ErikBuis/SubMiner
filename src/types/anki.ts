@@ -88,6 +88,13 @@ export type MediaTimingReviewDecision =
   | { action: 'skip-media'; translation?: string }
   | { action: 'discard' };
 
+/**
+ * What a review hands back to the card workflow: the user's decision, or `media-closed`
+ * when mpv closed or switched files before the card was finished. The media and source
+ * info would come from whatever mpv shows now, so the card is left as it was.
+ */
+export type MediaTimingReviewOutcome = MediaTimingReviewDecision | { action: 'media-closed' };
+
 export interface MediaTimingReviewOpenPayload {
   reviewId: string;
   kind: MediaTimingReviewKind;
