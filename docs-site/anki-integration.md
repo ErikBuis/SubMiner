@@ -160,6 +160,7 @@ During preview, the yellow cursor follows the audio player's position through th
 | Preview                  | `Space` or Play selection                                             |
 | Export the card          | `Enter` or Export card                                                |
 | Cancel                   | `Escape`                                                              |
+| Reach any control        | `Tab` / `Shift+Tab`, then `Space` or `Enter` presses a focused button |
 
 The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. `Enter` in the translation still exports the card, and line breaks are written as spaces. Your edit is kept when you export without media.
 

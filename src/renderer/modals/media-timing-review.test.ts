@@ -16,6 +16,7 @@ import {
   revealMediaTimingEdge,
   slideMediaTimingSelection,
   trimMediaTimingSelectionEnd,
+  wrapMediaTimingReviewFocus,
 } from './media-timing-review';
 
 test('waveform path mirrors normalized peaks around its center line', () => {
@@ -452,4 +453,23 @@ test('controller presses skip disabled buttons and buttons on the hidden step', 
   assert.equal(isMediaTimingReviewButtonAvailable(button(false, false)), true);
   assert.equal(isMediaTimingReviewButtonAvailable(button(true, false)), false);
   assert.equal(isMediaTimingReviewButtonAvailable(button(false, true)), false);
+});
+
+test('Tab wraps focus around the review instead of leaving it', () => {
+  const [first, middle, last] = ['first', 'middle', 'last'].map(
+    (id) => ({ id }) as unknown as HTMLElement,
+  ) as [HTMLElement, HTMLElement, HTMLElement];
+  const targets = [first, middle, last];
+  const outside = { id: 'outside' } as unknown as HTMLElement;
+
+  // Inside the list the browser's own Tab move is kept.
+  assert.equal(wrapMediaTimingReviewFocus(targets, first, false), null);
+  assert.equal(wrapMediaTimingReviewFocus(targets, middle, true), null);
+  // At the ends focus wraps around.
+  assert.equal(wrapMediaTimingReviewFocus(targets, last, false), first);
+  assert.equal(wrapMediaTimingReviewFocus(targets, first, true), last);
+  // Focus outside the dialog comes back in at the matching end.
+  assert.equal(wrapMediaTimingReviewFocus(targets, outside, false), first);
+  assert.equal(wrapMediaTimingReviewFocus(targets, null, true), last);
+  assert.equal(wrapMediaTimingReviewFocus([], first, false), null);
 });
