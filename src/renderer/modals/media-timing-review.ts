@@ -700,24 +700,28 @@ export function resolveMediaTimingReset(options: {
 }
 
 /**
- * Widens the visible timeline so an edge moved to `target` stays in view, with the same
- * margin added lines get. The view never shrinks here.
+ * Widens the visible timeline when an edge moves from `from` to `target` and would end up
+ * closer than the added-line margin to the view edge it moves toward, so the handle never
+ * sits on or past that edge. The view never shrinks here, and moving away from an edge
+ * leaves the view alone.
  */
 export function revealMediaTimingEdge(options: {
   target: number;
+  from: number;
   timelineStart: number;
   timelineEnd: number;
   mediaEnd: number;
 }): { timelineStart: number; timelineEnd: number } {
+  const { target, from, timelineStart, timelineEnd, mediaEnd } = options;
   return {
     timelineStart:
-      options.target < options.timelineStart
-        ? Math.max(0, options.target - LINE_REVEAL_MARGIN_SECONDS)
-        : options.timelineStart,
+      target < from && target < timelineStart + LINE_REVEAL_MARGIN_SECONDS
+        ? Math.max(0, Math.min(timelineStart, target - LINE_REVEAL_MARGIN_SECONDS))
+        : timelineStart,
     timelineEnd:
-      options.target > options.timelineEnd
-        ? Math.min(options.mediaEnd, options.target + LINE_REVEAL_MARGIN_SECONDS)
-        : options.timelineEnd,
+      target > from && target > timelineEnd - LINE_REVEAL_MARGIN_SECONDS
+        ? Math.min(mediaEnd, Math.max(timelineEnd, target + LINE_REVEAL_MARGIN_SECONDS))
+        : timelineEnd,
   };
 }
 
@@ -1377,8 +1381,9 @@ export function createMediaTimingReviewModal(
   }
 
   /**
-   * Moves one edge by a button or arrow key. The timeline widens when the edge would
-   * leave the view, so the buttons can reach past what is shown.
+   * Moves one edge by a button or arrow key. The timeline widens when the edge would come
+   * within a second of the view edge, so the buttons can reach past what is shown and the
+   * handle never lands on the border.
    */
   function nudgeEdge(edge: 'start' | 'end', delta: number): void {
     if (!payload || resolveInFlight) return;
@@ -1397,7 +1402,13 @@ export function createMediaTimingReviewModal(
     });
     const target = edge === 'start' ? next.start : next.end;
     if (Math.abs(target - current) < 0.0005) return;
-    const view = revealMediaTimingEdge({ target, timelineStart, timelineEnd, mediaEnd });
+    const view = revealMediaTimingEdge({
+      target,
+      from: current,
+      timelineStart,
+      timelineEnd,
+      mediaEnd,
+    });
     const timelineChanged =
       view.timelineStart !== timelineStart || view.timelineEnd !== timelineEnd;
     timelineStart = view.timelineStart;
