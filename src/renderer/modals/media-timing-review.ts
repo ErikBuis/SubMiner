@@ -26,6 +26,7 @@ import {
   type FuriganaSegment,
 } from '../../shared/furigana-markup';
 import { removeSpeakerLabels } from '../../shared/subtitle-speaker-labels';
+import { shieldYomitanScan } from '../yomitan-popup.js';
 
 const MINIMUM_CLIP_SECONDS = 0.1;
 const FINE_ADJUST_SECONDS = 0.1;
@@ -389,6 +390,7 @@ export function createMediaTimingReviewModal(
   options: {
     modalStateReader: Pick<ModalStateReader, 'isAnyModalOpen'>;
     syncSettingsModalSubtitleSuppression: () => void;
+    closeLookupWindow: () => boolean;
   },
 ) {
   let payload: MediaTimingReviewOpenPayload | null = null;
@@ -1028,6 +1030,7 @@ export function createMediaTimingReviewModal(
     options.syncSettingsModalSubtitleSuppression();
     payload = null;
     framePicker.close();
+    options.closeLookupWindow();
     if (!options.modalStateReader.isAnyModalOpen()) {
       ctx.dom.overlay.classList.remove('interactive');
       if (ctx.platform.shouldToggleMouseIgnore) {
@@ -1142,6 +1145,7 @@ export function createMediaTimingReviewModal(
   function openMediaTimingReviewModal(nextPayload: MediaTimingReviewOpenPayload): void {
     previewRequest.invalidate();
     cancelDrag();
+    options.closeLookupWindow();
     payload = {
       ...nextPayload,
       previousLines: nextPayload.previousLines ?? [],
@@ -1261,6 +1265,29 @@ export function createMediaTimingReviewModal(
     return false;
   }
 
+  /**
+   * Must run synchronously at renderer load: the shield only works while it is
+   * registered ahead of Yomitan's scanner, which hooks up after its own async setup.
+   *
+   * The shield stops `pointerdown`/`mousedown` at window capture for everything inside the
+   * dialog, so a `pointerdown`/`mousedown` listener added inside it later never fires. Press
+   * handling for the dialog has to go through the `onPress` callback below.
+   */
+  function shieldYomitanHover(): () => void {
+    return shieldYomitanScan(
+      ctx.dom.mediaTimingReviewModal,
+      () => ctx.state.mediaTimingReviewModalOpen,
+      // The shield swallows presses, so run what the dialog's own pointerdown listeners do.
+      (event) => {
+        focus.requestOverlayFocus();
+        focus.enforceModalFocus();
+        if (ctx.dom.mediaTimingReviewSelectionTrack.contains(event.target as Node)) {
+          beginDrag(event);
+        }
+      },
+    );
+  }
+
   function getControllerStep(): MediaTimingReviewStep {
     return ctx.dom.mediaTimingReviewCancelStep.classList.contains('hidden') ? 'editor' : 'cancel';
   }
@@ -1322,8 +1349,10 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewFrameReset.addEventListener('click', () => {
       if (!resolveInFlight) framePicker.reset();
     });
+    // No `pointerdown`/`mousedown` listeners here: shieldYomitanHover stops those at window
+    // capture, so they would never fire. Presses (including the drag start on the track) are
+    // handled in its `onPress` callback instead.
     const track = ctx.dom.mediaTimingReviewSelectionTrack;
-    track.addEventListener('pointerdown', beginDrag);
     track.addEventListener('pointermove', (event) => {
       if (drag?.pointerId === event.pointerId) applyDrag(event.clientX);
     });
@@ -1394,6 +1423,7 @@ export function createMediaTimingReviewModal(
     handleFurigana,
     requestCancel,
     handleMediaTimingReviewKeydown,
+    shieldYomitanHover,
     wireDomEvents,
     getControllerStep,
     handleControllerAction,
