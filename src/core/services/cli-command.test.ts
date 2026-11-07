@@ -100,8 +100,8 @@ function createDeps(overrides: Partial<CliCommandServiceDeps> = {}) {
       calls.push(`setMpvClientSocketPath:${socketPath}`);
     },
     hasMpvClient: () => true,
-    connectMpvClient: () => {
-      calls.push('connectMpvClient');
+    connectMpvClient: (options) => {
+      calls.push(options?.reconnect === false ? 'connectMpvClient:keep' : 'connectMpvClient');
     },
     isTexthookerRunning: () => false,
     setTexthookerPort: (port) => {
@@ -335,14 +335,21 @@ test('handleCliCommand reconnects MPV for second-instance --start when overlay r
   handleCliCommand(args, 'second-instance', deps);
 
   assert.ok(calls.includes('setMpvClientSocketPath:/tmp/subminer.sock'));
-  assert.equal(
-    calls.some((value) => value.includes('connectMpvClient')),
-    true,
-  );
+  assert.ok(calls.includes('connectMpvClient'));
   assert.equal(
     calls.some((value) => value.includes('initializeOverlayRuntime')),
     false,
   );
+});
+
+test('handleCliCommand keeps the startup MPV connection for the initial --start', () => {
+  const { deps, calls } = createDeps();
+
+  handleCliCommand(makeArgs({ start: true }), 'initial', deps);
+
+  assert.ok(calls.includes('setMpvClientSocketPath:/tmp/subminer.sock'));
+  assert.ok(calls.includes('connectMpvClient:keep'));
+  assert.equal(calls.includes('connectMpvClient'), false);
 });
 
 test('handleCliCommand processes --start for second-instance when overlay runtime is not initialized', () => {

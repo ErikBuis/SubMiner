@@ -28,7 +28,8 @@ export interface CliCommandServiceDeps {
   setMpvSocketPath: (socketPath: string) => void;
   setMpvClientSocketPath: (socketPath: string) => void;
   hasMpvClient: () => boolean;
-  connectMpvClient: () => void;
+  /** `reconnect: false` keeps a connection that is already up (or being dialed). */
+  connectMpvClient: (options?: { reconnect?: boolean }) => void;
   isTexthookerRunning: () => boolean;
   setTexthookerPort: (port: number) => void;
   getTexthookerPort: () => number;
@@ -244,10 +245,10 @@ export function createCliCommandDepsRuntime(
       client.setSocketPath(socketPath);
     },
     hasMpvClient: () => Boolean(options.mpv.getClient()),
-    connectMpvClient: () => {
+    connectMpvClient: (connectOptions) => {
       const client = options.mpv.getClient();
       if (!client) return;
-      if (client.reconnect) {
+      if (connectOptions?.reconnect !== false && client.reconnect) {
         client.reconnect();
         return;
       }
@@ -371,6 +372,7 @@ export function handleCliCommand(
   const needsOverlayRuntime = commandNeedsOverlayRuntime(args);
   const shouldInitializeOverlayRuntime = needsOverlayRuntime || args.start;
 
+  const socketPathBeforeArgs = deps.getMpvSocketPath();
   if (args.socketPath !== undefined) {
     deps.setMpvSocketPath(args.socketPath);
     deps.setMpvClientSocketPath(args.socketPath);
@@ -401,7 +403,11 @@ export function handleCliCommand(
   if (shouldConnectMpv && deps.hasMpvClient()) {
     const socketPath = deps.getMpvSocketPath();
     deps.setMpvClientSocketPath(socketPath);
-    deps.connectMpvClient();
+    // On the app's own launch the client already dialed this socket during startup.
+    // Reconnecting would drop that connection and reset the subtitle, prefetch, and
+    // autoplay state the first connection set up, redoing that work mid-startup.
+    const keepStartupConnection = source === 'initial' && socketPath === socketPathBeforeArgs;
+    deps.connectMpvClient({ reconnect: !keepStartupConnection });
     deps.log(`Starting MPV IPC connection on socket: ${socketPath}`);
   }
 

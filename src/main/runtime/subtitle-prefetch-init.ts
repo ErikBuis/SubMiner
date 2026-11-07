@@ -18,6 +18,8 @@ export interface SubtitlePrefetchInitControllerDeps {
   preCacheTokenization: (text: string, data: SubtitleData) => void;
   hasCachedTokenization?: (text: string) => boolean;
   getCacheGeneration?: () => number;
+  waitForTokenizer?: () => Promise<void>;
+  isForegroundBusy?: () => boolean;
   logInfo: (message: string) => void;
   logWarn: (message: string) => void;
   onParsedSubtitleCuesChanged?: (cues: SubtitleCue[] | null, sourceKey: string | null) => void;
@@ -108,6 +110,8 @@ export function createSubtitlePrefetchInitController(
         preCacheTokenization: (text, data) => deps.preCacheTokenization(text, data),
         hasCachedTokenization: (text) => deps.hasCachedTokenization?.(text) ?? false,
         getCacheGeneration: deps.getCacheGeneration,
+        waitForTokenizer: deps.waitForTokenizer,
+        isForegroundBusy: deps.isForegroundBusy,
       });
 
       if (revision !== initRevision) {

@@ -662,3 +662,22 @@ test('refreshCurrentSubtitle reports no emit for empty text when nothing is runn
   await flushMicrotasks();
   assert.deepEqual(emitted, []);
 });
+
+test('isProcessing reports a run in flight until the line is delivered', async () => {
+  let resolveTokenization!: (value: SubtitleData) => void;
+  const controller = createSubtitleProcessingController({
+    tokenizeSubtitle: async () =>
+      await new Promise<SubtitleData>((resolve) => {
+        resolveTokenization = resolve;
+      }),
+    emitSubtitle: () => {},
+  });
+
+  assert.equal(controller.isProcessing(), false);
+  controller.onSubtitleChange('字幕');
+  assert.equal(controller.isProcessing(), true);
+  await flushMicrotasks();
+  resolveTokenization({ text: '字幕', tokens: [] });
+  await flushMicrotasks();
+  assert.equal(controller.isProcessing(), false);
+});
