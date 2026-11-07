@@ -16,6 +16,7 @@ import { createModalFocusGuard } from './modal-focus-guard';
 import {
   findBestOverlappingLine,
   isSourceLanguageText,
+  isSoundCue,
   formatCardTranslation,
   joinSubtitleLineTexts,
 } from '../../shared/sentence-translation-alignment';
@@ -145,16 +146,223 @@ function dedupeSortedLines(
     .sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
 }
 
-/**
- * The translation for the lines currently on the card. With no added lines it is the
- * translation main resolved for the card; otherwise added lines bring the translation
- * main's sentence grouping assigned them. Null when there are no secondary lines to follow.
- */
 function compactText(text: string): string {
   return text.normalize('NFKC').replace(/\s+/gu, '');
 }
 
-export function buildMediaTimingReviewTranslation(options: {
+const lineMidpoint = (line: MediaTimingReviewContextLine): number =>
+  (line.startTime + line.endTime) / 2;
+
+const lineKey = (line: MediaTimingReviewContextLine): string =>
+  `${line.startTime}|${line.endTime}|${line.text}`;
+
+/** Chronological order, as `dedupeSortedLines` sorts. */
+function compareLines(a: MediaTimingReviewContextLine, b: MediaTimingReviewContextLine): number {
+  return a.startTime - b.startTime || a.endTime - b.endTime;
+}
+
+/**
+ * Moves the edges of a run of secondary lines through the sorted lines around the clip: a
+ * positive shift adds that many adjacent lines at that end, a negative one drops lines
+ * from it while `keep` lines remain. Both ends add before either drops, so lines added at
+ * one end can be dropped from the other. Added lines come from `pool`; an empty run grows
+ * from its lines before `anchors.start` or after `anchors.end`. Returns the shifts
+ * actually applied.
+ */
+function shiftRun(
+  run: MediaTimingReviewContextLine[],
+  pool: readonly MediaTimingReviewContextLine[],
+  previousShift: number,
+  nextShift: number,
+  anchors: { start: number; end: number },
+  keep: number,
+): { run: MediaTimingReviewContextLine[]; previousShift: number; nextShift: number } {
+  const inRun = new Set(run.map(lineKey));
+  const outside = pool.filter((line) => !inRun.has(lineKey(line)));
+  const first = run[0];
+  const last = run[run.length - 1];
+  const earlier = first
+    ? outside.filter((line) => compareLines(line, first) < 0)
+    : outside.filter((line) => lineMidpoint(line) < anchors.start);
+  const later = last
+    ? outside.filter((line) => compareLines(line, last) > 0)
+    : outside.filter((line) => lineMidpoint(line) > anchors.end);
+  const prepended =
+    previousShift > 0 ? earlier.slice(Math.max(0, earlier.length - previousShift)) : [];
+  const appended = nextShift > 0 ? later.slice(0, nextShift) : [];
+  let lines = [...prepended, ...run, ...appended];
+  const dropFirst = Math.min(Math.max(0, -previousShift), Math.max(0, lines.length - keep));
+  lines = lines.slice(dropFirst);
+  const dropLast = Math.min(Math.max(0, -nextShift), Math.max(0, lines.length - keep));
+  lines = lines.slice(0, lines.length - dropLast);
+  return {
+    run: lines,
+    previousShift: prepended.length - dropFirst,
+    nextShift: appended.length - dropLast,
+  };
+}
+
+export type MediaTimingReviewTranslationPreview = {
+  /** Null when the card lines changed but there are no secondary lines to follow. */
+  text: string | null;
+  /** The shifts that could be applied, clamped to the lines around the clip. */
+  previousShift: number;
+  nextShift: number;
+  canAddPrevious: boolean;
+  canRemovePrevious: boolean;
+  canAddNext: boolean;
+  canRemoveNext: boolean;
+  /**
+   * The timed lines at the start and the end of the translation. Both are the whole
+   * translation unless it came from the screen, whose text sits between them.
+   */
+  leadingLines: MediaTimingReviewContextLine[];
+  trailingLines: MediaTimingReviewContextLine[];
+};
+
+const CONTINUATION_MARK_PATTERN = /\s*\(\.\.\.\)$/;
+
+/**
+ * A letter or digit that only joins a word next to another one, so a cut must not end
+ * between the two. Scripts written without spaces between words have no such boundary.
+ */
+const SPACED_WORD_CHAR =
+  /^(?![\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}])[\p{L}\p{N}]$/u;
+
+/** An apostrophe or hyphen joins the letters on both sides into one word: "It's", "well-known". */
+const IN_WORD_JOINER = /^['\u2019\u2010\u2011-]$/u;
+
+const isSpacedWordChar = (char: string | undefined): boolean =>
+  char !== undefined && SPACED_WORD_CHAR.test(char);
+
+/** True when a cut at `index` of `text` would end inside a word. */
+function splitsWord(text: string, index: number): boolean {
+  const left = index > 0 ? text.charAt(index - 1) : undefined;
+  const right = index < text.length ? text.charAt(index) : undefined;
+  if (isSpacedWordChar(left) && isSpacedWordChar(right)) return true;
+  // A joiner on either side of the cut, with letters around it: "It|'s", "rock-|solid".
+  if (
+    isSpacedWordChar(left) &&
+    right !== undefined &&
+    IN_WORD_JOINER.test(right) &&
+    isSpacedWordChar(text.charAt(index + 1) || undefined)
+  ) {
+    return true;
+  }
+  return (
+    left !== undefined &&
+    IN_WORD_JOINER.test(left) &&
+    isSpacedWordChar(right) &&
+    isSpacedWordChar(index > 1 ? text.charAt(index - 2) : undefined)
+  );
+}
+
+function loosePattern(piece: string): string | null {
+  const words = piece.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  return words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+}
+
+/**
+ * Cuts `prefix` off the start of `text`, ignoring case and how the words are spaced.
+ * Null when the text does not start with it as whole words: "No" is not cut from "Nobody".
+ */
+function cutLoosePrefix(text: string, prefix: string): string | null {
+  const pattern = loosePattern(prefix);
+  if (pattern === null) return text;
+  const match = text.match(new RegExp(`^\\s*${pattern}`, 'iu'));
+  if (!match) return null;
+  const cut = match[0];
+  if (splitsWord(text, cut.length)) return null;
+  return text.slice(cut.length).trimStart();
+}
+
+/**
+ * Cuts `suffix` off the end of `text`, ignoring case and how the words are spaced.
+ * Null when the text does not end with it as whole words: "here." is not cut from "There.".
+ */
+function cutLooseSuffix(text: string, suffix: string): string | null {
+  const pattern = loosePattern(suffix);
+  if (pattern === null) return text;
+  const match = text.match(new RegExp(`${pattern}\\s*$`, 'iu'));
+  if (!match || match.index === undefined) return null;
+  if (splitsWord(text, match.index)) return null;
+  return text.slice(0, match.index).trimEnd();
+}
+
+/**
+ * Carries a change of the translation's lines into a translation the user edited: lines
+ * that came in at either end are added to the text there, and lines that went away are
+ * cut from it when the text still starts or ends with them. The rest of the edit stays.
+ */
+export function applyTranslationLineChanges(options: {
+  text: string;
+  before: Pick<MediaTimingReviewTranslationPreview, 'leadingLines' | 'trailingLines'>;
+  after: Pick<MediaTimingReviewTranslationPreview, 'leadingLines' | 'trailingLines'>;
+  format: boolean;
+}): string {
+  const { before, after } = options;
+  const keys = (lines: readonly MediaTimingReviewContextLine[]) => new Set(lines.map(lineKey));
+  const oldLeading = keys(before.leadingLines);
+  const newLeading = keys(after.leadingLines);
+  const oldTrailing = keys(before.trailingLines);
+  const newTrailing = keys(after.trailingLines);
+  const firstOld = before.leadingLines[0];
+  const firstNew = after.leadingLines[0];
+  const lastOld = before.trailingLines[before.trailingLines.length - 1];
+  const lastNew = after.trailingLines[after.trailingLines.length - 1];
+  const addedStart = after.leadingLines.filter(
+    (line) => !oldLeading.has(lineKey(line)) && (!firstOld || compareLines(line, firstOld) < 0),
+  );
+  const removedStart = before.leadingLines.filter(
+    (line) => !newLeading.has(lineKey(line)) && (!firstNew || compareLines(line, firstNew) < 0),
+  );
+  const addedEnd = after.trailingLines.filter(
+    (line) =>
+      !oldTrailing.has(lineKey(line)) &&
+      !addedStart.includes(line) &&
+      (!lastOld || compareLines(line, lastOld) > 0),
+  );
+  const removedEnd = before.trailingLines.filter(
+    (line) =>
+      !newTrailing.has(lineKey(line)) &&
+      !removedStart.includes(line) &&
+      (!lastNew || compareLines(line, lastNew) > 0),
+  );
+  if (!addedStart.length && !removedStart.length && !addedEnd.length && !removedEnd.length) {
+    return options.text;
+  }
+  // Formatting marks a comma-ended text; the mark moves with the end of the text.
+  // Trim first: a mark followed by a typed space or newline still counts as the end.
+  let text = options.text.trim();
+  if (options.format) text = text.replace(CONTINUATION_MARK_PATTERN, '');
+  let changed = false;
+  // A line that went away leaves only while the edit still starts or ends with it.
+  for (const [lines, cut] of [
+    [removedStart, cutLoosePrefix],
+    [removedEnd, cutLooseSuffix],
+  ] as const) {
+    if (lines.length === 0) continue;
+    const rest = cut(text, joinSubtitleLineTexts(lines));
+    if (rest === null) continue;
+    text = rest;
+    changed = true;
+  }
+  const start = joinSubtitleLineTexts(addedStart);
+  const end = joinSubtitleLineTexts(addedEnd);
+  // Nothing to put in or cut: the edit stays exactly as typed.
+  if (!changed && !start && !end) return options.text;
+  text = [start, text, end].filter(Boolean).join(' ');
+  return options.format ? formatCardTranslation(text) : text;
+}
+
+/**
+ * The translation for the lines currently on the card. With no added lines it is the
+ * translation main resolved for the card; otherwise added lines bring the translation
+ * main's sentence grouping assigned them. The translation's own shifts then add (positive)
+ * or drop (negative) secondary lines at its start or end, independent of the card lines.
+ */
+export function buildMediaTimingReviewTranslationPreview(options: {
   previousLines: MediaTimingReviewContextLine[];
   nextLines: MediaTimingReviewContextLine[];
   text: string;
@@ -169,9 +377,15 @@ export function buildMediaTimingReviewTranslation(options: {
   /** The secondary lines main's sentence grouping assigns each nearby primary line. */
   lineTranslations?: MediaTimingReviewLineTranslation[];
   format: boolean;
-}): string | null {
-  if (options.previousCount <= 0 && options.nextCount <= 0) return options.initialTranslation;
-  if (options.translationLines.length === 0) return null;
+  translationPreviousShift?: number;
+  translationNextShift?: number;
+}): MediaTimingReviewTranslationPreview {
+  const all = dedupeSortedLines(options.translationLines);
+  const unchanged =
+    options.previousCount <= 0 &&
+    options.nextCount <= 0 &&
+    !options.translationPreviousShift &&
+    !options.translationNextShift;
   const selection = buildMediaTimingLineSelection(options);
   // The card's own lines keep the translation main resolved. Added lines take the
   // translation main's full-track grouping assigned them; a line main did not cover falls
@@ -188,27 +402,76 @@ export function buildMediaTimingReviewTranslation(options: {
     const assigned =
       timed.find((entry) => entry.text !== undefined && compactText(entry.text) === own) ??
       timed[0];
-    const best = assigned ? null : findBestOverlappingLine(options.translationLines, line);
+    const best = assigned ? null : findBestOverlappingLine(all, line);
     const candidates = assigned?.lines ?? (best ? [best] : []);
     // A secondary track in the primary language is no translation, as in main.
     return candidates.filter((candidate) => !isSourceLanguageText([candidate.text], line.text));
   };
-  const before = selection.previous.flatMap(addedTranslation);
-  const after = selection.next.flatMap(addedTranslation);
-  // A translation taken from the screen has no timed lines behind it; keep its text.
-  const translation =
-    options.initialTranslationLines.length > 0
-      ? joinSubtitleLineTexts(
-          dedupeSortedLines([...before, ...options.initialTranslationLines, ...after]),
-        )
-      : [
-          joinSubtitleLineTexts(dedupeSortedLines(before)),
-          options.initialTranslation.trim(),
-          joinSubtitleLineTexts(dedupeSortedLines(after)),
-        ]
-          .filter(Boolean)
-          .join(' ');
-  return options.format ? formatCardTranslation(translation) : translation;
+  const before = dedupeSortedLines(selection.previous.flatMap(addedTranslation));
+  const after = dedupeSortedLines(selection.next.flatMap(addedTranslation));
+  const timedCore = options.initialTranslationLines.length > 0;
+  // Timed lines form one run that keeps at least one line. A translation taken from the
+  // screen has no timed lines behind it: its text stays, with runs before and after it.
+  const anchors = { start: options.originalStartTime, end: options.originalEndTime };
+  const keep = timedCore ? 1 : 0;
+  const core = timedCore
+    ? dedupeSortedLines([...before, ...options.initialTranslationLines, ...after])
+    : null;
+  // The buttons step through the lines the sentence grouping gives a dialogue line, so a
+  // background TV line or sign running alongside the dialogue is skipped.
+  const claimed = new Set(
+    (options.lineTranslations ?? [])
+      .filter((entry) => entry.text === undefined || !isSoundCue(entry.text))
+      .flatMap((entry) => entry.lines.map(lineKey)),
+  );
+  const pool = claimed.size > 0 ? all.filter((line) => claimed.has(lineKey(line))) : all;
+  const resolve = (previousShift: number, nextShift: number) => {
+    const leading = shiftRun(
+      core ?? before,
+      pool,
+      previousShift,
+      core ? nextShift : 0,
+      anchors,
+      keep,
+    );
+    const trailing = core ? leading : shiftRun(after, pool, 0, nextShift, anchors, keep);
+    return { leading, trailing };
+  };
+  const { leading, trailing } = resolve(
+    options.translationPreviousShift ?? 0,
+    options.translationNextShift ?? 0,
+  );
+  const previousShift = leading.previousShift;
+  const nextShift = trailing.nextShift;
+  // A button is available when one more press would change what it applies.
+  const preview = {
+    previousShift,
+    nextShift,
+    leadingLines: leading.run,
+    trailingLines: trailing.run,
+    canAddPrevious: resolve(previousShift + 1, nextShift).leading.previousShift > previousShift,
+    canRemovePrevious: resolve(previousShift - 1, nextShift).leading.previousShift < previousShift,
+    canAddNext: resolve(previousShift, nextShift + 1).trailing.nextShift > nextShift,
+    canRemoveNext: resolve(previousShift, nextShift - 1).trailing.nextShift < nextShift,
+  };
+  if (unchanged) return { text: options.initialTranslation, ...preview };
+  if (all.length === 0) return { text: null, ...preview };
+  const translation = timedCore
+    ? joinSubtitleLineTexts(leading.run)
+    : [
+        joinSubtitleLineTexts(leading.run),
+        options.initialTranslation.trim(),
+        joinSubtitleLineTexts(trailing.run),
+      ]
+        .filter(Boolean)
+        .join(' ');
+  return { text: options.format ? formatCardTranslation(translation) : translation, ...preview };
+}
+
+export function buildMediaTimingReviewTranslation(
+  options: Parameters<typeof buildMediaTimingReviewTranslationPreview>[0],
+): string | null {
+  return buildMediaTimingReviewTranslationPreview(options).text;
 }
 
 export function createMediaTimingPreviewRequestGuard() {
@@ -364,8 +627,19 @@ export function createMediaTimingReviewModal(
   let endPadSeconds = 0;
   /** True until the user moves the clip; the first waveform then trims trailing silence. */
   let trailingTrimPending = false;
-  /** Once the user types in the translation it no longer follows added or removed lines. */
+  /**
+   * Once the user types in the translation it is no longer rebuilt from the lines; lines
+   * added or removed later are put in or cut at its ends.
+   */
   let translationEdited = false;
+  /** Secondary lines added (positive) or dropped (negative) at the translation's ends. */
+  let translationPreviousShift = 0;
+  let translationNextShift = 0;
+  /** The lines behind the translation as last followed, to carry changes into an edit. */
+  let translationLines: Pick<
+    MediaTimingReviewTranslationPreview,
+    'leadingLines' | 'trailingLines'
+  > | null = null;
   let resolveInFlight = false;
   let previewPlaying = false;
   let previewTimer: ReturnType<typeof setTimeout> | null = null;
@@ -703,8 +977,8 @@ export function createMediaTimingReviewModal(
   /** Keeps an untouched translation in step with the lines on the card. */
   function followTranslation(): void {
     const translation = payload?.card?.translation;
-    if (!payload || !translation || translationEdited) return;
-    const next = buildMediaTimingReviewTranslation({
+    if (!payload || !translation) return;
+    const preview = buildMediaTimingReviewTranslationPreview({
       previousLines: payload.previousLines,
       nextLines: payload.nextLines,
       text: payload.text,
@@ -717,8 +991,47 @@ export function createMediaTimingReviewModal(
       translationLines: translation.lines,
       lineTranslations: translation.lineTranslations,
       format: translation.format,
+      translationPreviousShift,
+      translationNextShift,
     });
-    if (next !== null) setTranslation(next, false);
+    translationPreviousShift = preview.previousShift;
+    translationNextShift = preview.nextShift;
+    const previousLines = translationLines;
+    translationLines = { leadingLines: preview.leadingLines, trailingLines: preview.trailingLines };
+    const dom = ctx.dom;
+    dom.mediaTimingReviewTranslationLineControls.classList.toggle(
+      'hidden',
+      translation.lines.length === 0,
+    );
+    dom.mediaTimingReviewTranslationPrevAdd.disabled = !preview.canAddPrevious;
+    dom.mediaTimingReviewTranslationPrevRemove.disabled = !preview.canRemovePrevious;
+    dom.mediaTimingReviewTranslationNextAdd.disabled = !preview.canAddNext;
+    dom.mediaTimingReviewTranslationNextRemove.disabled = !preview.canRemoveNext;
+    if (!translationEdited) {
+      if (preview.text !== null) setTranslation(preview.text, false);
+    } else if (previousLines) {
+      // An edit stays: only the lines that came or went change the text.
+      setTranslation(
+        applyTranslationLineChanges({
+          text: ctx.dom.mediaTimingReviewTranslation.value,
+          before: previousLines,
+          after: translationLines,
+          format: translation.format,
+        }),
+        true,
+      );
+    }
+  }
+
+  /**
+   * Adds or drops a secondary line at one end of the translation. A translation the user
+   * typed keeps its text, with the line put in or cut at that end.
+   */
+  function adjustTranslationLines(direction: 'previous' | 'next', delta: number): void {
+    if (!payload?.card?.translation || resolveInFlight) return;
+    if (direction === 'previous') translationPreviousShift += delta;
+    else translationNextShift += delta;
+    followTranslation();
   }
 
   /**
@@ -737,7 +1050,9 @@ export function createMediaTimingReviewModal(
     const linesAdded = previousCount > 0 || nextCount > 0;
     const followedChange =
       includeFollowed && (value !== initialValue || (linesAdded && !initial.fromField));
-    return translationEdited || followedChange ? { translation: value } : {};
+    // Lines added or dropped with the translation's own buttons are an explicit choice too.
+    const adjusted = translationPreviousShift !== 0 || translationNextShift !== 0;
+    return translationEdited || adjusted || followedChange ? { translation: value } : {};
   }
 
   /**
@@ -996,6 +1311,7 @@ export function createMediaTimingReviewModal(
       ctx.dom.mediaTimingReviewTranslation.disabled = false;
       renderSelection();
       renderSentence();
+      followTranslation();
     }
   }
 
@@ -1094,7 +1410,11 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewDiscard.textContent =
       nextPayload.noteId !== undefined ? 'Delete card' : "Don't create card";
     renderCard();
+    translationPreviousShift = 0;
+    translationNextShift = 0;
+    translationLines = null;
     setTranslation(nextPayload.card?.translation?.text ?? '', false);
+    followTranslation();
     setStatus('');
     showEditor();
     framePicker.open(
@@ -1282,7 +1602,11 @@ export function createMediaTimingReviewModal(
       updateSelection(payload.selectionStartTime, payload.selectionEndTime);
       renderSentence();
       // Reset is about timing: a translation the user edited stays.
-      if (!translationEdited) setTranslation(payload.card?.translation?.text ?? '', false);
+      if (!translationEdited) {
+        translationPreviousShift = 0;
+        translationNextShift = 0;
+      }
+      followTranslation();
     });
     ctx.dom.mediaTimingReviewTranslation.addEventListener('input', () => {
       if (translationEdited) return;
@@ -1295,6 +1619,18 @@ export function createMediaTimingReviewModal(
     );
     ctx.dom.mediaTimingReviewNextAdd.addEventListener('click', () => adjustLines('next', 1));
     ctx.dom.mediaTimingReviewNextRemove.addEventListener('click', () => adjustLines('next', -1));
+    ctx.dom.mediaTimingReviewTranslationPrevAdd.addEventListener('click', () =>
+      adjustTranslationLines('previous', 1),
+    );
+    ctx.dom.mediaTimingReviewTranslationPrevRemove.addEventListener('click', () =>
+      adjustTranslationLines('previous', -1),
+    );
+    ctx.dom.mediaTimingReviewTranslationNextAdd.addEventListener('click', () =>
+      adjustTranslationLines('next', 1),
+    );
+    ctx.dom.mediaTimingReviewTranslationNextRemove.addEventListener('click', () =>
+      adjustTranslationLines('next', -1),
+    );
     ctx.dom.mediaTimingReviewCancel.addEventListener('click', requestCancel);
     ctx.dom.mediaTimingReviewCancelBack.addEventListener('click', showEditor);
     ctx.dom.mediaTimingReviewUseOriginal.addEventListener(
