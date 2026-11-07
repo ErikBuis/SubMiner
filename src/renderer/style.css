@@ -2274,6 +2274,33 @@ body:focus-visible,
   }
 }
 
+/* A short window, such as a 720p mpv window: a slimmer header, a one-line empty translation,
+   a smaller screenshot thumbnail and no key hints, so a word card fits without scrolling. */
+@media (max-height: 800px) {
+  .media-timing-review-header {
+    padding-top: 10px;
+    padding-bottom: 8px;
+  }
+
+  /* One line until something is typed; it still grows with its text. */
+  .media-timing-review-translation-input {
+    min-height: 0;
+  }
+
+  .media-timing-review-fine-grid {
+    margin-top: 8px;
+  }
+
+  .media-timing-frame-picker {
+    grid-template-columns: 140px minmax(0, 1fr);
+    margin-top: 8px;
+  }
+
+  .media-timing-review-hints {
+    display: none;
+  }
+}
+
 body.subtitle-sidebar-embedded-open #subtitleContainer {
   max-width: min(80%, calc(100vw - var(--subtitle-sidebar-reserved-width) - 24px));
   transform: translateX(calc(var(--subtitle-sidebar-reserved-width) * -0.5));
