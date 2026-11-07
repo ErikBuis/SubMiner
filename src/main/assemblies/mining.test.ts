@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   resolveTimedSentenceTranslation,
+  widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
 } from '../../anki-integration/sentence-translation';
 import type { SubtitleMiningContext } from '../../types';
@@ -176,5 +177,50 @@ test('a line mined with sub-delay gets the translation shown beside it', () => {
       tracks,
     })?.translation,
     'First line',
+  );
+});
+
+test('a sentence widened with sub-delay keeps its media range on the video clock', () => {
+  // `sub-delay` 2 plays file lines 10-11 and 11-12 at 12-13 and 13-14, both under one
+  // secondary line. Widening the first line must clip 12-14, where mpv plays the sentence.
+  type TracksProvider = () => SubtitleTracksForTranslation | null;
+  let provideTracks: TracksProvider | null = null;
+  const integration = new Proxy(
+    {},
+    {
+      get: (_target, name: string) => (callback: unknown) => {
+        if (name === 'setSubtitleTracksForTranslationProvider') {
+          provideTracks = callback as TracksProvider;
+        }
+      },
+    },
+  ) as AnkiIntegrationLike;
+  const mining = createMiningAssembly(
+    makeDeps({
+      appState: {
+        ...makeDeps().appState,
+        mpvClient: { currentSubDelay: 2 } as MpvClientLike,
+        activeParsedSubtitleCues: [
+          { text: '今日は', startTime: 10, endTime: 11 },
+          { text: 'いい天気ですね', startTime: 11, endTime: 12 },
+        ],
+      },
+      getSecondarySubtitleCues: () => [
+        { text: 'Nice weather today, huh?', startTime: 12, endTime: 14 },
+      ],
+    }),
+  );
+  mining.attachToAnkiIntegration(integration);
+  assert.ok(provideTracks);
+
+  assert.deepEqual(
+    widenSentenceToTranslation({
+      text: '今日は',
+      startTime: 12,
+      endTime: 13,
+      tracks: (provideTracks as TracksProvider)(),
+      maxSentenceSeconds: 0,
+    }),
+    { text: '今日は いい天気ですね', startTime: 12, endTime: 14 },
   );
 });

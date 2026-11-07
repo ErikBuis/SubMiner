@@ -29,8 +29,10 @@ import type { PendingYoutubeMediaUpdate } from './pending-youtube-media';
 import { resolveMpvVolumeScale } from './mpv-volume';
 import {
   resolveTimedSentenceTranslation,
+  widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
 } from './sentence-translation';
+import { formatCardTranslation } from '../shared/sentence-translation-alignment';
 
 const log = createLogger('anki').child('integration.card-creation');
 
@@ -618,8 +620,8 @@ export class CardCreationService {
 
     const maxMediaDuration = this.deps.getConfig().media?.maxMediaDuration ?? 30;
     // The cap limits the media only; the translation still covers every line of the sentence.
-    const subtitleStartTime = startTime;
-    const subtitleEndTime = endTime;
+    let subtitleStartTime = startTime;
+    let subtitleEndTime = endTime;
     const captured = this.deps.captureMiningProvenance?.() ?? null;
     const provenance = captured && {
       ...captured,
@@ -640,6 +642,24 @@ export class CardCreationService {
     let createdNoteId: number | null = null;
     try {
       return await this.deps.withUpdateProgress('Creating sentence card', async () => {
+        const behavior = this.deps.getConfig().behavior;
+        const tracks = (await this.deps.getSubtitleTracksForTranslation?.()) ?? null;
+        const widened = behavior?.widenSentenceToTranslation
+          ? widenSentenceToTranslation({
+              text: sentence,
+              startTime,
+              endTime: subtitleEndTime,
+              tracks,
+              maxSentenceSeconds: maxMediaDuration,
+            })
+          : null;
+        if (widened) {
+          sentence = widened.text;
+          startTime = subtitleStartTime = widened.startTime;
+          subtitleEndTime = widened.endTime;
+          endTime = clampMediaEndTime(startTime, subtitleEndTime, maxMediaDuration);
+        }
+
         const timingDecision = this.deps.reviewMediaTiming
           ? await this.deps.reviewMediaTiming({
               kind: 'sentence',
@@ -670,7 +690,6 @@ export class CardCreationService {
             sentenceEndTime = Math.max(sentenceEndTime, timingDecision.sentenceEndTime);
           }
         }
-        const tracks = (await this.deps.getSubtitleTracksForTranslation?.()) ?? null;
         const timedTranslation = resolveTimedSentenceTranslation({
           text: sentence,
           startTime: sentenceStartTime,
@@ -720,7 +739,7 @@ export class CardCreationService {
             ? ankiAiConfig.enabled === true
             : ankiAiConfig === true;
 
-        const backText = await resolveSentenceBackText(
+        const automaticBackText = await resolveSentenceBackText(
           {
             sentence,
             secondarySubText,
@@ -731,6 +750,10 @@ export class CardCreationService {
             logWarning: (message: string) => log.warn(message),
           },
         );
+        const backText =
+          behavior?.formatTranslation === true
+            ? formatCardTranslation(automaticBackText)
+            : automaticBackText;
         if (backText) {
           fields[translationField] = backText;
         }

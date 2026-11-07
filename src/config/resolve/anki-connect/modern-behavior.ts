@@ -13,6 +13,8 @@ export function applyModernBehaviorResolution(
     'overwriteImage',
     'highlightWord',
     'autoUpdateNewCards',
+    'widenSentenceToTranslation',
+    'formatTranslation',
   ] as const) {
     applyModernValue(
       context,
