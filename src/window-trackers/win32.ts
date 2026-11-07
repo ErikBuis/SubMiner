@@ -32,6 +32,11 @@ const GetWindowThreadProcessId = user32.func(
   'uint __stdcall GetWindowThreadProcessId(intptr hwnd, _Out_ uint *lpdwProcessId)',
 );
 const GetWindowLongW = user32.func('int __stdcall GetWindowLongW(intptr hwnd, int nIndex)');
+const SetForegroundWindow = user32.func('bool __stdcall SetForegroundWindow(intptr hwnd)');
+const BringWindowToTop = user32.func('bool __stdcall BringWindowToTop(intptr hwnd)');
+const AttachThreadInput = user32.func(
+  'int __stdcall AttachThreadInput(uint idAttach, uint idAttachTo, int fAttach)',
+);
 const SetWindowLongPtrW = user32.func(
   'intptr __stdcall SetWindowLongPtrW(intptr hwnd, int nIndex, intptr dwNewLong)',
 );
@@ -50,6 +55,7 @@ const OpenProcess = kernel32.func(
 );
 const CloseHandle = kernel32.func('bool __stdcall CloseHandle(intptr hObject)');
 const GetLastError = kernel32.func('uint __stdcall GetLastError()');
+const GetCurrentThreadId = kernel32.func('uint __stdcall GetCurrentThreadId()');
 const SetLastError = kernel32.func('void __stdcall SetLastError(uint dwErrCode)');
 const QueryFullProcessImageNameW = kernel32.func(
   'bool __stdcall QueryFullProcessImageNameW(intptr hProcess, uint dwFlags, _Out_ uint16 *lpExeName, _Inout_ uint *lpdwSize)',
@@ -264,6 +270,33 @@ export function getForegroundProcessName(): string | null {
   if (pidValue === 0) return null;
 
   return getProcessNameByPid(pidValue);
+}
+
+/**
+ * Makes `hwnd` the foreground window even though another process (mpv) owns the foreground.
+ * Windows refuses a plain SetForegroundWindow from a background process, so the calling
+ * thread briefly shares the foreground thread's input state first.
+ */
+export function activateWindow(hwnd: number): boolean {
+  const foregroundHwnd = GetForegroundWindow();
+  if (foregroundHwnd === hwnd) return true;
+
+  const currentThreadId = GetCurrentThreadId();
+  const foregroundThreadId = foregroundHwnd
+    ? GetWindowThreadProcessId(foregroundHwnd, new Uint32Array(1))
+    : 0;
+  const attached =
+    foregroundThreadId !== 0 &&
+    foregroundThreadId !== currentThreadId &&
+    AttachThreadInput(currentThreadId, foregroundThreadId, 1) !== 0;
+  try {
+    BringWindowToTop(hwnd);
+    return SetForegroundWindow(hwnd);
+  } finally {
+    if (attached) {
+      AttachThreadInput(currentThreadId, foregroundThreadId, 0);
+    }
+  }
 }
 
 export function setOverlayOwner(overlayHwnd: number, mpvHwnd: number): void {

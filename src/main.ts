@@ -85,6 +85,8 @@ import {
   resolveDefaultLogFilePath,
 } from './shared/log-files';
 import { createFatalErrorReporter } from './main/fatal-error';
+import { activateWindowsWindow } from './window-trackers/windows-helper';
+import { createWindowsModalFocusHandoff } from './main/runtime/windows-modal-focus-handoff';
 import {
   commandNeedsOverlayStartupPrereqs,
   commandNeedsOverlayRuntime,
@@ -299,6 +301,15 @@ type BootServices = MainBootServicesResult<
   }
 >;
 
+// Declared before the boot services so the modal state callback below can always reach it.
+const windowsModalFocusHandoff = createWindowsModalFocusHandoff({
+  platform: process.platform,
+  getModalWindow: () => overlayManager.getModalWindow(),
+  isMpvFocused: () => appState.windowTracker?.isTargetWindowFocused() ?? false,
+  activateNativeWindow: (window) =>
+    activateWindowsWindow(overlay.interaction.getWindowsNativeWindowHandleNumber(window)),
+});
+
 const bootServices = createMainBootServices({
   platform: process.platform,
   argv: process.argv,
@@ -384,8 +395,10 @@ const bootServices = createMainBootServices({
         setModalWindowBounds: (geometry) => overlayManager.setModalWindowBounds(geometry),
       },
       {
-        onModalStateChange: (isActive: boolean) =>
-          overlayModalInputState.handleModalInputStateChange(isActive),
+        onModalStateChange: (isActive: boolean) => {
+          overlayModalInputState.handleModalInputStateChange(isActive);
+          windowsModalFocusHandoff.setModalActive(isActive);
+        },
         bindModalWindowAboveMpv: (window) =>
           overlay.interaction.bindWindowsModalWindowAboveMpv(window),
         // On macOS, after the last modal closes the post-close visibility sync hides the overlay
