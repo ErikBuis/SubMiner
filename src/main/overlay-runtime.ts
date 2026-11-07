@@ -57,6 +57,7 @@ export interface OverlayModalRuntime {
   openJimaku: () => void;
   openTsukihime: () => void;
   handleOverlayModalClosed: (modal: OverlayHostedModal) => void;
+  handleModalWindowDestroyed: () => void;
   notifyOverlayModalOpened: (modal: OverlayHostedModal) => void;
   waitForModalOpen: (modal: OverlayHostedModal, timeoutMs: number) => Promise<boolean>;
   getRestoreVisibleOverlayOnModalClose: () => Set<OverlayHostedModal>;
@@ -597,6 +598,14 @@ export function createOverlayModalRuntimeService(
     }
   };
 
+  // A modal window destroyed from outside (on Windows, together with the mpv window that owns
+  // it) never reports its modals closed, which would leave the main overlay hidden for good.
+  const handleModalWindowDestroyed = (): void => {
+    for (const modal of [...restoreVisibleOverlayOnModalClose]) {
+      handleOverlayModalClosed(modal);
+    }
+  };
+
   const notifyOverlayModalOpened = (modal: OverlayHostedModal): void => {
     if (!restoreVisibleOverlayOnModalClose.has(modal)) return;
     openedModals.add(modal);
@@ -664,6 +673,7 @@ export function createOverlayModalRuntimeService(
     openJimaku,
     openTsukihime,
     handleOverlayModalClosed,
+    handleModalWindowDestroyed,
     notifyOverlayModalOpened,
     waitForModalOpen,
     getRestoreVisibleOverlayOnModalClose: () => restoreVisibleOverlayOnModalClose,

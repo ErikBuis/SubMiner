@@ -427,6 +427,37 @@ test('modal window path restores visible main overlay before modal input deactiv
   assert.deepEqual(events, ['state:true:visible:true', 'state:false:visible:true']);
 });
 
+test('a modal window destroyed from outside releases its modals and restores the main overlay', () => {
+  const main = new FakeOverlayWindow({ visible: true });
+  const modal = new FakeOverlayWindow();
+  const events: string[] = [];
+  const h = createHarness({
+    main,
+    modal,
+    platform: 'win32',
+    options: { onModalStateChange: (active) => events.push(`state:${active}`) },
+  });
+
+  h.runtime.sendToActiveOverlayWindow('media-timing-review:open', undefined, {
+    restoreOnModalClose: 'media-timing-review',
+    preferModalWindow: true,
+  });
+  h.runtime.notifyOverlayModalOpened('media-timing-review');
+  assert.equal(main.isVisible(), false);
+
+  // Windows destroys a window together with its owner (mpv) without the renderer reporting it.
+  modal.destroy();
+  h.runtime.handleModalWindowDestroyed();
+
+  assert.equal(h.runtime.getRestoreVisibleOverlayOnModalClose().size, 0);
+  assert.equal(main.isVisible(), true);
+  assert.deepEqual(events, ['state:true', 'state:false']);
+
+  // Nothing left to release on a later call, e.g. the normal close-and-destroy path.
+  h.runtime.handleModalWindowDestroyed();
+  assert.deepEqual(events, ['state:true', 'state:false']);
+});
+
 test('macOS maps a new modal panel before focusing SubMiner and hiding the subtitle overlay', () => {
   const log: string[] = [];
   const main = new FakeOverlayWindow({ name: 'main', log, visible: true });
