@@ -29,6 +29,7 @@ import type {
 import type { OverlayHostedModal } from '../shared/ipc/contracts';
 import { createKeyboardHandlers } from './handlers/keyboard.js';
 import { createGamepadController } from './handlers/gamepad-controller.js';
+import { createControllerHintVisibility } from './controller-hint-visibility.js';
 import { createControllerPressReplay } from './handlers/controller-press-replay.js';
 import { createMouseHandlers } from './handlers/mouse.js';
 import { createControllerStatusIndicator } from './controller-status-indicator.js';
@@ -398,6 +399,9 @@ let lastSecondarySubtitlePreview = '';
 let overlayErrorToastTimeout: ReturnType<typeof setTimeout> | null = null;
 let controllerAnimationFrameId: number | null = null;
 const controllerPressReplay = createControllerPressReplay();
+const controllerHintVisibility = createControllerHintVisibility({
+  getOverlayControllerId: () => window.electronAPI.getActiveControllerId(),
+});
 
 function truncateForErrorLog(text: string): string {
   const normalized = text.replace(/\s+/g, ' ').trim();
@@ -453,10 +457,13 @@ function applyControllerSnapshot(snapshot: {
   ctx.state.controllerRawButtons = snapshot.rawButtons;
   controllerSelectModal.updateDevices();
   controllerDebugModal.updateSnapshot();
-  // Shown whenever controller support is on: a fresh dialog window cannot see the pad
-  // until its first press, so "connected" would hide the hints exactly when needed.
   const controllerConfig = ctx.state.controllerConfig;
-  const hintsVisible = controllerConfig?.enabled === true;
+  const hintsVisible = controllerHintVisibility.update({
+    enabled: controllerConfig?.enabled === true,
+    dialogOpen: ctx.state.mediaTimingReviewModalOpen || ctx.state.kikuModalOpen,
+    activeGamepadId: snapshot.activeGamepadId,
+    now: performance.now(),
+  });
   mediaTimingReviewModal.setControllerHintsVisible(hintsVisible);
   kikuModal.setControllerHintsVisible(hintsVisible);
   if (
@@ -576,13 +583,13 @@ function startControllerPolling(): void {
             holdSecondarySub: { kind: 'none' },
             previousEntry: { kind: 'none' },
             nextEntry: { kind: 'none' },
+            toggleCharacterNavigation: { kind: 'none' },
             previousSubtitle: { kind: 'none' },
             nextSubtitle: { kind: 'none' },
             replaySubtitle: { kind: 'none' },
             playNextSubtitle: { kind: 'none' },
             leftStickHorizontal: { kind: 'axis', axisIndex: 0, dpadFallback: 'horizontal' },
             leftStickVertical: { kind: 'axis', axisIndex: 1, dpadFallback: 'vertical' },
-            rightStickHorizontal: { kind: 'axis', axisIndex: 3, dpadFallback: 'none' },
             rightStickVertical: { kind: 'axis', axisIndex: 4, dpadFallback: 'none' },
           },
           reviewBindings: getDefaultControllerReviewBindings(),
@@ -634,6 +641,9 @@ function startControllerPolling(): void {
     },
     nextEntry: () => {
       keyboardHandlers.movePopupEntryForController(1);
+    },
+    toggleCharacterNavigation: () => {
+      keyboardHandlers.toggleCharacterNavigationForController();
     },
     toggleMpvPause: () => {
       window.electronAPI.sendMpvCommand(['cycle', 'pause']);
