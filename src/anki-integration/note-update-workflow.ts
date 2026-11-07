@@ -19,6 +19,7 @@ import {
   widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
 } from './sentence-translation';
+import { ankiFuriganaFieldToPlainText } from './sentence-furigana';
 import { formatCardTranslation } from '../shared/sentence-translation-alignment';
 
 export interface NoteUpdateWorkflowNoteInfo {
@@ -38,6 +39,7 @@ export interface NoteUpdateWorkflowDeps {
     fields?: {
       word?: string;
       sentence?: string;
+      sentenceFurigana?: string;
       audio?: string;
       image?: string;
       miscInfo?: string;
@@ -188,6 +190,21 @@ export class NoteUpdateWorkflow {
       ? ankiFieldHtmlToPlainText(noteInfo.fields[fieldName]?.value ?? '')
       : '';
     return meaning ? { meaning } : {};
+  }
+
+  /** The note's sentence furigana as plain text, so the review can show readings on hover. */
+  private getReviewSentenceFurigana(
+    noteInfo: NoteUpdateWorkflowNoteInfo,
+    configuredField: string | undefined,
+  ): { sentenceFurigana?: string } {
+    const fieldName = this.deps.resolveConfiguredFieldName(
+      noteInfo,
+      configuredField || 'SentenceFurigana',
+    );
+    const sentenceFurigana = fieldName
+      ? ankiFuriganaFieldToPlainText(noteInfo.fields[fieldName]?.value ?? '')
+      : '';
+    return sentenceFurigana ? { sentenceFurigana } : {};
   }
 
   /** The translation the card would get, so the review can show, follow and edit it. */
@@ -372,6 +389,7 @@ export class NoteUpdateWorkflow {
               noteId,
               card: {
                 ...(hasExpressionText ? { word: ankiFieldHtmlToPlainText(expressionText) } : {}),
+                ...this.getReviewSentenceFurigana(noteInfo, config.fields?.sentenceFurigana),
                 ...this.getReviewMeaning(noteInfo, config.fields?.definition),
                 ...reviewTranslation,
               },

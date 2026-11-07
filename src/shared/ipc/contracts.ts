@@ -157,6 +157,7 @@ export const IPC_CHANNELS = {
     mediaTimingReviewOpen: 'media-timing-review:open',
     mediaTimingReviewPreviewEnded: 'media-timing-review:preview-ended',
     mediaTimingReviewPreviewPosition: 'media-timing-review:preview-position',
+    mediaTimingReviewFurigana: 'media-timing-review:furigana',
     youtubePickerCancel: 'youtube:picker-cancel',
     playlistBrowserOpen: 'playlist-browser:open',
     sessionNumericSelectionStart: 'session:numeric-selection-start',

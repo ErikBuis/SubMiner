@@ -7,6 +7,7 @@ import type {
   MediaTimingReviewActionResult,
   MediaTimingReviewOpenPayload,
   MediaTimingReviewPreviewPosition,
+  MediaTimingReviewFurigana,
   MediaTimingReviewPreviewRequest,
   MediaTimingReviewResolveRequest,
   MediaTimingReviewFrameRequest,
@@ -680,6 +681,7 @@ export interface ElectronAPI {
   onMediaTimingReviewPreviewPosition: (
     callback: (position: MediaTimingReviewPreviewPosition) => void,
   ) => void;
+  onMediaTimingReviewFurigana: (callback: (furigana: MediaTimingReviewFurigana) => void) => void;
   previewMediaTimingReview: (
     request: MediaTimingReviewPreviewRequest,
   ) => Promise<MediaTimingReviewActionResult>;
