@@ -521,6 +521,8 @@ test('registerIpcHandlers validates and forwards timing review text and screensh
           startTime: 10,
           endTime: 12,
           text: '前の行 対象の行',
+          sentenceStartTime: 8,
+          sentenceEndTime: 12,
           screenshotTime: 13,
         },
       },
@@ -536,11 +538,19 @@ test('registerIpcHandlers validates and forwards timing review text and screensh
         endTime: 12,
         text: '前の行 対象の行',
         screenshotTime: 13,
+        sentenceStartTime: 8,
+        sentenceEndTime: 12,
       },
     },
   ]);
 
-  for (const invalid of [{ text: '   ' }, { screenshotTime: Infinity }]) {
+  for (const invalid of [
+    { text: '   ' },
+    { screenshotTime: Infinity },
+    { sentenceStartTime: 8, sentenceEndTime: 12 },
+    { text: '前の行 対象の行', sentenceStartTime: 12, sentenceEndTime: 8 },
+    { text: '前の行 対象の行', sentenceStartTime: 8 },
+  ]) {
     assert.deepEqual(
       await handler!(
         {},
