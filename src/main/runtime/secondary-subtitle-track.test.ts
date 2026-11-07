@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseSubtitleCues } from '../../core/services/subtitle-cue-parser';
 import {
+  buildSubtitleTracksForTranslation,
   createSecondarySubtitleTrackController,
   findActiveSubtitleText,
+  selectAlignableSubtitleCues,
 } from './secondary-subtitle-track';
 
 test('findActiveSubtitleText combines unique simultaneous parsed cues', () => {
@@ -309,6 +311,62 @@ test('findActiveSubtitleText keeps a complete reconstructed line over entrance f
   assert.equal(findActiveSubtitleText([current, nextEntrance, nextLine], 4.1), nextLine.text);
 });
 
+test('selectAlignableSubtitleCues drops entrance fragments a longer same-style cue completes', () => {
+  const cue = (text: string, startTime: number, endTime: number, assStyle = 'op_english') => ({
+    text,
+    startTime,
+    endTime,
+    source: 'reconstructed-ass' as const,
+    assStyle,
+  });
+  const entrance = cue('Ne', 3.8, 4.2);
+  const nextLine = cue('Next complete line', 4, 7);
+  const otherStyle = cue('Ne', 3.8, 4.2, 'sign');
+  const later = cue('Ne', 10, 11);
+  assert.deepEqual(selectAlignableSubtitleCues([entrance, nextLine, otherStyle, later]), [
+    nextLine,
+    otherStyle,
+    later,
+  ]);
+});
+
+test('selectAlignableSubtitleCues keeps a full lyric the next, longer one only touches', () => {
+  const cue = (text: string, startTime: number, endTime: number) => ({
+    text,
+    startTime,
+    endTime,
+    source: 'reconstructed-ass' as const,
+    assStyle: 'op_english',
+  });
+  const lyric = cue('Never give up', 1, 4);
+  const next = cue('Never give up on me', 3.8, 7);
+  assert.deepEqual(selectAlignableSubtitleCues([lyric, next]), [lyric, next]);
+});
+
+test('buildSubtitleTracksForTranslation moves parsed primary cues onto the video clock', () => {
+  const fragmentGrid = { text: 'grid', startTime: 0, endTime: 1 };
+  Object.defineProperty(fragmentGrid, 'assLayout', {
+    value: { kind: 'fragment-grid' },
+    enumerable: false,
+  });
+  const tracks = buildSubtitleTracksForTranslation({
+    primaryCues: [{ text: 'line', startTime: 10, endTime: 12 }, fragmentGrid],
+    primarySubDelay: 2,
+    secondaryCues: [{ text: 'secondary', startTime: 13, endTime: 15 }],
+  });
+  assert.deepEqual(tracks?.primary, [{ text: 'line', startTime: 12, endTime: 14 }]);
+  // The secondary track comes from `getTimelineCues`, already on the video clock.
+  assert.deepEqual(tracks?.secondary, [{ text: 'secondary', startTime: 13, endTime: 15 }]);
+  assert.equal(
+    buildSubtitleTracksForTranslation({
+      primaryCues: [],
+      primarySubDelay: 2,
+      secondaryCues: null,
+    }),
+    null,
+  );
+});
+
 test('secondary track controller parses the selected ASS file before publishing', async () => {
   const broadcasts: string[] = [];
   let currentText = '';
@@ -378,7 +436,18 @@ test('secondary track controller follows parsed cue timing and subtitle delay', 
   });
 
   await controller.refresh();
+  assert.deepEqual(
+    controller.getTimelineCues()?.map((cue) => [cue.startTime, cue.endTime]),
+    [
+      [1.5, 2.5],
+      [2.5, 3.5],
+    ],
+  );
   controller.handleDelayChange(0);
+  assert.deepEqual(
+    controller.getTimelineCues()?.map((cue) => cue.startTime),
+    [1, 2],
+  );
   time = 3.25;
   controller.handleTimePos(time);
 

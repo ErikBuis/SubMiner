@@ -1,4 +1,5 @@
 import type { SubtitleCue } from '../../types/subtitle';
+import type { SubtitleTracksForTranslation } from '../../anki-integration/sentence-translation';
 import { flattenedSecondarySubtitleLineIdentity } from '../../core/services/secondary-subtitle-line-identity';
 import {
   removeAssControlDebrisLines,
@@ -196,6 +197,77 @@ export function findActiveSubtitleText(cues: readonly SubtitleCue[], timeSeconds
   return activeText.join('\n');
 }
 
+const ENTRANCE_FRAGMENT_MAX_SECONDS = 1;
+
+/**
+ * Cues worth pairing with the other track: no fragment grids, and no reconstructed
+ * entrance fragments ("Ne") whose text a longer overlapping cue of the same style
+ * completes. `findActiveSubtitleText` hides those behind the complete line as soon as
+ * both are active, so they only flash during the entrance animation.
+ */
+export function selectAlignableSubtitleCues(cues: readonly SubtitleCue[]): SubtitleCue[] {
+  const compact = (text: string) => text.normalize('NFKC').replace(/\s+/gu, '');
+  const reconstructed = cues.filter(
+    (cue) => cue.source === 'reconstructed-ass' && cue.assLayout?.kind !== 'fragment-grid',
+  );
+  return cues.filter((cue) => {
+    if (cue.assLayout?.kind === 'fragment-grid') return false;
+    if (cue.source !== 'reconstructed-ass') return true;
+    const text = compact(cue.text);
+    return !reconstructed.some(
+      (other) =>
+        other !== cue &&
+        (other.assStyle ?? '') === (cue.assStyle ?? '') &&
+        other.startTime < cue.endTime &&
+        other.endTime > cue.startTime &&
+        // Entrance fragments flash for a moment or sit under the complete line; a full
+        // lyric that only touches the next, longer one is no fragment.
+        (cue.endTime - cue.startTime <= ENTRANCE_FRAGMENT_MAX_SECONDS ||
+          Math.min(other.endTime, cue.endTime) - Math.max(other.startTime, cue.startTime) >=
+            0.5 * (cue.endTime - cue.startTime)) &&
+        compact(other.text).length > text.length &&
+        compact(other.text).includes(text),
+    );
+  });
+}
+
+/** A parsed cue moved by `delaySeconds`, from the subtitle file's clock onto the video's. */
+function shiftCueToVideoClock(cue: SubtitleCue, delaySeconds: number): SubtitleCue {
+  if (delaySeconds === 0) return cue;
+  const shifted: SubtitleCue = {
+    ...cue,
+    startTime: cue.startTime + delaySeconds,
+    endTime: cue.endTime + delaySeconds,
+  };
+  // The parser stores the layout as a non-enumerable property, which a spread drops.
+  if (cue.assLayout) {
+    Object.defineProperty(shifted, 'assLayout', { value: cue.assLayout, enumerable: false });
+  }
+  return shifted;
+}
+
+/**
+ * The parsed tracks a card's translation is picked from, on the video clock like every
+ * mined range (`SubtitleMiningContext`, sentence and word card ranges, the media timing
+ * review). Parsed primary cues keep the subtitle file's timestamps, so they move by the
+ * primary `sub-delay`; `secondaryCues` come from `getTimelineCues`, already on the video
+ * clock. Null without a parsed secondary track.
+ */
+export function buildSubtitleTracksForTranslation(input: {
+  primaryCues: readonly SubtitleCue[];
+  primarySubDelay: number;
+  secondaryCues: readonly SubtitleCue[] | null;
+}): SubtitleTracksForTranslation | null {
+  if (!input.secondaryCues) return null;
+  const primaryDelay = Number.isFinite(input.primarySubDelay) ? input.primarySubDelay : 0;
+  return {
+    primary: selectAlignableSubtitleCues(input.primaryCues).map((cue) =>
+      shiftCueToVideoClock(cue, primaryDelay),
+    ),
+    secondary: selectAlignableSubtitleCues(input.secondaryCues),
+  };
+}
+
 export function createSecondarySubtitleTrackController(deps: {
   getMpvClient: () => SecondarySubtitleMpvClient | null;
   getCurrentTimePos: () => number;
@@ -342,6 +414,14 @@ export function createSecondarySubtitleTrackController(deps: {
   return {
     refresh,
     scheduleRefresh,
+    /**
+     * Parsed cues of the selected secondary track on the video clock: moved by
+     * `secondary-sub-delay` to where mpv plays them.
+     */
+    getTimelineCues(): SubtitleCue[] | null {
+      if (!parsedCues) return null;
+      return parsedCues.map((cue) => shiftCueToVideoClock(cue, secondaryDelaySeconds));
+    },
     handleLiveText(text: string): void {
       lastLiveText = removeLiveGlyphFragmentLines(
         activeSourceUsesAssSyntax ? removeAssControlDebrisLines(text) : text,

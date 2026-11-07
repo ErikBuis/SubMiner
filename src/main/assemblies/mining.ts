@@ -20,7 +20,7 @@ import { getSharedRemoteMediaWindowCache } from '../../core/services/remote-medi
 import type { Logger } from '../../logger';
 import type { PluginMinedNote, PluginMiningProvenance } from '../../plugin-api';
 import { IPC_CHANNELS, type OverlayHostedModal } from '../../shared/ipc/contracts';
-import type { ResolvedConfig, SubtitleMiningContext } from '../../types';
+import type { ResolvedConfig, SubtitleCue, SubtitleMiningContext } from '../../types';
 import type { OverlayModalRuntime } from '../overlay-runtime';
 import {
   createCopyCurrentSubtitleHandler,
@@ -44,6 +44,7 @@ import { openMediaTimingReviewModal } from '../runtime/media-timing-review-open'
 import { findMpvExecutablePath } from '../runtime/mpv-process';
 import type { createOverlayNotificationsRuntime } from '../runtime/overlay-notifications-runtime';
 import { resolvePrimarySubtitle } from '../runtime/primary-subtitle-text';
+import { buildSubtitleTracksForTranslation } from '../runtime/secondary-subtitle-track';
 import type { AppState } from '../state';
 import type { OverlayModalsAssembly } from './overlay-modals';
 import type { CliSlice, IpcSlice } from './slices';
@@ -92,6 +93,8 @@ export interface MiningAssemblyDeps {
   >;
   getOverlayModals: () => Pick<OverlayModalsAssembly, 'createOverlayHostedModalOpenDeps'>;
   setVisibleOverlayVisible: (visible: boolean) => void;
+  /** Parsed cues of the selected secondary track on the video clock; null when not parsed. */
+  getSecondarySubtitleCues: () => readonly SubtitleCue[] | null;
   ensureOverlayStartupPrereqs: () => void;
   ensureOverlayWindowsReadyForVisibilityActions: () => void;
   /** Callbacks the Anki integration reports back through once mining finishes. */
@@ -342,6 +345,14 @@ export function createMiningAssembly(deps: MiningAssemblyDeps) {
     integration.setSubtitleMiningContextConsumer(consumePendingSubtitleMiningContext);
     integration.setMediaTimingReviewCallback(mediaTimingReviewRuntime.requestReview);
     integration.setSentenceFuriganaGenerator(callbacks.generateSentenceFurigana);
+    // Mined ranges are on the video clock, so the tracks are moved there too.
+    integration.setSubtitleTracksForTranslationProvider(() =>
+      buildSubtitleTracksForTranslation({
+        primaryCues: appState.activeParsedSubtitleCues,
+        primarySubDelay: appState.mpvClient?.currentSubDelay ?? 0,
+        secondaryCues: deps.getSecondarySubtitleCues(),
+      }),
+    );
   }
 
   const ipc: IpcSlice<

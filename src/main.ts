@@ -997,6 +997,7 @@ const mining = createMiningAssembly({
   getOverlayNotifications: () => overlayNotificationsRuntime,
   getOverlayModals: () => overlayModals,
   setVisibleOverlayVisible: (visible) => setVisibleOverlayVisible(visible),
+  getSecondarySubtitleCues: () => playback.secondarySubtitleTrackController.getTimelineCues(),
   ensureOverlayStartupPrereqs: () => startup.ensureOverlayStartupPrereqs(),
   ensureOverlayWindowsReadyForVisibilityActions: () =>
     ensureOverlayWindowsReadyForVisibilityActions(),
