@@ -156,13 +156,13 @@ During preview, the yellow cursor follows the audio player's position through th
 | Show more timeline       | Earlier / Later                                                       |
 | Pick the screenshot      | Screenshot slider or Frame buttons (static images only)               |
 | Add previous / next line | `P` / `N` (`Shift+P` / `Shift+N` removes)                             |
-| Preview                  | `Space`                                                               |
-| Confirm                  | `Enter`                                                               |
+| Preview                  | `Space` or Play selection                                             |
+| Export the card          | `Enter` or Export card                                                |
 | Cancel                   | `Escape`                                                              |
 
-The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable and follows the lines you add or remove. Once you type in it, your text stays, and an added or removed line is put in or cut at its start or end. Its own Prev and Next `−`/`+` buttons add or drop secondary subtitle lines at the start or end of the translation, for when the translator split the sentence differently. They skip lines no dialogue line has, such as a TV in the background. `Enter` in the translation still confirms, and line breaks are written as spaces. Your edit is kept when you choose to keep the original timing or skip media.
+The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. `Enter` in the translation still exports the card, and line breaks are written as spaces. Your edit is kept when you choose to keep the original timing or skip media.
 
-The confirmed range is used as is, with no extra padding. Added lines go into the sentence field. Reset restores the original timing and removes added lines.
+Play selection, Export card and the key hints stay at the bottom of the dialog, so they never scroll away. The exported range is used as is, with no extra padding. Added lines go into the sentence field. Reset timing, next to the 0.1 s buttons, restores the original timing and removes added lines.
 
 When you cancel, you can go back to editing, keep the original timing, create the card without media, or discard it. Discard deletes the Yomitan note or audio card, and skips creation for a sentence card.
 
@@ -196,15 +196,14 @@ Nudges, Earlier/Later, lines and frames repeat while held whichever buttons they
 
 ### Update behavior
 
-| Key                           | What it does                                                     |
-| ----------------------------- | ---------------------------------------------------------------- |
-| `behavior.overwriteAudio`     | Replace existing audio instead of adding to it                   |
-| `behavior.overwriteImage`     | Replace the existing image instead of adding to it               |
-| `behavior.mediaInsertMode`    | `append` or `prepend` new media when not overwriting             |
-| `behavior.autoUpdateNewCards` | Fill new Yomitan notes automatically                             |
-| `behavior.highlightWord`      | Bold the mined word in the sentence field                        |
-| `behavior.stripSpeakerLabels` | Drop bracketed speaker names like `（ひとり）` from the sentence |
-| `behavior.notificationType`   | `overlay`, `system`, `both`, or `none`                           |
+| Key                           | What it does                                         |
+| ----------------------------- | ---------------------------------------------------- |
+| `behavior.overwriteAudio`     | Replace existing audio instead of adding to it       |
+| `behavior.overwriteImage`     | Replace the existing image instead of adding to it   |
+| `behavior.mediaInsertMode`    | `append` or `prepend` new media when not overwriting |
+| `behavior.autoUpdateNewCards` | Fill new Yomitan notes automatically                 |
+| `behavior.highlightWord`      | Bold the mined word in the sentence field            |
+| `behavior.notificationType`   | `overlay`, `system`, `both`, or `none`               |
 
 Manual clipboard updates (`Ctrl/Cmd+V`) always replace the sentence audio, whatever `overwriteAudio` says.
 
