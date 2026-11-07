@@ -27,6 +27,7 @@ export interface NoteUpdateWorkflowDeps {
     fields?: {
       word?: string;
       sentence?: string;
+      sentenceFurigana?: string;
       audio?: string;
       image?: string;
       miscInfo?: string;
@@ -287,7 +288,7 @@ export class NoteUpdateWorkflow {
       }
       const sentenceFuriganaField = this.deps.resolveConfiguredFieldName(
         noteInfo,
-        'SentenceFurigana',
+        config.fields?.sentenceFurigana || 'SentenceFurigana',
       );
       const existingSentenceFurigana = sentenceFuriganaField
         ? noteInfo.fields[sentenceFuriganaField]?.value || ''

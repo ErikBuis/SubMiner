@@ -127,6 +127,9 @@ function buildAnkiRuntimeConfigPatch(
   if (diff.hotReloadFields.includes('ankiConnect.fields.sentence')) {
     fieldPatch.sentence = config.ankiConnect.fields.sentence;
   }
+  if (diff.hotReloadFields.includes('ankiConnect.fields.sentenceFurigana')) {
+    fieldPatch.sentenceFurigana = config.ankiConnect.fields.sentenceFurigana;
+  }
   if (diff.hotReloadFields.includes('ankiConnect.fields.miscInfo')) {
     fieldPatch.miscInfo = config.ankiConnect.fields.miscInfo;
   }
