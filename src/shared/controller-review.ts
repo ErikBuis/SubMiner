@@ -73,9 +73,7 @@ export const CONTROLLER_REVIEW_ACTIONS: readonly ControllerReviewActionDefinitio
   { id: 'endForward', label: 'End +0.1s', step: 'editor', repeat: true },
   { id: 'nextLineAdd', label: 'Add next line', step: 'editor', repeat: true },
   { id: 'nextLineRemove', label: 'Remove next line', step: 'editor', repeat: true },
-  { id: 'useOriginal', label: 'Use original timing', step: 'cancel', repeat: false },
   { id: 'keepEditing', label: 'Keep editing', step: 'cancel', repeat: false },
-  { id: 'skipMedia', label: 'Without media', step: 'cancel', repeat: false },
   { id: 'discard', label: 'Discard card', step: 'cancel', repeat: false },
 ];
 
@@ -149,9 +147,7 @@ const DEFAULT_CONTROLLER_REVIEW_BINDINGS: ResolvedControllerReviewBindings = {
   endForward: combo(dpad('right'), RIGHT_SHOULDER),
   nextLineAdd: combo(dpad('up'), RIGHT_SHOULDER),
   nextLineRemove: combo(dpad('down'), RIGHT_SHOULDER),
-  useOriginal: combo(face('a')),
   keepEditing: combo(face('b')),
-  skipMedia: combo(face('x')),
   discard: combo(face('y')),
 };
 
