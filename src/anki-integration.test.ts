@@ -372,6 +372,55 @@ test('AnkiIntegration highlights mined word in sentence furigana field', () => {
   );
 });
 
+for (const c of [
+  {
+    name: 'bolds the word given its note fields',
+    highlightWord: true,
+    withFields: true,
+    expected: '特技',
+  },
+  {
+    name: 'bolds nothing for a sentence card',
+    highlightWord: true,
+    withFields: false,
+    expected: undefined,
+  },
+  {
+    name: 'bolds nothing with highlightWord off',
+    highlightWord: false,
+    withFields: true,
+    expected: undefined,
+  },
+]) {
+  test(`AnkiIntegration sentence furigana generator ${c.name}`, async () => {
+    const integration = createIntegration({
+      fields: { word: 'Expression', sentence: 'Sentence' },
+      behavior: { highlightWord: c.highlightWord },
+    });
+    const calls: Array<[string, string | undefined]> = [];
+    integration.setSentenceFuriganaGenerator(async (text, highlightedText) => {
+      calls.push([text, highlightedText]);
+      return 'furigana';
+    });
+    const generate = (
+      integration as unknown as {
+        generateSentenceFurigana: (
+          text: string,
+          noteFields?: Record<string, string>,
+        ) => Promise<string | null>;
+      }
+    ).generateSentenceFurigana.bind(integration);
+
+    const result = await generate(
+      '不思議な特技を',
+      c.withFields ? { expression: '特技', sentence: '不思議な特技を' } : undefined,
+    );
+
+    assert.equal(result, 'furigana');
+    assert.deepEqual(calls, [['不思議な特技を', c.expected]]);
+  });
+}
+
 // --- Proxy, field grouping, notifications -----------------------------------
 
 test('AnkiIntegration reports an occupied proxy address through its notification seam', async () => {

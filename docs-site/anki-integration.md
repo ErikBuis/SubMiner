@@ -224,6 +224,8 @@ Sentence cards and audio cards (`Ctrl/Cmd+Shift+A`) always write to the `Sentenc
 
 The card's translation is the secondary subtitle line that translates the mined line(s), picked by timing from the parsed subtitle tracks, as mpv plays them after `sub-delay` and `secondary-sub-delay`. A secondary line that only overlaps the dialogue, such as a sign or a TV in the background, is left out, and a mined line the parsed track has no translation for gets none. Without a readable secondary subtitle file or embedded text track, the secondary subtitle on screen is used.
 
+If the note type has a `SentenceFurigana` field, sentence cards fill it with readings from the dictionary parser. Audio cards regenerate it when they replace the note's sentence, so it never spells the word card's old sentence. When the parser can't read the whole sentence, the field is left empty and the card shows the plain sentence.
+
 ### Sentence translations
 
 Two behavior options change how the sentence and its translation come out, on sentence cards and on word cards with `fields.wordCardTranslation`:
