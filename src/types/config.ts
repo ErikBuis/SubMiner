@@ -298,6 +298,8 @@ export interface ResolvedConfig {
     behavior: {
       overwriteAudio: boolean;
       overwriteImage: boolean;
+      widenSentenceToTranslation: boolean;
+      formatTranslation: boolean;
       mediaInsertMode: 'append' | 'prepend';
       highlightWord: boolean;
       notificationType: NotificationType;
