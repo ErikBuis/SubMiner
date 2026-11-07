@@ -269,7 +269,10 @@ export function registerStatsMiningRoutes(app: Hono, options?: StatsMiningRouteO
 
       mediaFields[sentenceFieldName] = highlightedSentence;
       const furiganaFieldName = noteInfo
-        ? resolveStatsNoteFieldName(noteInfo, 'SentenceFurigana')
+        ? resolveStatsNoteFieldName(
+            noteInfo,
+            ankiConfig.fields?.sentenceFurigana || 'SentenceFurigana',
+          )
         : null;
       if (furiganaFieldName) {
         let furigana: string | null = null;
