@@ -392,6 +392,12 @@ export function createMediaTimingReviewModal(
     setStatus('');
   }
 
+  /** Main ended this review itself (mpv closed or switched files); nothing left to decide. */
+  function handleReviewEnded(reviewId: string): void {
+    if (!payload || payload.reviewId !== reviewId) return;
+    closeResolvedReview();
+  }
+
   /** Callers that need to report a failure set their own status after stopping the preview. */
   function stopPreview(): void {
     previewRequest.invalidate();
@@ -1126,6 +1132,7 @@ export function createMediaTimingReviewModal(
   return {
     openMediaTimingReviewModal,
     handlePreviewEnded,
+    handleReviewEnded,
     handlePreviewPosition,
     requestCancel,
     handleMediaTimingReviewKeydown,

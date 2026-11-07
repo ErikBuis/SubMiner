@@ -570,6 +570,56 @@ test('NoteUpdateWorkflow deletes an existing word card when timing review discar
   assert.deepEqual(harness.notifications, []);
 });
 
+test('NoteUpdateWorkflow leaves the word card unchanged when mpv closes during the review', async () => {
+  const harness = createWorkflowHarness();
+  const mediaCalls: string[] = [];
+  const osd: string[] = [];
+  let deleted = false;
+  let appendedKnownWords = false;
+  harness.deps.captureSubtitleMediaContext = () => ({
+    source: 'overlay',
+    text: 'subtitle-text',
+    startTime: 4,
+    endTime: 6,
+  });
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Sentence', image: 'Picture', miscInfo: 'MiscInfo' },
+    media: { generateAudio: true, generateImage: true },
+    behavior: {},
+  });
+  harness.deps.reviewMediaTiming = async () => ({ action: 'media-closed' });
+  harness.deps.generateAudio = async () => {
+    mediaCalls.push('audio');
+    return Buffer.from('audio');
+  };
+  harness.deps.generateImage = async () => {
+    mediaCalls.push('image');
+    return Buffer.from('image');
+  };
+  harness.deps.formatMiscInfoPattern = () => {
+    mediaCalls.push('misc');
+    return 'Unknown media • 00:00:04';
+  };
+  harness.deps.client.deleteNotes = async () => {
+    deleted = true;
+  };
+  harness.deps.appendKnownWordsFromNoteInfo = () => {
+    appendedKnownWords = true;
+  };
+  harness.deps.showOsdNotification = (message) => {
+    osd.push(message);
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(harness.updates, []);
+  assert.deepEqual(mediaCalls, []);
+  assert.equal(deleted, false);
+  assert.equal(appendedKnownWords, true);
+  assert.deepEqual(harness.notifications, []);
+  assert.deepEqual(osd, ['Card left unchanged: mpv closed or changed video during the review.']);
+});
+
 test('NoteUpdateWorkflow keeps the word card but skips media after timing review', async () => {
   const harness = createWorkflowHarness();
   const mediaCalls: string[] = [];

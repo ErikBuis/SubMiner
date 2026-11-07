@@ -177,6 +177,10 @@ const onMediaTimingReviewPreviewEndedEvent = createQueuedIpcListenerWithPayload<
   IPC_CHANNELS.event.mediaTimingReviewPreviewEnded,
   (payload) => (typeof payload === 'string' ? payload : ''),
 );
+const onMediaTimingReviewEndedEvent = createQueuedIpcListenerWithPayload<string>(
+  IPC_CHANNELS.event.mediaTimingReviewEnded,
+  (payload) => (typeof payload === 'string' ? payload : ''),
+);
 const onOpenPlaylistBrowserEvent = createQueuedIpcListener(IPC_CHANNELS.event.playlistBrowserOpen);
 const onCancelYoutubeTrackPickerEvent = createQueuedIpcListener(
   IPC_CHANNELS.event.youtubePickerCancel,
@@ -471,6 +475,7 @@ const electronAPI: ElectronAPI = {
   onOpenYoutubeTrackPicker: onOpenYoutubeTrackPickerEvent,
   onOpenMediaTimingReview: onOpenMediaTimingReviewEvent,
   onMediaTimingReviewPreviewEnded: onMediaTimingReviewPreviewEndedEvent,
+  onMediaTimingReviewEnded: onMediaTimingReviewEndedEvent,
   onMediaTimingReviewPreviewPosition: (
     callback: (position: MediaTimingReviewPreviewPosition) => void,
   ): void => {

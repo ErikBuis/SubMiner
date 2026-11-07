@@ -29,7 +29,7 @@ import {
   KikuMergePreviewResponse,
   NotificationOptions,
   type WordCardKind,
-  type MediaTimingReviewDecision,
+  type MediaTimingReviewOutcome,
   type MediaTimingReviewRequest,
 } from './types/anki';
 import { AiConfig } from './types/integrations';
@@ -253,7 +253,7 @@ export class AnkiIntegration {
     | ((text: string, highlightedText?: string) => Promise<string | null>)
     | null = null;
   private mediaTimingReviewCallback:
-    | ((request: MediaTimingReviewRequest) => Promise<MediaTimingReviewDecision>)
+    | ((request: MediaTimingReviewRequest) => Promise<MediaTimingReviewOutcome>)
     | null = null;
   private noteIdRedirects = new Map<number, number>();
   private trackedDuplicateNoteIds = new Map<number, number[]>();
@@ -1905,14 +1905,14 @@ export class AnkiIntegration {
   }
 
   setMediaTimingReviewCallback(
-    callback: ((request: MediaTimingReviewRequest) => Promise<MediaTimingReviewDecision>) | null,
+    callback: ((request: MediaTimingReviewRequest) => Promise<MediaTimingReviewOutcome>) | null,
   ): void {
     this.mediaTimingReviewCallback = callback;
   }
 
   private async reviewMediaTiming(
     request: Omit<MediaTimingReviewRequest, 'audioPadding' | 'maxMediaDuration'>,
-  ): Promise<MediaTimingReviewDecision> {
+  ): Promise<MediaTimingReviewOutcome> {
     if (this.config.media?.reviewTiming !== true || !this.mediaTimingReviewCallback) {
       log.debug(
         `[media-timing] review skipped: reviewTiming=${String(this.config.media?.reviewTiming)} callback=${this.mediaTimingReviewCallback ? 'set' : 'missing'}`,
