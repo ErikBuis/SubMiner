@@ -476,6 +476,7 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
     screen: deps.screen,
     overlayManager: {
       getMainWindow: () => overlayManager.getMainWindow(),
+      getModalWindow: () => overlayManager.getModalWindow(),
       getVisibleOverlayVisible: () => overlayManager.getVisibleOverlayVisible(),
     },
     overlayContentMeasurementStore: {
