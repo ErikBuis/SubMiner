@@ -98,13 +98,12 @@ export type RendererDom = {
   mediaTimingReviewReset: HTMLButtonElement;
   mediaTimingReviewCancel: HTMLButtonElement;
   mediaTimingReviewConfirm: HTMLButtonElement;
+  mediaTimingReviewWithoutMedia: HTMLInputElement;
   mediaTimingReviewStatus: HTMLDivElement;
   mediaTimingReviewEditor: HTMLDivElement;
   mediaTimingReviewCancelStep: HTMLDivElement;
   mediaTimingReviewCancelMessage: HTMLParagraphElement;
   mediaTimingReviewCancelBack: HTMLButtonElement;
-  mediaTimingReviewUseOriginal: HTMLButtonElement;
-  mediaTimingReviewSkipMedia: HTMLButtonElement;
   mediaTimingReviewDiscard: HTMLButtonElement;
 
   kikuModal: HTMLDivElement;
@@ -383,6 +382,9 @@ export function resolveRendererDom(): RendererDom {
     mediaTimingReviewReset: getRequiredElement<HTMLButtonElement>('mediaTimingReviewReset'),
     mediaTimingReviewCancel: getRequiredElement<HTMLButtonElement>('mediaTimingReviewCancel'),
     mediaTimingReviewConfirm: getRequiredElement<HTMLButtonElement>('mediaTimingReviewConfirm'),
+    mediaTimingReviewWithoutMedia: getRequiredElement<HTMLInputElement>(
+      'mediaTimingReviewWithoutMedia',
+    ),
     mediaTimingReviewStatus: getRequiredElement<HTMLDivElement>('mediaTimingReviewStatus'),
     mediaTimingReviewEditor: getRequiredElement<HTMLDivElement>('mediaTimingReviewEditor'),
     mediaTimingReviewCancelStep: getRequiredElement<HTMLDivElement>('mediaTimingReviewCancelStep'),
@@ -392,10 +394,6 @@ export function resolveRendererDom(): RendererDom {
     mediaTimingReviewCancelBack: getRequiredElement<HTMLButtonElement>(
       'mediaTimingReviewCancelBack',
     ),
-    mediaTimingReviewUseOriginal: getRequiredElement<HTMLButtonElement>(
-      'mediaTimingReviewUseOriginal',
-    ),
-    mediaTimingReviewSkipMedia: getRequiredElement<HTMLButtonElement>('mediaTimingReviewSkipMedia'),
     mediaTimingReviewDiscard: getRequiredElement<HTMLButtonElement>('mediaTimingReviewDiscard'),
 
     kikuModal: getRequiredElement<HTMLDivElement>('kikuFieldGroupingModal'),

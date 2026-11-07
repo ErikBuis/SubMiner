@@ -40,8 +40,8 @@ function createLayout(step: MediaTimingReviewStep = 'editor') {
   return { layout, actions, state };
 }
 
-test('the default review layout binds all 21 actions without conflicts', () => {
-  assert.equal(CONTROLLER_REVIEW_ACTIONS.length, 21);
+test('the default review layout binds all 19 actions without conflicts', () => {
+  assert.equal(CONTROLLER_REVIEW_ACTIONS.length, 19);
   for (const action of CONTROLLER_REVIEW_ACTIONS) {
     assert.equal(CONFIG.reviewBindings[action.id]?.kind, 'combo', action.id);
   }
@@ -78,7 +78,7 @@ test('face buttons press the cancel-step buttons on that step', () => {
 
   layout.poll(pad(['A', 'B', 'X', 'Y']), CONFIG, 10);
 
-  assert.deepEqual(actions, ['useOriginal', 'keepEditing', 'skipMedia', 'discard']);
+  assert.deepEqual(actions, ['keepEditing', 'discard']);
 });
 
 test('buttons already held when the review opens wait for a fresh press', () => {
