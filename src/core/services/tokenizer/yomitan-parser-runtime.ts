@@ -14,6 +14,7 @@ import {
   HACHIDORI_PARSER_BRIDGE_SCRIPT,
   HACHIDORI_SESSION_PARTITION,
 } from './hachidori-parser-bridge';
+import type { MorphologyGuide } from './morphology-guide';
 import { selectYomitanParseTokens } from './parser-selection-stage';
 import {
   buildYomitanScanCallScript,
@@ -1033,6 +1034,7 @@ export async function requestYomitanScanTokens(
     includeNameMatchMetadata?: boolean;
     currentCharacterDictionaryMediaId?: number | null;
     nameCandidates?: { key: string; forms: string[] } | null;
+    morphologyGuide?: MorphologyGuide | null;
   },
 ): Promise<YomitanScanToken[] | null> {
   const yomitanExt = deps.getYomitanExt();
@@ -1078,6 +1080,7 @@ export async function requestYomitanScanTokens(
     dictionaryFrequencyModeByName: metadata?.dictionaryFrequencyModeByName ?? {},
     cacheEpoch: getYomitanScanCacheEpoch(parserWindow),
     nameCandidateKey: nameCandidates?.key ?? null,
+    morphologyGuide: options?.morphologyGuide ?? null,
   });
 
   try {

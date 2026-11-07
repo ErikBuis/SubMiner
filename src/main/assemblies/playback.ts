@@ -46,6 +46,7 @@ import {
   shouldUseCachedYoutubeParsedCues,
 } from '../runtime/youtube-playback';
 import { MecabTokenizer } from '../../mecab-tokenizer';
+import { createKuromojiMorphologyGuideRuntime } from '../../core/services/tokenizer/morphology-guide';
 import { IPC_CHANNELS } from '../../shared/ipc/contracts';
 import type {
   MpvSubtitleRenderMetrics,
@@ -688,6 +689,10 @@ export function createPlaybackAssembly(deps: PlaybackAssemblyDeps) {
   let signalAutoplayReadyFromWarmTokenization: ((path: string | null | undefined) => void) | null =
     null;
 
+  const morphologyGuideRuntime = createKuromojiMorphologyGuideRuntime({
+    logWarn: (message) => logger.warn(message),
+  });
+
   const {
     bindMpvClientEventHandlers,
     createMpvClientRuntimeService: createMpvClientRuntimeServiceHandler,
@@ -1011,6 +1016,10 @@ export function createPlaybackAssembly(deps: PlaybackAssemblyDeps) {
         getFrequencyRank: (text) => appState.frequencyRankLookup(text),
         getYomitanGroupDebugEnabled: () => appState.overlayDebugVisualizationEnabled,
         getMecabTokenizer: () => appState.mecabTokenizer,
+        getMorphologyGuide: (text) =>
+          configService.getConfig().subtitleStyle.morphologyGuidedSplitting
+            ? morphologyGuideRuntime.buildGuide(text)
+            : Promise.resolve(null),
         onTokenizationReady: () => {
           currentMediaTokenizationGate.markReady(
             appState.currentMediaPath?.trim() ||
@@ -1057,7 +1066,17 @@ export function createPlaybackAssembly(deps: PlaybackAssemblyDeps) {
           backgroundWarmupsStarted = started;
         },
         isTexthookerOnlyMode: () => appState.texthookerOnlyMode,
-        ensureYomitanExtensionLoaded: () => deps.ensureYomitanExtensionLoaded().then(() => {}),
+        ensureYomitanExtensionLoaded: () => {
+          // Low-power mode leaves the analyzer to load on the first subtitle.
+          const config = configService.getConfig();
+          if (
+            config.subtitleStyle.morphologyGuidedSplitting &&
+            !config.startupWarmups.lowPowerMode
+          ) {
+            morphologyGuideRuntime.warmup();
+          }
+          return deps.ensureYomitanExtensionLoaded().then(() => {});
+        },
         shouldWarmupMecab: () => {
           const startupWarmups = configService.getConfig().startupWarmups;
           if (startupWarmups.lowPowerMode) {
