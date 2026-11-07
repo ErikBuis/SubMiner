@@ -207,6 +207,8 @@ export interface PlaybackAssemblyDeps {
   restoreOverlayMpvSubtitles: () => void;
   syncOverlayMpvSubtitleSuppression: () => void;
   setOverlayVisible: (visible: boolean) => void;
+  /** The visible overlay window has painted and is shown; mpv's own subtitles can stand down. */
+  isVisibleOverlayWindowContentReady: () => boolean;
   ensureYomitanExtensionLoaded: () => Promise<unknown>;
   shouldInitializeMecabForAnnotations: () => boolean;
   getRuntimeBooleanOption: (id: AnnotationRuntimeOptionId, fallback: boolean) => boolean;
@@ -917,6 +919,8 @@ export function createPlaybackAssembly(deps: PlaybackAssemblyDeps) {
       isAutoStartOverlayEnabled: () => appState.autoStartOverlay,
       setOverlayVisible: (visible: boolean) => deps.setOverlayVisible(visible),
       isVisibleOverlayVisible: () => overlayManager.getVisibleOverlayVisible(),
+      shouldSuppressMpvSubtitles: () =>
+        overlayManager.getVisibleOverlayVisible() && deps.isVisibleOverlayWindowContentReady(),
       getReconnectTimer: () => appState.reconnectTimer,
       setReconnectTimer: (timer: ReturnType<typeof setTimeout> | null) => {
         appState.reconnectTimer = timer;

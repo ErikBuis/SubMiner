@@ -111,6 +111,8 @@ export interface MpvIpcClientProtocolDeps {
   autoStartOverlay: boolean;
   setOverlayVisible: (visible: boolean) => void;
   isVisibleOverlayVisible: () => boolean;
+  // Defaults to isVisibleOverlayVisible. The app keeps mpv's subtitles while the overlay loads.
+  shouldSuppressMpvSubtitles?: () => boolean;
   getReconnectTimer: () => ReturnType<typeof setTimeout> | null;
   setReconnectTimer: (timer: ReturnType<typeof setTimeout> | null) => void;
   shouldAutoLoadSecondarySubTrack?: (path: string) => boolean;
@@ -402,6 +404,8 @@ export class MpvIpcClient implements MpvClient {
       getResolvedConfig: () => this.deps.getResolvedConfig(),
       getSubtitleMetrics: () => this.mpvSubtitleRenderMetrics,
       isVisibleOverlayVisible: () => this.deps.isVisibleOverlayVisible(),
+      shouldSuppressMpvSubtitles: () =>
+        this.deps.shouldSuppressMpvSubtitles?.() ?? this.deps.isVisibleOverlayVisible(),
       emitSubtitleChange: (payload) => {
         this.emit('subtitle-change', payload);
       },

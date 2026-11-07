@@ -63,6 +63,7 @@ function makeDeps(recorder: Recorder, state: FixtureState) {
       info: spy('logger.info', noop),
       warn: spy('logger.warn', noop),
     },
+    isVisibleOverlayWindowContentReady: spy('overlay.isContentReady', () => true),
     overlayManager: {
       getMainWindow: spy('overlay.getMainWindow', () => state.mainWindow),
       setMainWindow: spy('overlay.setMainWindow', noop),
@@ -386,7 +387,7 @@ for (const trackedGeometry of [null, { x: 10, y: 20, width: 1280, height: 720 }]
       setSubVisibility: recorder.spy('mpv.setSubVisibility', () => {}),
     } as unknown as typeof deps.appState.mpvClient;
     // An opaque token: the assembly only hands the created window to the overlay manager.
-    state.window = {} as BrowserWindow;
+    state.window = { on: () => {} } as unknown as BrowserWindow;
 
     overlay.linuxOverlayModeRuntime.sync(true);
 

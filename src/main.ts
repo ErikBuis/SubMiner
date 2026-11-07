@@ -133,6 +133,7 @@ import {
   createOverlayManager,
   createOverlayWindow as createOverlayWindowCore,
   hasMpvWebsocketPlugin,
+  isOverlayWindowContentReady,
   loadSubtitlePosition as loadSubtitlePositionCore,
   promoteSettingsWindowAboveOverlay,
   runStartupBootstrapRuntime,
@@ -730,6 +731,18 @@ async function initializeDiscordPresenceService(): Promise<void> {
   await appState.discordPresenceService.start();
   discordPresenceRuntime.publishDiscordPresence();
 }
+// The overlay takes over from mpv's subtitles once its window has painted and is shown.
+// On Windows it stays hidden after painting until the window tracker has found mpv.
+function isVisibleOverlayWindowContentReady(): boolean {
+  const overlayWindow = overlayManager.getMainWindow();
+  return Boolean(
+    overlayWindow &&
+    !overlayWindow.isDestroyed() &&
+    isOverlayWindowContentReady(overlayWindow) &&
+    overlayWindow.isVisible(),
+  );
+}
+
 const configDerivedRuntime = createConfigDerivedRuntime({
   getResolvedConfig: () => configService.getConfig(),
   getRuntimeOptionsManager: () => appState.runtimeOptionsManager,
@@ -826,6 +839,7 @@ const overlay = createOverlayAssembly({
   getYomitanSession: () => yomitan.getOverlaySession(),
   getOverlayShortcuts: () => shortcuts.overlayShortcutsRuntime,
   getOverlayNotifications: () => overlayNotificationsRuntime,
+  isVisibleOverlayWindowContentReady: () => isVisibleOverlayWindowContentReady(),
   getRuntimeOptionsState: () => getRuntimeOptionsStateHandler(),
   getOverlayForegroundSeparateWindows: () => getOverlayForegroundSeparateWindows(),
   promoteStatsOverlayAbovePlayback: () => {
@@ -1390,6 +1404,7 @@ const playback = createPlaybackAssembly({
   restoreOverlayMpvSubtitles: () => restoreOverlayMpvSubtitles(),
   syncOverlayMpvSubtitleSuppression: () => syncOverlayMpvSubtitleSuppression(),
   setOverlayVisible: (visible) => setOverlayVisible(visible),
+  isVisibleOverlayWindowContentReady: () => isVisibleOverlayWindowContentReady(),
   ensureYomitanExtensionLoaded: () => yomitan.ensureExtensionLoaded(),
   shouldInitializeMecabForAnnotations: () =>
     annotationOptions.shouldInitializeMecabForAnnotations(),

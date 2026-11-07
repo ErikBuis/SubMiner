@@ -11,6 +11,7 @@ local function run_plugin_scenario(config)
 		osd = {},
 		logs = {},
 		property_sets = {},
+		property_deletes = {},
 		periodic_timers = {},
 		timeouts = {},
 		timeout_handles = {},
@@ -208,6 +209,9 @@ local function run_plugin_scenario(config)
 			if name == "pause" then
 				config.paused = value == true
 			end
+		end
+		function mp.del_property(name)
+			recorded.property_deletes[#recorded.property_deletes + 1] = name
 		end
 		function mp.set_property(name, value)
 			recorded.property_sets[#recorded.property_sets + 1] = {
@@ -1642,10 +1646,29 @@ do
 		"auto-start visible overlay should force overlay loading OSD spinner on start-file"
 	)
 	assert_true(
+		has_property_set(recorded.property_sets, "sub-visibility", true),
+		"mpv should show its own subtitles while the overlay is still loading"
+	)
+	assert_true(
+		has_property_set(recorded.property_sets, "user-data/subminer/sub-visibility-before-overlay", false),
+		"the visibility from before the loading fallback should be kept for the app to restore"
+	)
+	recorded.script_messages["subminer-visible-overlay-hidden"]()
+	assert_true(
+		recorded.property_sets[#recorded.property_sets].name == "sub-visibility"
+			and recorded.property_sets[#recorded.property_sets].value == false,
+		"hiding the overlay should end the loading fallback with the earlier visibility"
+	)
+	assert_true(
+		recorded.property_deletes[1] == "user-data/subminer/sub-visibility-before-overlay",
+		"ending the fallback should drop the saved pre-loading visibility"
+	)
+	recorded.script_messages["subminer-visible-overlay-shown"]()
+	assert_true(
 		#recorded.periodic_timers == 1,
 		"auto-start visible overlay should refresh the early overlay loading OSD"
 	)
-	local overlay_loading_deadline = find_timeout_handle(recorded, 30)
+	local overlay_loading_deadline = find_timeout_handle(recorded, 60)
 	assert_true(overlay_loading_deadline ~= nil, "overlay loading OSD should have a bounded deadline")
 	local overlay_loading_timer = recorded.periodic_timers[1]
 	recorded.periodic_timers[1].callback()
@@ -1677,6 +1700,10 @@ do
 		"overlay loading ready script message should be registered"
 	)
 	recorded.script_messages["subminer-overlay-loading-ready"]()
+	assert_true(
+		recorded.osd[#recorded.osd] == "",
+		"overlay loading ready should clear the spinner's last frame"
+	)
 	assert_true(
 		recorded.periodic_timers[1].killed == true,
 		"overlay loading ready should stop the early overlay loading OSD refresher"
@@ -1759,7 +1786,7 @@ do
 		"warm playlist advance should not restart the overlay loading OSD for an already-ready overlay"
 	)
 	assert_true(
-		count_live_periodic_timers(recorded) == 0 and count_live_timeouts(recorded, 30) == 0,
+		count_live_periodic_timers(recorded) == 0 and count_live_timeouts(recorded, 60) == 0,
 		"warm playlist advance should not leave an overlay loading spinner or deadline running"
 	)
 end
@@ -1792,7 +1819,7 @@ do
 	fire_event(recorded, "file-loaded")
 	fire_short_timeouts(recorded)
 	assert_true(
-		count_live_periodic_timers(recorded) == 1 and count_live_timeouts(recorded, 30) == 1,
+		count_live_periodic_timers(recorded) == 1 and count_live_timeouts(recorded, 60) == 1,
 		"overlay loading OSD should still be running before the app dismisses it"
 	)
 	assert_true(
@@ -1801,7 +1828,7 @@ do
 	)
 	recorded.script_messages["subminer-overlay-loading-dismissed"]()
 	assert_true(
-		count_live_periodic_timers(recorded) == 0 and count_live_timeouts(recorded, 30) == 0,
+		count_live_periodic_timers(recorded) == 0 and count_live_timeouts(recorded, 60) == 0,
 		"overlay loading dismissed should stop the spinner and its deadline"
 	)
 	fire_event(recorded, "end-file", { reason = "eof" })
@@ -1876,7 +1903,7 @@ do
 	})
 	assert_true(recorded ~= nil, "plugin failed to load for overlay loading deadline scenario: " .. tostring(err))
 	fire_event(recorded, "start-file")
-	local overlay_loading_deadline = find_timeout_handle(recorded, 30)
+	local overlay_loading_deadline = find_timeout_handle(recorded, 60)
 	assert_true(overlay_loading_deadline ~= nil, "overlay loading deadline should be scheduled")
 	overlay_loading_deadline.callback()
 	assert_true(
@@ -1890,6 +1917,50 @@ do
 	assert_true(
 		has_log_containing(recorded.logs, "Overlay loading deadline expired"),
 		"overlay loading deadline should leave a diagnostic log entry"
+	)
+	recorded.script_messages["subminer-overlay-loading-start"]()
+	assert_true(
+		#recorded.periodic_timers == 2 and recorded.periodic_timers[2].killed ~= true,
+		"the app's overlay loading request should start the plugin spinner"
+	)
+end
+
+do
+	local recorded, err = run_plugin_scenario({
+		defer_timeouts = true,
+		process_list = "",
+		option_overrides = {
+			binary_path = binary_path,
+			auto_start = "yes",
+			auto_start_visible_overlay = "yes",
+			auto_start_pause_until_ready = "yes",
+			osd_messages = true,
+			socket_path = "/tmp/subminer-socket",
+		},
+		input_ipc_server = "/tmp/subminer-socket",
+		media_title = "Random Movie",
+		files = {
+			[binary_path] = true,
+		},
+	})
+	assert_true(recorded ~= nil, "plugin failed to load for gate-owned OSD scenario: " .. tostring(err))
+	fire_event(recorded, "start-file")
+	fire_event(recorded, "file-loaded")
+	local osd_count = #recorded.osd
+	recorded.script_messages["subminer-overlay-loading-start"]()
+	assert_true(
+		#recorded.osd == osd_count,
+		"the app's loading request should not take the OSD from the pause-until-ready messages"
+	)
+	recorded.script_messages["subminer-autoplay-ready"]()
+	assert_true(
+		recorded.osd[#recorded.osd] == "SubMiner: Overlay loading |",
+		"playback starting before the overlay is shown should bring the loading spinner back"
+	)
+	recorded.script_messages["subminer-overlay-loading-ready"]()
+	assert_true(
+		recorded.osd[#recorded.osd] == "",
+		"the overlay taking over should clear the spinner"
 	)
 end
 
@@ -1913,6 +1984,79 @@ do
 	assert_true(
 		not has_osd_message(recorded.osd, "SubMiner: Overlay loading |"),
 		"auto-start hidden visible overlay should not show early overlay loading OSD"
+	)
+	assert_true(
+		not has_property_set(recorded.property_sets, "sub-visibility", true),
+		"mpv subtitles should stay as they are when no visible overlay is coming"
+	)
+end
+
+do
+	local recorded, err = run_plugin_scenario({
+		process_list = "",
+		option_overrides = {
+			binary_path = binary_path,
+			auto_start = "yes",
+			auto_start_visible_overlay = "yes",
+			socket_path = "/tmp/subminer-socket",
+		},
+		input_ipc_server = "/tmp/subminer-socket",
+		media_title = "Random Movie",
+		files = {
+			[binary_path] = true,
+		},
+	})
+	assert_true(recorded ~= nil, "plugin failed to load for app restore notice scenario: " .. tostring(err))
+	fire_event(recorded, "start-file")
+	local sets_before_applied = #recorded.property_sets
+	recorded.script_messages["subminer-sub-visibility-restored"]("applied")
+	assert_true(
+		#recorded.property_sets == sets_before_applied,
+		"an app restore that already applied its value should not be overwritten by the plugin"
+	)
+	assert_true(
+		recorded.property_deletes[1] == "user-data/subminer/sub-visibility-before-overlay",
+		"an applied app restore should drop the saved visibility"
+	)
+	fire_event(recorded, "end-file", { reason = "eof" })
+	fire_event(recorded, "start-file")
+	recorded.script_messages["subminer-sub-visibility-restored"]("none")
+	local last_set = recorded.property_sets[#recorded.property_sets]
+	assert_true(
+		last_set.name == "sub-visibility" and last_set.value == false,
+		"the app quitting before its capture should still end the loading fallback"
+	)
+	assert_true(
+		recorded.property_deletes[2] == "user-data/subminer/sub-visibility-before-overlay",
+		"ending the fallback on the app's notice should drop the saved visibility"
+	)
+end
+
+do
+	local recorded, err = run_plugin_scenario({
+		process_list = "",
+		option_overrides = {
+			binary_path = binary_path,
+			auto_start = "yes",
+			auto_start_visible_overlay = "no",
+			overlay_loading_osd = "yes",
+			socket_path = "/tmp/subminer-socket",
+		},
+		input_ipc_server = "/tmp/subminer-socket",
+		media_title = "Random Movie",
+		files = {
+			[binary_path] = true,
+		},
+	})
+	assert_true(recorded ~= nil, "plugin failed to load for loading OSD without visible overlay: " .. tostring(err))
+	fire_event(recorded, "start-file")
+	assert_true(
+		has_osd_message(recorded.osd, "SubMiner: Overlay loading |"),
+		"overlay_loading_osd should still show the spinner"
+	)
+	assert_true(
+		not has_property_set(recorded.property_sets, "sub-visibility", true),
+		"the subtitle fallback should wait for a visible overlay, not the spinner option"
 	)
 end
 
@@ -2576,6 +2720,11 @@ do
 		},
 	})
 	assert_true(recorded ~= nil, "plugin failed to load for mismatched socket auto-start scenario: " .. tostring(err))
+	fire_event(recorded, "start-file")
+	assert_true(
+		not has_property_set(recorded.property_sets, "sub-visibility", true),
+		"mpv subtitles should stay as they are when the overlay won't attach to this mpv"
+	)
 	fire_event(recorded, "file-loaded")
 	local start_call = find_start_call(recorded.async_calls)
 	assert_true(
