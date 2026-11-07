@@ -164,7 +164,9 @@ You can drive the overlay with a gamepad.
 3. Press `Y` on the controller to turn on keyboard-only mode. Most controller actions only work in this mode.
 4. Move between words with the left stick, press `A` to look one up, and `X` to mine it.
 
-Press `Alt+C` to choose a controller and remap buttons. Click an action's **Learn** button, then press the button you want. Set **Button Style** to Xbox, Nintendo or PlayStation so buttons are named as printed on your controller; it is saved per controller. Changes apply right away. When two actions share an input, both fire, so their rows show a ⚠ warning naming the other action; this includes a button on the D-pad while a **(D-pad)** row under **Navigation** is still on, and a stick direction used by a stick action. The window only sees a controller after you press one of its buttons; until then it shows the bindings of the controller in use as a preview, and editing stays locked. With several controllers connected, it selects the one you pressed last. `Alt+Shift+C` shows raw input values for unusual pads.
+Press `Alt+C` to choose a controller and remap buttons. Click an action's **Learn** button, then press the button you want, or hold one button and press another to make a combo such as `L1` + D-pad right. Set **Button Style** to Xbox, Nintendo or PlayStation so buttons are named as printed on your controller; it is saved per controller. Changes apply right away. When two actions share an input, both fire, so their rows show a ⚠ warning naming the other action; this includes a button on the D-pad while a **(D-pad)** row under **Navigation** is still on, and a stick direction used by a stick action. The window only sees a controller after you press one of its buttons; until then it shows the bindings of the controller in use as a preview, and editing stays locked. With several controllers connected, it selects the one you pressed last. `Alt+Shift+C` shows raw input values for unusual pads.
+
+A combo fires each time you press its second button while the first is down, so holding `L1` and pressing right twice runs it twice. While a combo's hold button is down, other buttons only run combos that use it, and its press no longer drives a **(D-pad)** or stick row. A hold button can keep its own action: that action then runs when you let go, unless you pressed another bound button during the hold. The exception is **Show Secondary Subtitle (Hold)**, which can't wait for release, so its row warns if it shares a hold button.
 
 | Button                | Action                                 |
 | --------------------- | -------------------------------------- |
@@ -184,12 +186,15 @@ Press `Alt+C` to choose a controller and remap buttons. Click an action's **Lear
 | Unbound by default    | Previous / next subtitle line          |
 | Unbound by default    | Replay the current line, then pause    |
 | Unbound by default    | Play the next line, then pause         |
+| Unbound by default    | Move by word or by character           |
 
 The secondary subtitle hold works with or without keyboard-only mode. Assign it with **Learn** on the **Show Secondary Subtitle (Hold)** row in `Alt+C`. While held, the secondary subtitle shows as if its mode were `visible`; releasing the button returns it to your chosen mode.
 
 The **Subtitles** rows in `Alt+C` do the same as the keyboard shortcuts: **Previous Subtitle** and **Next Subtitle** jump a line like `Shift+H` / `Shift+L` (a paused video stays paused), **Replay Subtitle** is `Ctrl+Shift+H` and **Play Next Subtitle** is `Ctrl+Shift+L`. Like the secondary subtitle hold and pause, they work with or without keyboard-only mode. If you put them on the D-pad, click **Clear** on the matching **(D-pad)** row under **Navigation** too (both rows warn until you do), or in keyboard-only mode the D-pad will also move between words or scroll the popup.
 
 **Previous Entry** and **Next Entry** move one word entry at a time in the open popup, and Mine Card then mines the selected entry. They send Yomitan's default `Alt+Up` / `Alt+Down` entry shortcuts, so they stop working if you rebind those in Yomitan's keyboard settings. If you assign them to the D-pad, click **Clear** on the **Popup Scroll (D-pad)** row too, or the D-pad will also scroll the popup.
+
+When the subtitle is split in the wrong place, a word can start in the middle of a box (in もっとハ|キ|ハキしなくちゃ, ハキハキ starts at the last character of the first box) and moving by word never reaches it. In keyboard-only mode, press `C` on the keyboard, or the **Toggle Character Navigation** button (unbound by default, under **Navigation** in `Alt+C`), to move one character at a time: the box turns orange and covers one character, and a lookup searches from that character, so Yomitan finds the longest word starting there. Press it again to go back to moving by word. It stays on until you switch it back, even after leaving keyboard-only mode.
 
 The media timing review and duplicate card (field grouping) dialogs have their own controller layouts, which you can change in the **Review media timing** and **Duplicate card (field grouping)** groups of `Alt+C`; see [Review media timing](/anki-integration#with-a-controller) and [Field grouping](/anki-integration#field-grouping-with-a-controller).
 
