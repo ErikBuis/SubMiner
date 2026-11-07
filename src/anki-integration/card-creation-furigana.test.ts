@@ -341,3 +341,159 @@ test('audio card leaves a note without a furigana field alone', async () => {
   assert.deepEqual(calls, []);
   assert.deepEqual(updates, [{ Sentence: '字幕' }]);
 });
+
+function createClipboardUpdateService(options: {
+  noteFields: Record<string, string>;
+  updates: Array<Record<string, string>>;
+  calls?: FuriganaCall[];
+  fields?: Record<string, string>;
+  generateSentenceFurigana?: CardCreationDeps['generateSentenceFurigana'];
+}): CardCreationService {
+  return new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () => createAnkiConfig({ fields: options.fields }),
+      getTimingTracker: () =>
+        ({
+          findTiming: (text: string) =>
+            text === '字幕' || text === '次の行' ? { startTime: 12, endTime: 14 } : null,
+        }) as never,
+      client: createFakeClient({
+        findNotes: async () => [42],
+        notesInfo: async () => [
+          {
+            noteId: 42,
+            fields: Object.fromEntries(
+              Object.entries(options.noteFields).map(([name, value]) => [name, { value }]),
+            ),
+          },
+        ],
+        updateNoteFields: async (_noteId, fields) => {
+          options.updates.push(fields);
+        },
+      }),
+      extractFields: (fields) =>
+        Object.fromEntries(
+          Object.entries(fields).map(([name, { value }]) => [name.toLowerCase(), value]),
+        ),
+      generateSentenceFurigana:
+        options.generateSentenceFurigana ??
+        (async (text, noteFields) => {
+          options.calls?.push({ text, noteFields });
+          return ' 字幕[じまく]';
+        }),
+    }),
+  );
+}
+
+test('clipboard update regenerates furigana for the pasted sentence, bolding the word', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const calls: FuriganaCall[] = [];
+  const service = createClipboardUpdateService({
+    noteFields: {
+      Expression: '猫',
+      Sentence: '<b>猫</b>を見た。',
+      SentenceFurigana: '<b> 猫[ねこ]</b>を 見[み]た。',
+    },
+    updates,
+    calls,
+  });
+
+  await service.updateLastAddedFromClipboard('字幕');
+
+  assert.deepEqual(calls, [
+    {
+      text: '字幕',
+      noteFields: {
+        expression: '猫',
+        sentence: '<b>猫</b>を見た。',
+        sentencefurigana: '<b> 猫[ねこ]</b>を 見[み]た。',
+      },
+    },
+  ]);
+  assert.equal(updates[0]?.Sentence, '字幕');
+  assert.equal(updates[0]?.SentenceFurigana, ' 字幕[じまく]');
+});
+
+test('clipboard update generates furigana for all pasted lines joined', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const calls: FuriganaCall[] = [];
+  const service = createClipboardUpdateService({
+    noteFields: { Sentence: '前の文。', SentenceFurigana: ' 前[まえ]の 文[ぶん]。' },
+    updates,
+    calls,
+  });
+
+  await service.updateLastAddedFromClipboard('字幕\n\n次の行');
+
+  assert.equal(calls[0]?.text, '字幕 次の行');
+  assert.equal(updates[0]?.SentenceFurigana, ' 字幕[じまく]');
+});
+
+test('clipboard update keeps the furigana when the sentence did not change', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const calls: FuriganaCall[] = [];
+  const service = createClipboardUpdateService({
+    noteFields: { Sentence: '<b>字幕</b>', SentenceFurigana: '<b> 字幕[じまく]</b>' },
+    updates,
+    calls,
+  });
+
+  await service.updateLastAddedFromClipboard('字幕');
+
+  assert.deepEqual(calls, []);
+  assert.equal(updates[0]?.Sentence, '字幕');
+  assert.equal('SentenceFurigana' in (updates[0] ?? {}), false);
+});
+
+test('clipboard update writes furigana to the configured sentenceFurigana field', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createClipboardUpdateService({
+    fields: { sentenceFurigana: 'Furigana' },
+    noteFields: { Sentence: '前の文。', Furigana: '前の文。', SentenceFurigana: '' },
+    updates,
+  });
+
+  await service.updateLastAddedFromClipboard('字幕');
+
+  assert.equal(updates[0]?.Furigana, ' 字幕[じまく]');
+  assert.equal('SentenceFurigana' in (updates[0] ?? {}), false);
+});
+
+for (const [name, generateSentenceFurigana] of [
+  ['finds no full parse', async () => null],
+  [
+    'throws',
+    async () => {
+      throw new Error('parser unavailable');
+    },
+  ],
+] as const) {
+  test(`clipboard update clears stale furigana when the parser ${name}`, async () => {
+    const updates: Array<Record<string, string>> = [];
+    const service = createClipboardUpdateService({
+      noteFields: { Sentence: '前の文。', SentenceFurigana: ' 前[まえ]の 文[ぶん]。' },
+      updates,
+      generateSentenceFurigana,
+    });
+
+    await service.updateLastAddedFromClipboard('字幕');
+
+    assert.equal(updates[0]?.Sentence, '字幕');
+    assert.equal(updates[0]?.SentenceFurigana, '');
+  });
+}
+
+test('clipboard update leaves a note without a furigana field alone', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const calls: FuriganaCall[] = [];
+  const service = createClipboardUpdateService({
+    noteFields: { Sentence: '前の文。' },
+    updates,
+    calls,
+  });
+
+  await service.updateLastAddedFromClipboard('字幕');
+
+  assert.deepEqual(calls, []);
+  assert.deepEqual(updates, [{ Sentence: '字幕' }]);
+});
