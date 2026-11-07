@@ -20,7 +20,20 @@ const CONFIG: ResolvedControllerConfig = { ...CORE_DEFAULT_CONFIG.controller, en
 const { repeatDelayMs, repeatIntervalMs } = CONFIG;
 
 // Standard-layout indices; the layout reads them from config.buttonIndices.
-const BUTTON = { A: 0, B: 1, X: 2, Y: 3, L1: 4, R1: 5, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
+const BUTTON = {
+  A: 0,
+  B: 1,
+  X: 2,
+  Y: 3,
+  L1: 4,
+  R1: 5,
+  L2: 6,
+  R2: 7,
+  UP: 12,
+  DOWN: 13,
+  LEFT: 14,
+  RIGHT: 15,
+};
 type ButtonName = keyof typeof BUTTON;
 
 function pad(pressed: ButtonName[] = [], axes: number[] = [0, 0, 0, 0]): GamepadLike {
@@ -40,8 +53,8 @@ function createLayout(step: MediaTimingReviewStep = 'editor') {
   return { layout, actions, state };
 }
 
-test('the default review layout binds all 19 actions without conflicts', () => {
-  assert.equal(CONTROLLER_REVIEW_ACTIONS.length, 19);
+test('the default review layout binds all 21 actions without conflicts', () => {
+  assert.equal(CONTROLLER_REVIEW_ACTIONS.length, 21);
   for (const action of CONTROLLER_REVIEW_ACTIONS) {
     assert.equal(CONFIG.reviewBindings[action.id]?.kind, 'combo', action.id);
   }
@@ -56,7 +69,8 @@ test('the default review layout binds all 19 actions without conflicts', () => {
 test('controller hints read like the documented layout', () => {
   const hints = formatMediaTimingReviewControllerHints(CONFIG, 'standard');
   assert.equal(hints.confirm, 'A');
-  assert.equal(hints.showEarlier, '\u25c0');
+  assert.equal(hints.startBackCoarse, 'L2 + \u25c0');
+  assert.equal(hints.endForwardCoarse, 'R2 + \u25b6');
   assert.equal(hints.startForward, 'L1 + \u25b6');
   assert.equal(hints.nextLineAdd, 'R1 + \u25b2');
   assert.equal(hints.frameReset, 'L1 + R1');
@@ -89,16 +103,16 @@ test('buttons already held when the review opens wait for a fresh press', () => 
   });
 
   // X mined the card that opened this review; it must not also start the preview.
-  layout.activate(pad(['X', 'RIGHT']), CONFIG, 0, { latchHeld: true });
-  layout.poll(pad(['X', 'RIGHT']), CONFIG, 1_000);
+  layout.activate(pad(['X', 'DOWN']), CONFIG, 0, { latchHeld: true });
+  layout.poll(pad(['X', 'DOWN']), CONFIG, 1_000);
   assert.deepEqual(actions, []);
 
   layout.poll(pad(), CONFIG, 1_010);
-  layout.poll(pad(['X', 'RIGHT']), CONFIG, 1_020);
-  assert.deepEqual(actions, ['play', 'showLater']);
+  layout.poll(pad(['X', 'DOWN']), CONFIG, 1_020);
+  assert.deepEqual(actions, ['play', 'frameNext']);
 });
 
-test('D-pad alone moves the timeline and steps screenshot frames', () => {
+test('D-pad up and down alone step screenshot frames, left and right alone do nothing', () => {
   const { layout, actions } = createLayout();
 
   for (const name of ['LEFT', 'RIGHT', 'UP', 'DOWN'] as const) {
@@ -106,7 +120,27 @@ test('D-pad alone moves the timeline and steps screenshot frames', () => {
     layout.poll(pad(), CONFIG, 20);
   }
 
-  assert.deepEqual(actions, ['showEarlier', 'showLater', 'framePrevious', 'frameNext']);
+  assert.deepEqual(actions, ['framePrevious', 'frameNext']);
+});
+
+test('L2 and R2 combos move the start and end by two seconds', () => {
+  const { layout, actions } = createLayout();
+  const press = (names: ButtonName[]) => {
+    layout.poll(pad(names), CONFIG, 10);
+    layout.poll(pad(), CONFIG, 20);
+  };
+
+  press(['L2', 'LEFT']);
+  press(['L2', 'RIGHT']);
+  press(['R2', 'LEFT']);
+  press(['R2', 'RIGHT']);
+
+  assert.deepEqual(actions, [
+    'startBackCoarse',
+    'startForwardCoarse',
+    'endBackCoarse',
+    'endForwardCoarse',
+  ]);
 });
 
 test('L1 combos adjust the start and previous lines, R1 combos the end and next lines', () => {
@@ -153,14 +187,14 @@ test('holding a D-pad combo repeats after the configured delay', () => {
 test('letting go of L1 before the D-pad does not fire the plain D-pad action', () => {
   const { layout, actions } = createLayout();
 
-  layout.poll(pad(['L1', 'RIGHT']), CONFIG, 10);
-  layout.poll(pad(['RIGHT']), CONFIG, 20);
-  layout.poll(pad(['RIGHT']), CONFIG, 2_000);
-  assert.deepEqual(actions, ['startForward']);
+  layout.poll(pad(['L1', 'UP']), CONFIG, 10);
+  layout.poll(pad(['UP']), CONFIG, 20);
+  layout.poll(pad(['UP']), CONFIG, 2_000);
+  assert.deepEqual(actions, ['previousLineAdd']);
 
   layout.poll(pad(), CONFIG, 2_010);
-  layout.poll(pad(['RIGHT']), CONFIG, 2_020);
-  assert.deepEqual(actions, ['startForward', 'showLater']);
+  layout.poll(pad(['UP']), CONFIG, 2_020);
+  assert.deepEqual(actions, ['previousLineAdd', 'framePrevious']);
 });
 
 test('pressing L1 and R1 together resets the screenshot frame once', () => {
@@ -272,7 +306,6 @@ test('repeat follows the action, not the button it is on', () => {
   const config = withReviewBindings({
     startForward: { kind: 'combo', press: { kind: 'face', letter: 'b' }, hold: null },
     cancel: { kind: 'combo', press: { kind: 'dpad', direction: 'right' }, hold: null },
-    showLater: { kind: 'none' },
   });
   const actions: MediaTimingReviewControllerAction[] = [];
   const layout = createMediaTimingReviewControllerLayout({
@@ -291,8 +324,8 @@ test('repeat follows the action, not the button it is on', () => {
 
 test('conflicts are reported, including a learned D-pad button that matches a default', () => {
   const config = withReviewBindings({
-    // A learned raw D-pad left (button 14) is the same input as the default "D-pad ◀".
-    showLater: { kind: 'combo', press: { kind: 'button', buttonIndex: 14 }, hold: null },
+    // A learned raw D-pad up (button 12) is the same input as the default "D-pad ▲".
+    frameNext: { kind: 'combo', press: { kind: 'button', buttonIndex: 12 }, hold: null },
     // R1 alone, while other actions hold R1.
     play: { kind: 'combo', press: { kind: 'button', buttonIndex: 5 }, hold: null },
   });
@@ -301,7 +334,7 @@ test('conflicts are reported, including a learned D-pad button that matches a de
     getControllerReviewInputContext(config, 'standard'),
   );
 
-  assert.equal(issues.showLater, 'Same as Earlier −2s');
-  assert.equal(issues.showEarlier, 'Same as Later +2s');
+  assert.equal(issues.frameNext, 'Same as Previous screenshot frame');
+  assert.equal(issues.framePrevious, 'Same as Next screenshot frame');
   assert.equal(issues.play, 'R1 is also a hold button on this step');
 });

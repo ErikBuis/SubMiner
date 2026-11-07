@@ -23,9 +23,10 @@ import {
 const MINIMUM_CLIP_SECONDS = 0.1;
 const FINE_ADJUST_SECONDS = 0.1;
 const COARSE_ADJUST_SECONDS = 0.5;
-const TIMELINE_EXPANSION_SECONDS = 2;
-/** Shown under the waveform once it has loaded; matches the hint in index.html. */
-const MEDIA_TIMING_REVIEW_DRAG_HINT = 'Drag an edge to trim, or the clip to move it.';
+/** The outer buttons of each edge's group (−2.0s / +2.0s). */
+const JUMP_ADJUST_SECONDS = 2;
+/** How long a nudged edge stays highlighted after the last nudge. */
+const EDGE_HIGHLIGHT_MS = 700;
 const LINE_REVEAL_MARGIN_SECONDS = 1;
 /**
  * Subtitles usually linger past the dialogue for readability, so an untouched clip end
@@ -51,12 +52,14 @@ export const MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS: Record<
   cancel: 'mediaTimingReviewCancel',
   play: 'mediaTimingReviewPlay',
   resetTiming: 'mediaTimingReviewReset',
-  showEarlier: 'mediaTimingReviewShowEarlier',
-  showLater: 'mediaTimingReviewShowLater',
   startBack: 'mediaTimingReviewStartBack',
   startForward: 'mediaTimingReviewStartForward',
+  startBackCoarse: 'mediaTimingReviewStartBackCoarse',
+  startForwardCoarse: 'mediaTimingReviewStartForwardCoarse',
   endBack: 'mediaTimingReviewEndBack',
   endForward: 'mediaTimingReviewEndForward',
+  endBackCoarse: 'mediaTimingReviewEndBackCoarse',
+  endForwardCoarse: 'mediaTimingReviewEndForwardCoarse',
   previousLineAdd: 'mediaTimingReviewPrevAdd',
   previousLineRemove: 'mediaTimingReviewPrevRemove',
   nextLineAdd: 'mediaTimingReviewNextAdd',
@@ -362,6 +365,28 @@ export function resolveMediaTimingReset(options: {
   return { ...clip, timelineStart, timelineEnd };
 }
 
+/**
+ * Widens the visible timeline so an edge moved to `target` stays in view, with the same
+ * margin added lines get. The view never shrinks here.
+ */
+export function revealMediaTimingEdge(options: {
+  target: number;
+  timelineStart: number;
+  timelineEnd: number;
+  mediaEnd: number;
+}): { timelineStart: number; timelineEnd: number } {
+  return {
+    timelineStart:
+      options.target < options.timelineStart
+        ? Math.max(0, options.target - LINE_REVEAL_MARGIN_SECONDS)
+        : options.timelineStart,
+    timelineEnd:
+      options.target > options.timelineEnd
+        ? Math.min(options.mediaEnd, options.target + LINE_REVEAL_MARGIN_SECONDS)
+        : options.timelineEnd,
+  };
+}
+
 /** Maps a pointer position over the timeline track back onto a media timestamp. */
 export function mediaTimingTimeFromPointer(options: {
   clientX: number;
@@ -414,6 +439,7 @@ export function createMediaTimingReviewModal(
   let previewTimer: ReturnType<typeof setTimeout> | null = null;
   let waveformTimer: ReturnType<typeof setTimeout> | null = null;
   let waveformSequence = 0;
+  let edgeHighlightTimer: ReturnType<typeof setTimeout> | null = null;
   let drag: {
     edge: 'start' | 'end' | 'both';
     pointerId: number;
@@ -580,17 +606,30 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewStartValue.textContent = formatMediaTimingTimestamp(selectionStart);
     ctx.dom.mediaTimingReviewEndValue.textContent = formatMediaTimingTimestamp(selectionEnd);
     ctx.dom.mediaTimingReviewDuration.textContent = `${(selectionEnd - selectionStart).toFixed(2)}s`;
-    ctx.dom.mediaTimingReviewTimelineStart.textContent = formatMediaTimingTimestamp(
-      timelineStart,
-      false,
-    );
-    ctx.dom.mediaTimingReviewTimelineEnd.textContent = formatMediaTimingTimestamp(
-      timelineEnd,
-      false,
-    );
-    ctx.dom.mediaTimingReviewShowEarlier.disabled = timelineStart <= 0;
-    ctx.dom.mediaTimingReviewShowLater.disabled =
-      payload?.mediaDuration !== undefined && timelineEnd >= payload.mediaDuration;
+  }
+
+  /**
+   * Lights up an edge's handle and time while it is dragged, and for a moment after a
+   * button or arrow key nudges it. This is separate from focus, so the start handle can
+   * hold focus on open (which makes the arrow keys work) without looking selected.
+   */
+  function highlightEdge(edge: 'start' | 'end' | 'both' | null, linger = false): void {
+    if (edgeHighlightTimer !== null) {
+      clearTimeout(edgeHighlightTimer);
+      edgeHighlightTimer = null;
+    }
+    const modal = ctx.dom.mediaTimingReviewModal;
+    if (edge === null) {
+      delete modal.dataset.activeEdge;
+      return;
+    }
+    modal.dataset.activeEdge = edge;
+    if (linger) {
+      edgeHighlightTimer = setTimeout(() => {
+        edgeHighlightTimer = null;
+        if (drag === null) delete modal.dataset.activeEdge;
+      }, EDGE_HIGHLIGHT_MS);
+    }
   }
 
   function setWaveformState(state: 'loading' | 'ready' | 'unavailable'): void {
@@ -600,11 +639,7 @@ export function createMediaTimingReviewModal(
       state === 'unavailable',
     );
     ctx.dom.mediaTimingReviewWaveformLabel.textContent =
-      state === 'loading'
-        ? 'Isolating dialogue...'
-        : state === 'ready'
-          ? MEDIA_TIMING_REVIEW_DRAG_HINT
-          : 'Waveform unavailable. Drag an edge to trim.';
+      state === 'loading' ? 'Isolating dialogue...' : state === 'ready' ? '' : 'No waveform';
   }
 
   async function loadWaveform(): Promise<void> {
@@ -913,6 +948,37 @@ export function createMediaTimingReviewModal(
     else updateSelection(selectionStart, value);
   }
 
+  /**
+   * Moves one edge by a button or arrow key. The timeline widens when the edge would
+   * leave the view, so the buttons can reach past what is shown.
+   */
+  function nudgeEdge(edge: 'start' | 'end', delta: number): void {
+    if (!payload || resolveInFlight) return;
+    const mediaEnd = payload.mediaDuration ?? Number.POSITIVE_INFINITY;
+    const current = edge === 'start' ? selectionStart : selectionEnd;
+    // Apply the clip rules (minimum length, length cap, media bounds) before widening,
+    // so a move that gets clamped does not widen the view for nothing.
+    const next = constrainMediaTimingSelection({
+      nextStart: edge === 'start' ? current + delta : selectionStart,
+      nextEnd: edge === 'end' ? current + delta : selectionEnd,
+      currentStart: selectionStart,
+      timelineStart: 0,
+      timelineEnd: mediaEnd,
+      mediaEnd,
+      maxMediaDuration: payload.maxMediaDuration,
+    });
+    const target = edge === 'start' ? next.start : next.end;
+    if (Math.abs(target - current) < 0.0005) return;
+    const view = revealMediaTimingEdge({ target, timelineStart, timelineEnd, mediaEnd });
+    const timelineChanged =
+      view.timelineStart !== timelineStart || view.timelineEnd !== timelineEnd;
+    timelineStart = view.timelineStart;
+    timelineEnd = view.timelineEnd;
+    updateSelection(next.start, next.end);
+    highlightEdge(edge, true);
+    if (timelineChanged) queueWaveformLoad(120);
+  }
+
   function applyDrag(clientX: number): void {
     if (!drag) return;
     const pointerTime = mediaTimingTimeFromPointer({
@@ -971,7 +1037,7 @@ export function createMediaTimingReviewModal(
     };
     track.setPointerCapture(event.pointerId);
     ctx.dom.mediaTimingReviewModal.classList.add(edge === 'both' ? 'is-sliding' : 'is-scrubbing');
-    ctx.dom.mediaTimingReviewModal.dataset.dragEdge = edge;
+    highlightEdge(edge);
     if (edge !== 'both') {
       const handle =
         edge === 'start'
@@ -988,23 +1054,24 @@ export function createMediaTimingReviewModal(
     if (track.hasPointerCapture(event.pointerId)) track.releasePointerCapture(event.pointerId);
     drag = null;
     ctx.dom.mediaTimingReviewModal.classList.remove('is-scrubbing', 'is-sliding');
-    delete ctx.dom.mediaTimingReviewModal.dataset.dragEdge;
+    highlightEdge(null);
   }
 
   function cancelDrag(): void {
     drag = null;
     ctx.dom.mediaTimingReviewModal.classList.remove('is-scrubbing', 'is-sliding');
-    delete ctx.dom.mediaTimingReviewModal.dataset.dragEdge;
+    highlightEdge(null);
   }
 
   function handleEdgeKeydown(event: KeyboardEvent, edge: 'start' | 'end'): void {
     const step = event.shiftKey ? COARSE_ADJUST_SECONDS : FINE_ADJUST_SECONDS;
-    const current = edge === 'start' ? selectionStart : selectionEnd;
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') setEdge(edge, current - step);
-    else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') setEdge(edge, current + step);
-    else if (event.key === 'Home') setEdge(edge, timelineStart);
-    else if (event.key === 'End') setEdge(edge, timelineEnd);
-    else return;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') nudgeEdge(edge, -step);
+    else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') nudgeEdge(edge, step);
+    else if (event.key === 'Home' || event.key === 'End') {
+      if (!payload || resolveInFlight) return;
+      setEdge(edge, event.key === 'Home' ? timelineStart : timelineEnd);
+      highlightEdge(edge, true);
+    } else return;
     event.preventDefault();
   }
 
@@ -1224,20 +1291,6 @@ export function createMediaTimingReviewModal(
     queueWaveformLoad();
   }
 
-  function expandTimeline(direction: 'earlier' | 'later'): void {
-    if (!payload) return;
-    if (direction === 'earlier') {
-      timelineStart = Math.max(0, timelineStart - TIMELINE_EXPANSION_SECONDS);
-    } else {
-      timelineEnd = Math.min(
-        payload.mediaDuration ?? Number.POSITIVE_INFINITY,
-        timelineEnd + TIMELINE_EXPANSION_SECONDS,
-      );
-    }
-    renderSelection();
-    queueWaveformLoad(120);
-  }
-
   function handleMediaTimingReviewKeydown(event: KeyboardEvent): boolean {
     if (!ctx.state.mediaTimingReviewModalOpen) return false;
     // Keys that belong to an IME composition in the translation (Escape cancels it).
@@ -1366,20 +1419,19 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewEndHandle.addEventListener('keydown', (event) =>
       handleEdgeKeydown(event, 'end'),
     );
-    ctx.dom.mediaTimingReviewShowEarlier.addEventListener('click', () => expandTimeline('earlier'));
-    ctx.dom.mediaTimingReviewShowLater.addEventListener('click', () => expandTimeline('later'));
-    ctx.dom.mediaTimingReviewStartBack.addEventListener('click', () =>
-      updateSelection(selectionStart - FINE_ADJUST_SECONDS, selectionEnd),
-    );
-    ctx.dom.mediaTimingReviewStartForward.addEventListener('click', () =>
-      updateSelection(selectionStart + FINE_ADJUST_SECONDS, selectionEnd),
-    );
-    ctx.dom.mediaTimingReviewEndBack.addEventListener('click', () =>
-      updateSelection(selectionStart, selectionEnd - FINE_ADJUST_SECONDS),
-    );
-    ctx.dom.mediaTimingReviewEndForward.addEventListener('click', () =>
-      updateSelection(selectionStart, selectionEnd + FINE_ADJUST_SECONDS),
-    );
+    const nudgeButtons: Array<[HTMLButtonElement, 'start' | 'end', number]> = [
+      [ctx.dom.mediaTimingReviewStartBackCoarse, 'start', -JUMP_ADJUST_SECONDS],
+      [ctx.dom.mediaTimingReviewStartBack, 'start', -FINE_ADJUST_SECONDS],
+      [ctx.dom.mediaTimingReviewStartForward, 'start', FINE_ADJUST_SECONDS],
+      [ctx.dom.mediaTimingReviewStartForwardCoarse, 'start', JUMP_ADJUST_SECONDS],
+      [ctx.dom.mediaTimingReviewEndBackCoarse, 'end', -JUMP_ADJUST_SECONDS],
+      [ctx.dom.mediaTimingReviewEndBack, 'end', -FINE_ADJUST_SECONDS],
+      [ctx.dom.mediaTimingReviewEndForward, 'end', FINE_ADJUST_SECONDS],
+      [ctx.dom.mediaTimingReviewEndForwardCoarse, 'end', JUMP_ADJUST_SECONDS],
+    ];
+    for (const [button, edge, delta] of nudgeButtons) {
+      button.addEventListener('click', () => nudgeEdge(edge, delta));
+    }
     ctx.dom.mediaTimingReviewPlay.addEventListener('click', () => void togglePreview());
     ctx.dom.mediaTimingReviewReset.addEventListener('click', () => resetTiming());
     ctx.dom.mediaTimingReviewResetAll.addEventListener('click', () => resetAll());

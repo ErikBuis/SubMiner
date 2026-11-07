@@ -386,6 +386,11 @@
                   aria-hidden="true"
                 ></div>
                 <div class="media-timing-review-playhead" aria-hidden="true"></div>
+                <span
+                  id="mediaTimingReviewWaveformLabel"
+                  class="media-timing-review-waveform-status"
+                  aria-live="polite"
+                ></span>
                 <div
                   id="mediaTimingReviewStartHandle"
                   class="media-timing-review-handle media-timing-review-handle-start"
@@ -403,79 +408,84 @@
                   aria-orientation="horizontal"
                 ></div>
               </div>
-              <div class="media-timing-review-expand-row">
+              <div class="media-timing-review-nudge-row">
+                <div
+                  class="media-timing-review-nudge-group is-start"
+                  role="group"
+                  aria-label="Clip start"
+                >
+                  <button
+                    id="mediaTimingReviewStartBackCoarse"
+                    type="button"
+                    aria-label="Move start backward 2 seconds"
+                  >
+                    &minus;2.0s
+                  </button>
+                  <button
+                    id="mediaTimingReviewStartBack"
+                    type="button"
+                    aria-label="Move start backward 100 milliseconds"
+                  >
+                    &minus;0.1s
+                  </button>
+                  <button
+                    id="mediaTimingReviewStartForward"
+                    type="button"
+                    aria-label="Move start forward 100 milliseconds"
+                  >
+                    +0.1s
+                  </button>
+                  <button
+                    id="mediaTimingReviewStartForwardCoarse"
+                    type="button"
+                    aria-label="Move start forward 2 seconds"
+                  >
+                    +2.0s
+                  </button>
+                </div>
                 <button
-                  id="mediaTimingReviewShowEarlier"
-                  class="media-timing-review-expand-button"
+                  id="mediaTimingReviewReset"
+                  class="media-timing-review-quiet-button media-timing-review-reset-button"
                   type="button"
-                  aria-label="Show two more seconds before the visible timeline without moving the selected clip"
-                  title="Show 2 more seconds before the visible timeline. The selected clip does not move."
+                  aria-label="Reset timing"
+                  title="Restore the mined clip for the lines on the card. Added lines, the translation and the screenshot stay"
                 >
-                  Earlier &minus;2s
+                  Reset
                 </button>
-                <span id="mediaTimingReviewTimelineStart" class="media-timing-review-timeline-edge"
-                  >00:00</span
+                <div
+                  class="media-timing-review-nudge-group is-end"
+                  role="group"
+                  aria-label="Clip end"
                 >
-                <span id="mediaTimingReviewWaveformLabel" class="media-timing-review-timeline-hint"
-                  >Drag an edge to trim, or the clip to move it.</span
-                >
-                <span id="mediaTimingReviewTimelineEnd" class="media-timing-review-timeline-edge"
-                  >00:00</span
-                >
-                <button
-                  id="mediaTimingReviewShowLater"
-                  class="media-timing-review-expand-button"
-                  type="button"
-                  aria-label="Show two more seconds after the visible timeline without moving the selected clip"
-                  title="Show 2 more seconds after the visible timeline. The selected clip does not move."
-                >
-                  Later +2s
-                </button>
-              </div>
-            </div>
-
-            <div class="media-timing-review-fine-grid">
-              <div class="media-timing-review-fine-control">
-                <span>Start</span>
-                <button
-                  id="mediaTimingReviewStartBack"
-                  type="button"
-                  aria-label="Move start backward 100 milliseconds"
-                >
-                  &minus;0.1s
-                </button>
-                <button
-                  id="mediaTimingReviewStartForward"
-                  type="button"
-                  aria-label="Move start forward 100 milliseconds"
-                >
-                  +0.1s
-                </button>
-              </div>
-              <button
-                id="mediaTimingReviewReset"
-                class="media-timing-review-quiet-button media-timing-review-reset-button"
-                type="button"
-                title="Restore the mined clip for the lines on the card. Added lines, the translation and the screenshot stay"
-              >
-                Reset timing
-              </button>
-              <div class="media-timing-review-fine-control">
-                <span>End</span>
-                <button
-                  id="mediaTimingReviewEndBack"
-                  type="button"
-                  aria-label="Move end backward 100 milliseconds"
-                >
-                  &minus;0.1s
-                </button>
-                <button
-                  id="mediaTimingReviewEndForward"
-                  type="button"
-                  aria-label="Move end forward 100 milliseconds"
-                >
-                  +0.1s
-                </button>
+                  <button
+                    id="mediaTimingReviewEndBackCoarse"
+                    type="button"
+                    aria-label="Move end backward 2 seconds"
+                  >
+                    &minus;2.0s
+                  </button>
+                  <button
+                    id="mediaTimingReviewEndBack"
+                    type="button"
+                    aria-label="Move end backward 100 milliseconds"
+                  >
+                    &minus;0.1s
+                  </button>
+                  <button
+                    id="mediaTimingReviewEndForward"
+                    type="button"
+                    aria-label="Move end forward 100 milliseconds"
+                  >
+                    +0.1s
+                  </button>
+                  <button
+                    id="mediaTimingReviewEndForwardCoarse"
+                    type="button"
+                    aria-label="Move end forward 2 seconds"
+                  >
+                    +2.0s
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -569,10 +579,11 @@
                   ><kbd class="media-timing-review-arrow-key" title="Right arrow"
                     ><svg viewBox="0 0 12 12"><path d="M2 6h7.5M6 2.5 9.5 6 6 9.5" /></svg
                   ></kbd>
-                  nudge focused edge</span
+                  nudge edge</span
                 >
-                <span><kbd>P</kbd>/<kbd>N</kbd> add prev/next line</span>
-                <span><kbd>Enter</kbd> export card</span>
+                <span><kbd>Drag</kbd> trim or move clip</span>
+                <span><kbd>P</kbd>/<kbd>N</kbd> add line</span>
+                <span><kbd>Enter</kbd> export</span>
                 <span><kbd>Esc</kbd> cancel</span>
               </div>
             </div>
