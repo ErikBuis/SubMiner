@@ -250,6 +250,26 @@ export class CardCreationService {
     }
   }
 
+  /**
+   * The note's furigana spells the sentence it had; when a new sentence replaces it, write the
+   * new sentence's furigana (bolding the note's word), or clear the field if the parser fails.
+   */
+  private async regenerateSentenceFuriganaForNewSentence(
+    noteInfo: CardCreationNoteInfo,
+    noteSentenceField: string,
+    newSentence: string,
+    noteFields: Record<string, string>,
+    updatedFields: Record<string, string>,
+  ): Promise<void> {
+    const sentenceFuriganaField = this.resolveSentenceFuriganaField(noteInfo);
+    if (!sentenceFuriganaField || sentenceFuriganaField === noteSentenceField) return;
+    if (sameSentenceText(newSentence, noteInfo.fields[noteSentenceField]?.value ?? '')) return;
+    updatedFields[sentenceFuriganaField] = await this.generateSentenceFurigana(
+      newSentence,
+      noteFields,
+    );
+  }
+
   private getConfiguredAnkiTags(): string[] {
     const tags = this.deps.getConfig().tags;
     if (!Array.isArray(tags)) {
@@ -373,6 +393,13 @@ export class CardCreationService {
           if (wordCardKind) {
             this.deps.setCardTypeFields(updatedFields, Object.keys(noteInfo.fields), wordCardKind);
           }
+          await this.regenerateSentenceFuriganaForNewSentence(
+            noteInfo,
+            sentenceField,
+            sentence,
+            fields,
+            updatedFields,
+          );
           updatePerformed = true;
         }
 
@@ -742,23 +769,13 @@ export class CardCreationService {
           }
         }
 
-        // The note's furigana spells the word card's sentence; a new line needs its own.
-        const sentenceFuriganaField = this.resolveSentenceFuriganaField(noteInfo);
-        const noteSentenceField = sentenceField
-          ? this.deps.resolveNoteFieldName(noteInfo, sentenceField)
-          : null;
-        if (
-          sentenceField &&
-          sentenceFuriganaField &&
-          sentenceFuriganaField !== (noteSentenceField ?? sentenceField) &&
-          !sameSentenceText(
-            sentenceText,
-            noteSentenceField ? (noteInfo.fields[noteSentenceField]?.value ?? '') : '',
-          )
-        ) {
-          updatedFields[sentenceFuriganaField] = await this.generateSentenceFurigana(
+        if (sentenceField) {
+          await this.regenerateSentenceFuriganaForNewSentence(
+            noteInfo,
+            this.deps.resolveNoteFieldName(noteInfo, sentenceField) ?? sentenceField,
             sentenceText,
             fields,
+            updatedFields,
           );
         }
 
