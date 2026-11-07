@@ -81,16 +81,15 @@ If cards are not getting filled:
 
 `ankiConnect.fields` maps SubMiner's data to fields on your note type.
 
-| Key                          | Receives                                                                                                                |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `fields.word`                | The mined word                                                                                                          |
-| `fields.audio`               | Sentence audio cut from the video                                                                                       |
-| `fields.wordAudio`           | Read only: Yomitan's word audio, used to time animated images (see below)                                               |
-| `fields.image`               | Screenshot or animated clip                                                                                             |
-| `fields.sentence`            | Subtitle text                                                                                                           |
-| `fields.miscInfo`            | Text from `ankiConnect.metadata.pattern`                                                                                |
-| `fields.wordCardTranslation` | Word cards only: the secondary subtitle translating the mined sentence. Empty by default (no translation on word cards) |
-| `fields.definition`          | Read only: the dictionary meaning, shown in the timing review                                                           |
+| Key                          | Receives                                                                                                                     |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `fields.word`                | The mined word                                                                                                               |
+| `fields.audio`               | Sentence audio cut from the video                                                                                            |
+| `fields.wordAudio`           | Read only: Yomitan's word audio, used to time animated images (see below)                                                    |
+| `fields.image`               | Screenshot or animated clip                                                                                                  |
+| `fields.sentence`            | Subtitle text                                                                                                                |
+| `fields.miscInfo`            | Text from `ankiConnect.metadata.pattern`                                                                                     |
+| `fields.wordCardTranslation` | Word and audio cards: the secondary subtitle translating the mined sentence. Empty by default (no translation on word cards) |
 
 ```jsonc
 "ankiConnect": {
@@ -107,7 +106,7 @@ Hachidori prepares downloadable word audio before it saves a note through the pr
 
 `fields.audio` gets sentence audio, not word audio. Yomitan writes its own dictionary audio into your note (often `ExpressionAudio`), so keep `fields.audio` pointed at a separate field such as the default `SentenceAudio`. Pointing it at Yomitan's word-audio field would overwrite that audio.
 
-`fields.wordCardTranslation` gives word cards the translation of their sentence, picked by timing like on sentence cards. Point it at the note type's translation field, for example `SentenceTranslation` in Kiku, or the field your sentence cards put their translation in. With field grouping, the translations of grouped cards are merged like their sentences.
+`fields.wordCardTranslation` gives word cards the translation of their sentence, picked by timing like on sentence cards. Point it at the note type's translation field, for example `SentenceTranslation` in Kiku, or the field your sentence cards put their translation in. With field grouping, the translations of grouped cards are merged like their sentences. Audio cards (`Ctrl/Cmd+Shift+A`) write it too, for the line they replace the sentence with. When that line has no translation and replaces a different sentence, they clear the old translation, which belonged to the previous sentence.
 
 `ankiConnect.tags` adds tags to every mined or updated card. Set it to `[]` to add none.
 
@@ -144,58 +143,53 @@ With `media.reviewTiming` on, SubMiner pauses before making media for word, sent
 
 Playback stays paused while the dialog is open, even if the popup or hover that paused it goes away. When the dialog closes, playback resumes if it was playing before, or if the popup closed in the meantime. A popup that is still open keeps it paused.
 
-The dialog shows the clip over a speech waveform. When the waveform loads, an untouched clip end moves back to just after the last speech in the line. The orange bars still mark the subtitle's original start and end. The clip's start, length and end sit on top of the waveform. The start is always yellow and the end purple, on the times, the handles and the buttons under the waveform. The edge you are dragging or nudging lights up.
+The dialog shows the clip over a speech waveform. When the waveform loads, an untouched clip end moves back to just after the last speech in the line. The orange bars still mark the subtitle's original start and end.
 
-During preview, the yellow cursor follows the audio player's position through the selected range and disappears when playback finishes. Buffering pauses the cursor too. If the player stops reporting progress for 15 seconds, the preview stops so you can retry.
+During preview, the yellow cursor follows the audio player's position through the selected range and stays at the end when playback finishes. Buffering pauses the cursor too. If the player stops reporting progress for 15 seconds, the preview stops so you can retry.
 
 | Action                   | How                                                                   |
 | ------------------------ | --------------------------------------------------------------------- |
 | Trim                     | Drag either edge, or click the waveform to move the nearer edge there |
 | Nudge an edge            | Arrow keys on a focused edge (100 ms, `Shift` for 500 ms)             |
-| Move an edge by buttons  | −2.0s / −0.1s / +0.1s / +2.0s for the start (left) and end (right)    |
 | Slide the clip           | Drag the middle                                                       |
-| Reach past the view      | Move an edge to or past it; the timeline widens with 1 s to spare     |
+| Show more timeline       | Earlier / Later                                                       |
 | Pick the screenshot      | Screenshot slider or Frame buttons (static images only)               |
 | Add previous / next line | `P` / `N` (`Shift+P` / `Shift+N` removes)                             |
-| Preview                  | `Space` or Play selection                                             |
-| Export the card          | `Enter` or Export card                                                |
+| Preview                  | `Space`                                                               |
+| Confirm                  | `Enter`                                                               |
 | Cancel                   | `Escape`                                                              |
-| Reach any control        | `Tab` / `Shift+Tab`, then `Space` or `Enter` presses a focused button |
 
-The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. `Enter` in the translation still exports the card, and line breaks are written as spaces. Your edit is kept when you export without media.
+The confirmed range is used as is, with no extra padding. Added lines go into the sentence field. Reset restores the original timing and removes added lines.
 
-Play selection, Export card and the key hints stay at the bottom of the dialog, so they never scroll away. The exported range is used as is, with no extra padding. Added lines go into the sentence field. Reset, between the start and end buttons, restores the mined clip and timeline view for the lines on the card. Added lines, the translation and the screenshot stay as they are. Reset all, next to Cancel, undoes every change, unticks Without media and returns the review to how it opened.
-
-Tick Without media, next to Export card, to export the sentence and translation with no audio or image. When you cancel, you can go back to editing or drop the card: a new word card is deleted, a sentence card is not created, and an audio card leaves the earlier note unchanged. To keep the mined timing, use Reset and export.
+When you cancel, you can go back to editing, keep the original timing, create the card without media, or discard it. Discard deletes the Yomitan note or audio card, and skips creation for a sentence card.
 
 #### With a controller
 
-With [controller support](/usage#controller-support) on, the dialog has its own controller layout, and each button shows its controller shortcut. It works with or without keyboard-only mode, and the controller's usual actions pause until the dialog closes. Buttons that were already held when the dialog opened, such as the mine button, wait for a fresh press.
+With [controller support](/usage#controller-support) on, the dialog has its own controller layout, and each button shows its controller shortcut once SubMiner has seen a controller, which takes one button press after connecting it. It works with or without keyboard-only mode, and the controller's usual actions pause until the dialog closes. Buttons that were already held when the dialog opened, such as the mine button, wait for a fresh press.
 
 `A`, `B`, `X` and `Y` mean the letters printed on your controller. Pick your controller's **Button Style** in `Alt+C`: choose Nintendo if A is on the right and B at the bottom (Switch-style and many 8BitDo pads). On PlayStation, `A` is ╳, `B` ○, `X` □ and `Y` △, and the shortcuts on screen show those symbols.
 
-Hold a shoulder button and press the D-pad for the combos. `L1` and `L2` cover the clip start (`L1` also the lines before it), and `R1` and `R2` the clip end (`R1` also the lines after it). D-pad actions repeat while held.
+Hold `L1` or `R1` and press the D-pad for the combos. `L1` covers the clip start and the lines before it, and `R1` the clip end and the lines after it. D-pad actions repeat while held.
 
 This is the default layout:
 
-| Controller              | Editing                          | After Cancel |
-| ----------------------- | -------------------------------- | ------------ |
-| `A`                     | Use this timing                  |              |
-| `B`                     | Cancel                           | Keep editing |
-| `X`                     | Play selection                   |              |
-| `Y`                     | Reset timing                     | Discard      |
-| D-pad up / down         | Previous / next screenshot frame |              |
-| `L1` + D-pad left/right | Start −0.1s / +0.1s              |              |
-| `L2` + D-pad left/right | Start −2.0s / +2.0s              |              |
-| `L1` + D-pad up/down    | Add / remove a previous line     |              |
-| `R1` + D-pad left/right | End −0.1s / +0.1s                |              |
-| `R2` + D-pad left/right | End −2.0s / +2.0s                |              |
-| `R1` + D-pad up/down    | Add / remove a next line         |              |
-| `L1` + `R1`             | Reset the screenshot frame       |              |
+| Controller              | Editing                          | After Cancel        |
+| ----------------------- | -------------------------------- | ------------------- |
+| `A`                     | Use this timing                  | Use original timing |
+| `B`                     | Cancel                           | Keep editing        |
+| `X`                     | Play selection                   | Without media       |
+| `Y`                     | Reset timing                     | Discard             |
+| D-pad left / right      | Earlier −2s / Later +2s          |                     |
+| D-pad up / down         | Previous / next screenshot frame |                     |
+| `L1` + D-pad left/right | Start −0.1s / +0.1s              |                     |
+| `L1` + D-pad up/down    | Add / remove a previous line     |                     |
+| `R1` + D-pad left/right | End −0.1s / +0.1s                |                     |
+| `R1` + D-pad up/down    | Add / remove a next line         |                     |
+| `L1` + `R1`             | Reset the screenshot frame       |                     |
 
 To change it, open `Alt+C` and expand **Review media timing**. Click an action's pencil, then press a button, or hold one button and press another to make a combo; the first button becomes the one you hold. Any button can be a hold button. Changes are saved per controller, and **Reset all** brings back the default layout.
 
-Nudges, lines and frames repeat while held whichever buttons they are on. A row warns you when two actions on the same step share an input, or when an action uses a button alone that other actions hold.
+Nudges, Earlier/Later, lines and frames repeat while held whichever buttons they are on. A row warns you when two actions on the same step share an input, or when an action uses a button alone that other actions hold.
 
 ### Update behavior
 
@@ -223,20 +217,9 @@ Manual clipboard updates (`Ctrl/Cmd+V`) always replace the sentence audio, whate
 }
 ```
 
-Sentence cards always write to the `Sentence` and `SentenceAudio` fields. Audio cards (`Ctrl/Cmd+Shift+A`) update the last-added word note: with `isLapis` or `isKiku` enabled they write to `Sentence` and `SentenceAudio`, otherwise to your `ankiConnect.fields.sentence` and `fields.audio` mapping. If the note has no field by the preferred name, the other one is used. Normal word cards keep using your `ankiConnect.fields` mapping.
+Sentence cards and audio cards (`Ctrl/Cmd+Shift+A`) always write to the `Sentence` and `SentenceAudio` fields. Normal word cards keep using your `ankiConnect.fields` mapping.
 
 The card's translation is the secondary subtitle line that translates the mined line(s), picked by timing from the parsed subtitle tracks, as mpv plays them after `sub-delay` and `secondary-sub-delay`. A secondary line that only overlaps the dialogue, such as a sign or a TV in the background, is left out, and a mined line the parsed track has no translation for gets none. Without a readable secondary subtitle file or embedded text track, the secondary subtitle on screen is used.
-
-### Sentence translations
-
-Two behavior options change how the sentence and its translation come out, on sentence cards and on word cards with `fields.wordCardTranslation`:
-
-| Key                                   | What it does                                                                                                                                                                                           |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `behavior.widenSentenceToTranslation` | Translators often give one secondary line to a sentence the Japanese track splits over several lines. The card sentence and its media then widen to all of those lines, up to `media.maxMediaDuration` |
-| `behavior.formatTranslation`          | Start the translation with a capital letter and add ` (...)` after a trailing comma, since a line cut off mid-sentence stands alone on the card                                                        |
-
-Widening needs both tracks to be readable subtitle files or embedded text tracks.
 
 ## Word card type (Kiku/Lapis)
 
@@ -289,7 +272,7 @@ The manual dialog cancels itself after 90 seconds. Identical entries are not ded
 
 ### With a controller {#field-grouping-with-a-controller}
 
-With [controller support](/usage#controller-support) on, the dialog has its own controller layout, and each control shows its controller shortcut. Like the [media timing review](#with-a-controller), it works with or without keyboard-only mode, `A`/`B`/`X`/`Y` are the printed letters (set by **Button Style** in `Alt+C`), and a button already held when the dialog opens waits for a fresh press.
+With [controller support](/usage#controller-support) on, the dialog has its own controller layout, and each control shows its controller shortcut once SubMiner has seen a controller. Like the [media timing review](#with-a-controller), it works with or without keyboard-only mode, `A`/`B`/`X`/`Y` are the printed letters (set by **Button Style** in `Alt+C`), and a button already held when the dialog opens waits for a fresh press.
 
 | Controller         | Choosing the card                 | Merge preview           |
 | ------------------ | --------------------------------- | ----------------------- |

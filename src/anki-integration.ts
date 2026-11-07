@@ -593,6 +593,7 @@ export class AnkiIntegration {
     return new CardCreationService({
       getConfig: () => this.config,
       getSubtitleTracksForTranslation: () => this.subtitleTracksForTranslationProvider?.() ?? null,
+      getLiveSecondarySubtitleFor: (primaryText) => this.getLiveSecondarySubtitleFor(primaryText),
       getAiConfig: () => this.aiConfig,
       getTimingTracker: () => this.timingTracker,
       getMpvClient: () => this.mpvClient,
