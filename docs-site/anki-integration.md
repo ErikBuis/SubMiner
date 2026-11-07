@@ -81,14 +81,16 @@ If cards are not getting filled:
 
 `ankiConnect.fields` maps SubMiner's data to fields on your note type.
 
-| Key                | Receives                                                                  |
-| ------------------ | ------------------------------------------------------------------------- |
-| `fields.word`      | The mined word                                                            |
-| `fields.audio`     | Sentence audio cut from the video                                         |
-| `fields.wordAudio` | Read only: Yomitan's word audio, used to time animated images (see below) |
-| `fields.image`     | Screenshot or animated clip                                               |
-| `fields.sentence`  | Subtitle text                                                             |
-| `fields.miscInfo`  | Text from `ankiConnect.metadata.pattern`                                  |
+| Key                          | Receives                                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `fields.word`                | The mined word                                                                                                          |
+| `fields.audio`               | Sentence audio cut from the video                                                                                       |
+| `fields.wordAudio`           | Read only: Yomitan's word audio, used to time animated images (see below)                                               |
+| `fields.image`               | Screenshot or animated clip                                                                                             |
+| `fields.sentence`            | Subtitle text                                                                                                           |
+| `fields.miscInfo`            | Text from `ankiConnect.metadata.pattern`                                                                                |
+| `fields.wordCardTranslation` | Word cards only: the secondary subtitle translating the mined sentence. Empty by default (no translation on word cards) |
+| `fields.definition`          | Read only: the dictionary meaning, shown in the timing review                                                           |
 
 ```jsonc
 "ankiConnect": {
@@ -104,6 +106,8 @@ Field names are matched case-insensitively. A mapped field that is missing from 
 Hachidori prepares downloadable word audio before it saves a note through the proxy, so the animated image delay works on the first mine. Set a downloadable pronunciation source in Hachidori's Audio settings. Browser speech cannot be saved to Anki. Without word audio, Hachidori shows a warning and the card gets no word-audio hold.
 
 `fields.audio` gets sentence audio, not word audio. Yomitan writes its own dictionary audio into your note (often `ExpressionAudio`), so keep `fields.audio` pointed at a separate field such as the default `SentenceAudio`. Pointing it at Yomitan's word-audio field would overwrite that audio.
+
+`fields.wordCardTranslation` gives word cards the translation of their sentence, picked by timing like on sentence cards. Point it at the note type's translation field, for example `SentenceTranslation` in Kiku, or the field your sentence cards put their translation in. With field grouping, the translations of grouped cards are merged like their sentences.
 
 `ankiConnect.tags` adds tags to every mined or updated card. Set it to `[]` to add none.
 
@@ -140,8 +144,6 @@ With `media.reviewTiming` on, SubMiner pauses before making media for word, sent
 
 Playback stays paused while the dialog is open, even if the popup or hover that paused it goes away. When the dialog closes, playback resumes if it was playing before, or if the popup closed in the meantime. A popup that is still open keeps it paused.
 
-While the dialog is open, mpv's own keys and mouse buttons do nothing, so `Space`, seeking, volume, or `q` pressed in the mpv window (for example after switching back to it) can't change playback behind the dialog. mpv shows a short reminder instead. The window's close button still quits mpv. If SubMiner crashes with the dialog open, the SubMiner mpv plugin gives mpv its keys back about 3 seconds after the next key press.
-
 The dialog shows the clip over a speech waveform. When the waveform loads, an untouched clip end moves back to just after the last speech in the line. The orange bars still mark the subtitle's original start and end.
 
 During preview, the yellow cursor follows the audio player's position through the selected range and stays at the end when playback finishes. Buffering pauses the cursor too. If the player stops reporting progress for 15 seconds, the preview stops so you can retry.
@@ -154,11 +156,13 @@ During preview, the yellow cursor follows the audio player's position through th
 | Show more timeline       | Earlier / Later                                                       |
 | Pick the screenshot      | Screenshot slider or Frame buttons (static images only)               |
 | Add previous / next line | `P` / `N` (`Shift+P` / `Shift+N` removes)                             |
-| Preview                  | `Space`                                                               |
-| Confirm                  | `Enter`                                                               |
+| Preview                  | `Space` or Play selection                                             |
+| Export the card          | `Enter` or Export card                                                |
 | Cancel                   | `Escape`                                                              |
 
-The confirmed range is used as is, with no extra padding. Added lines go into the sentence field. Reset restores the original timing and removes added lines.
+The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. `Enter` in the translation still exports the card, and line breaks are written as spaces. Your edit is kept when you choose to keep the original timing or skip media.
+
+Play selection, Export card and the key hints stay at the bottom of the dialog, so they never scroll away. In a short window, such as a 720p mpv window, the dialog tightens its layout and hides the key hints so it still fits without scrolling. The exported range is used as is, with no extra padding. Added lines go into the sentence field. Reset timing, next to the 0.1 s buttons, restores the original timing and removes added lines.
 
 When you cancel, you can go back to editing, keep the original timing, create the card without media, or discard it. Discard deletes the Yomitan note or audio card, and skips creation for a sentence card.
 
@@ -217,6 +221,19 @@ Manual clipboard updates (`Ctrl/Cmd+V`) always replace the sentence audio, whate
 ```
 
 Sentence cards and audio cards (`Ctrl/Cmd+Shift+A`) always write to the `Sentence` and `SentenceAudio` fields. Normal word cards keep using your `ankiConnect.fields` mapping.
+
+The card's translation is the secondary subtitle line that translates the mined line(s), picked by timing from the parsed subtitle tracks, as mpv plays them after `sub-delay` and `secondary-sub-delay`. A secondary line that only overlaps the dialogue, such as a sign or a TV in the background, is left out, and a mined line the parsed track has no translation for gets none. Without a readable secondary subtitle file or embedded text track, the secondary subtitle on screen is used.
+
+### Sentence translations
+
+Two behavior options change how the sentence and its translation come out, on sentence cards and on word cards with `fields.wordCardTranslation`:
+
+| Key                                   | What it does                                                                                                                                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `behavior.widenSentenceToTranslation` | Translators often give one secondary line to a sentence the Japanese track splits over several lines. The card sentence and its media then widen to all of those lines, up to `media.maxMediaDuration` |
+| `behavior.formatTranslation`          | Start the translation with a capital letter and add ` (...)` after a trailing comma, since a line cut off mid-sentence stands alone on the card                                                        |
+
+Widening needs both tracks to be readable subtitle files or embedded text tracks.
 
 ## Word card type (Kiku/Lapis)
 
