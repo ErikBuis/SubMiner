@@ -57,6 +57,7 @@ export interface OverlayModalRuntime {
   openJimaku: () => void;
   openTsukihime: () => void;
   handleOverlayModalClosed: (modal: OverlayHostedModal) => void;
+  handleModalWindowDestroyed: () => void;
   notifyOverlayModalOpened: (modal: OverlayHostedModal) => void;
   waitForModalOpen: (modal: OverlayHostedModal, timeoutMs: number) => Promise<boolean>;
   getRestoreVisibleOverlayOnModalClose: () => Set<OverlayHostedModal>;
@@ -71,6 +72,12 @@ export interface OverlayModalRuntimeOptions {
   onFinalModalClosed?: () => void;
   scheduleRevealFallback?: (callback: () => void, delayMs: number) => RevealFallbackHandle;
   clearRevealFallback?: (timeout: RevealFallbackHandle) => void;
+  /**
+   * Windows only: stacks the modal window directly above mpv, owned by it, instead of making
+   * it topmost, so switching to another app covers the modal like it covers mpv. Returns false
+   * when mpv's window is unknown, which keeps the topmost fallback.
+   */
+  bindModalWindowAboveMpv?: (window: BrowserWindow) => boolean;
 }
 
 export function createOverlayModalRuntimeService(
@@ -216,6 +223,15 @@ export function createOverlayModalRuntimeService(
 
   const elevateModalWindow = (window: BrowserWindow): void => {
     if (window.isDestroyed()) return;
+    // No setAlwaysOnTop(false) first: once the modal is owned by mpv, demoting it also demotes
+    // mpv, which would drop mpv's own ontop state. The binding matches mpv's topmost state.
+    if (
+      platform === 'win32' &&
+      options.bindModalWindowAboveMpv &&
+      options.bindModalWindowAboveMpv(window)
+    ) {
+      return;
+    }
     window.setAlwaysOnTop(true, 'screen-saver', 3);
     window.moveTop();
   };
@@ -582,6 +598,14 @@ export function createOverlayModalRuntimeService(
     }
   };
 
+  // A modal window destroyed from outside (on Windows, together with the mpv window that owns
+  // it) never reports its modals closed, which would leave the main overlay hidden for good.
+  const handleModalWindowDestroyed = (): void => {
+    for (const modal of [...restoreVisibleOverlayOnModalClose]) {
+      handleOverlayModalClosed(modal);
+    }
+  };
+
   const notifyOverlayModalOpened = (modal: OverlayHostedModal): void => {
     if (!restoreVisibleOverlayOnModalClose.has(modal)) return;
     openedModals.add(modal);
@@ -649,6 +673,7 @@ export function createOverlayModalRuntimeService(
     openJimaku,
     openTsukihime,
     handleOverlayModalClosed,
+    handleModalWindowDestroyed,
     notifyOverlayModalOpened,
     waitForModalOpen,
     getRestoreVisibleOverlayOnModalClose: () => restoreVisibleOverlayOnModalClose,

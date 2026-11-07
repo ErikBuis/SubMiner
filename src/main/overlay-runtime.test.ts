@@ -89,6 +89,71 @@ test('sendToActiveOverlayWindow targets modal window with full geometry and trac
   assert.deepEqual(modal.sent, [['runtime-options:open']]);
 });
 
+test('Windows modal window stacks above mpv instead of staying topmost', () => {
+  const modal = new FakeOverlayWindow();
+  const bound: unknown[] = [];
+  const h = createHarness({
+    modal,
+    platform: 'win32',
+    options: {
+      bindModalWindowAboveMpv: (window) => {
+        bound.push(window);
+        return true;
+      },
+    },
+  });
+
+  h.runtime.sendToActiveOverlayWindow('runtime-options:open', undefined, {
+    restoreOnModalClose: 'runtime-options',
+  });
+  h.runtime.notifyOverlayModalOpened('runtime-options');
+  h.runtime.notifyOverlayModalOpened('runtime-options');
+
+  // Elevation repeats on an already-owned modal; none may touch the topmost state directly,
+  // since demoting an owned window also demotes an mpv running with --ontop.
+  assert.ok(bound.length >= 2);
+  assert.ok(bound.every((window) => window === modal));
+  assert.deepEqual(modal.alwaysOnTopCalls, []);
+});
+
+test('Windows modal window stays topmost when mpv cannot be bound', () => {
+  const modal = new FakeOverlayWindow();
+  const h = createHarness({
+    modal,
+    platform: 'win32',
+    options: { bindModalWindowAboveMpv: () => false },
+  });
+
+  h.runtime.sendToActiveOverlayWindow('runtime-options:open', undefined, {
+    restoreOnModalClose: 'runtime-options',
+  });
+  h.runtime.notifyOverlayModalOpened('runtime-options');
+
+  assert.equal(modal.alwaysOnTopCalls.at(-1), 'top:true:screen-saver:3');
+});
+
+test('non-Windows modal window ignores the mpv binding', () => {
+  const modal = new FakeOverlayWindow();
+  let bindCalls = 0;
+  const h = createHarness({
+    modal,
+    options: {
+      bindModalWindowAboveMpv: () => {
+        bindCalls += 1;
+        return true;
+      },
+    },
+  });
+
+  h.runtime.sendToActiveOverlayWindow('runtime-options:open', undefined, {
+    restoreOnModalClose: 'runtime-options',
+  });
+  h.runtime.notifyOverlayModalOpened('runtime-options');
+
+  assert.equal(bindCalls, 0);
+  assert.deepEqual(modal.alwaysOnTopCalls, ['top:true:screen-saver:3']);
+});
+
 test('sendToActiveOverlayWindow creates modal window lazily when absent', () => {
   const modal = new FakeOverlayWindow();
   const h = createHarness({ createModal: () => modal });
@@ -360,6 +425,37 @@ test('modal window path restores visible main overlay before modal input deactiv
   assert.equal(main.showCount, 1);
   assert.equal(main.isVisible(), true);
   assert.deepEqual(events, ['state:true:visible:true', 'state:false:visible:true']);
+});
+
+test('a modal window destroyed from outside releases its modals and restores the main overlay', () => {
+  const main = new FakeOverlayWindow({ visible: true });
+  const modal = new FakeOverlayWindow();
+  const events: string[] = [];
+  const h = createHarness({
+    main,
+    modal,
+    platform: 'win32',
+    options: { onModalStateChange: (active) => events.push(`state:${active}`) },
+  });
+
+  h.runtime.sendToActiveOverlayWindow('media-timing-review:open', undefined, {
+    restoreOnModalClose: 'media-timing-review',
+    preferModalWindow: true,
+  });
+  h.runtime.notifyOverlayModalOpened('media-timing-review');
+  assert.equal(main.isVisible(), false);
+
+  // Windows destroys a window together with its owner (mpv) without the renderer reporting it.
+  modal.destroy();
+  h.runtime.handleModalWindowDestroyed();
+
+  assert.equal(h.runtime.getRestoreVisibleOverlayOnModalClose().size, 0);
+  assert.equal(main.isVisible(), true);
+  assert.deepEqual(events, ['state:true', 'state:false']);
+
+  // Nothing left to release on a later call, e.g. the normal close-and-destroy path.
+  h.runtime.handleModalWindowDestroyed();
+  assert.deepEqual(events, ['state:true', 'state:false']);
 });
 
 test('macOS maps a new modal panel before focusing SubMiner and hiding the subtitle overlay', () => {
