@@ -218,6 +218,25 @@ export function joinSubtitleLineTexts(lines: readonly TimedSubtitleText[]): stri
   return taken.map((line) => line.text).join(' ');
 }
 
+/** A bracketed annotation opening a line, such as the speaker label （ひとり） or (Hitori). */
+const LEADING_LABEL = /^[ \t\u3000]*(?:[（(][^（）()\n]+[）)][ \t\u3000]*)+/u;
+
+/**
+ * Whether the card sentence holds a subtitle line. The sentence can leave out a label that
+ * opens the line (speaker names are stripped from mined sentences), so the line also counts
+ * without it. A line that is nothing but a label is in the sentence only as written.
+ */
+function sentenceIncludesLine(compactSentence: string, lineText: string): boolean {
+  if (compactSentence.includes(compactText(lineText))) return true;
+  const unlabeled = compactText(
+    lineText
+      .split(/\r?\n|\\N/)
+      .map((line) => line.replace(LEADING_LABEL, ''))
+      .join('\n'),
+  );
+  return unlabeled.length > 0 && compactSentence.includes(unlabeled);
+}
+
 function coTimed(
   a: Pick<TimedSubtitleText, 'startTime' | 'endTime'>,
   b: Pick<TimedSubtitleText, 'startTime' | 'endTime'>,
@@ -363,7 +382,7 @@ export function alignSentenceTranslation(options: {
   const excluded = new Set<number>();
   if (sentence) {
     const inSentence = minedIndexes.filter((index) =>
-      sentence.includes(compactText(primary[index]!.text)),
+      sentenceIncludesLine(sentence, primary[index]!.text),
     );
     if (inSentence.length > 0) {
       for (const index of minedIndexes) if (!inSentence.includes(index)) excluded.add(index);
