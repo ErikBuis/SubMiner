@@ -99,10 +99,12 @@ async function startActiveMediaTimingReview(
     generateWaveform?: () => Promise<number[]>;
     play?: () => Promise<void>;
     paused?: boolean;
+    openModal?: () => Promise<boolean>;
   } = {},
 ) {
   const previewCalls: Array<[number, number]> = [];
   const commands: Array<Array<string | number>> = [];
+  const inputLockCalls: string[] = [];
   let publishPayload!: (payload: MediaTimingReviewOpenPayload) => void;
   const openedPayload = new Promise<MediaTimingReviewOpenPayload>((resolve) => {
     publishPayload = resolve;
@@ -131,7 +133,11 @@ async function startActiveMediaTimingReview(
     }),
     openModal: async (payload) => {
       publishPayload(payload);
-      return true;
+      return options.openModal ? options.openModal() : true;
+    },
+    inputLock: {
+      lock: () => inputLockCalls.push('lock'),
+      unlock: () => inputLockCalls.push('unlock'),
     },
     showStatus: () => undefined,
   });
@@ -144,7 +150,19 @@ async function startActiveMediaTimingReview(
     maxMediaDuration: options.maxMediaDuration ?? 30,
   });
 
-  return { runtime, payload: await openedPayload, pendingDecision, previewCalls, commands };
+  return {
+    runtime,
+    payload: await openedPayload,
+    pendingDecision,
+    previewCalls,
+    commands,
+    inputLockCalls,
+  };
+}
+
+/** Lets the review get past the modal's open acknowledgement. */
+function settleModalOpen(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 test('media timing review pauses playback, resolves exact timing, and restores playing state', async () => {
@@ -650,6 +668,62 @@ test('collectMediaTimingContextLines falls back to played history when no cues a
 
   assert.deepEqual(context.previous, [{ text: '前の行', startTime: 1, endTime: 2 }]);
   assert.deepEqual(context.next, []);
+});
+
+test('media timing review locks mpv input while the modal is open and releases it on export', async () => {
+  const { runtime, payload, pendingDecision, inputLockCalls } =
+    await startActiveMediaTimingReview();
+  await settleModalOpen();
+  assert.deepEqual(inputLockCalls, ['lock']);
+
+  runtime.resolveReview({
+    reviewId: payload.reviewId,
+    decision: { action: 'confirm', startTime: 10, endTime: 12 },
+  });
+  await pendingDecision;
+
+  assert.deepEqual(inputLockCalls, ['lock', 'unlock']);
+});
+
+for (const action of ['use-original', 'skip-media', 'discard'] as const) {
+  test(`media timing review releases the mpv input lock on ${action}`, async () => {
+    const { runtime, payload, pendingDecision, inputLockCalls } =
+      await startActiveMediaTimingReview();
+    await settleModalOpen();
+
+    runtime.resolveReview({ reviewId: payload.reviewId, decision: { action } });
+    assert.deepEqual(await pendingDecision, { action });
+
+    assert.deepEqual(inputLockCalls, ['lock', 'unlock']);
+  });
+}
+
+test('media timing review releases the mpv input lock when the decision times out', async () => {
+  const { pendingDecision, inputLockCalls } = await startActiveMediaTimingReview({
+    decisionTimeoutMs: 0,
+  });
+
+  assert.deepEqual(await pendingDecision, { action: 'use-original' });
+  assert.deepEqual(inputLockCalls, ['lock', 'unlock']);
+});
+
+test('disposing an open review releases the mpv input lock', async () => {
+  const { runtime, pendingDecision, inputLockCalls } = await startActiveMediaTimingReview();
+  await settleModalOpen();
+
+  await runtime.dispose();
+
+  assert.deepEqual(await pendingDecision, { action: 'use-original' });
+  assert.deepEqual(inputLockCalls, ['lock', 'unlock']);
+});
+
+test('media timing review releases the mpv input lock when the modal does not open', async () => {
+  const { pendingDecision, inputLockCalls } = await startActiveMediaTimingReview({
+    openModal: async () => false,
+  });
+
+  assert.deepEqual(await pendingDecision, { action: 'use-original' });
+  assert.deepEqual(inputLockCalls, ['lock', 'unlock']);
 });
 
 test('media timing review keeps an already-paused video paused when nothing asks to resume', async () => {

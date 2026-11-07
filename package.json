@@ -50,7 +50,7 @@
     "docs:preview": "bun run --cwd docs-site docs:preview",
     "docs:test": "bun run --cwd docs-site test",
     "test:docs:kb": "bun test scripts/docs-knowledge-base.test.ts",
-    "test:plugin:src": "lua scripts/test-plugin-lua-compat.lua && lua scripts/test-plugin-start-gate.lua && lua scripts/test-plugin-process-start-retries.lua && lua scripts/test-plugin-restart-feedback.lua && lua scripts/test-plugin-session-bindings.lua && lua scripts/test-plugin-binary-windows.lua",
+    "test:plugin:src": "lua scripts/test-plugin-lua-compat.lua && lua scripts/test-plugin-start-gate.lua && lua scripts/test-plugin-process-start-retries.lua && lua scripts/test-plugin-restart-feedback.lua && lua scripts/test-plugin-session-bindings.lua && lua scripts/test-plugin-input-lock.lua && lua scripts/test-plugin-binary-windows.lua",
     "test:launcher:smoke:src": "bun test launcher/smoke.e2e.test.ts",
     "test:smoke:dist": "env ELECTRON_RUN_AS_NODE=1 electron scripts/compiled-runtime-smoke.mjs",
     "test:subtitle:src": "bun test src/core/services/subsync.test.ts src/subsync/utils.test.ts",

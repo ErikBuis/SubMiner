@@ -16,6 +16,7 @@ import {
 } from '../../core/services';
 import { createMediaTimingFrameExtractor } from '../../core/services/media-timing-frame';
 import { MediaTimingPreviewSession } from '../../core/services/media-timing-preview';
+import { createMpvInputLock } from '../../core/services/mpv-input-lock';
 import { generateSpeechWaveform } from '../../core/services/media-timing-waveform';
 import { getSharedRemoteMediaWindowCache } from '../../core/services/remote-media-window-cache';
 import type { Logger } from '../../logger';
@@ -220,6 +221,14 @@ export function createMiningAssembly(deps: MiningAssemblyDeps) {
       : ('optional' as const),
   });
 
+  const mpvInputLock = createMpvInputLock({
+    getMpvClient: () => appState.mpvClient,
+    onBlockedKey: () => {
+      appState.mpvClient?.send({
+        command: ['show-text', 'Finish the card review in SubMiner first', '2000'],
+      });
+    },
+  });
   const mediaTimingFrameExtractor = createMediaTimingFrameExtractor();
   const mediaTimingReviewRuntime = createMediaTimingReviewRuntime({
     getMpvClient: () => appState.mpvClient,
@@ -267,6 +276,7 @@ export function createMiningAssembly(deps: MiningAssemblyDeps) {
         payload,
         signal,
       ),
+    inputLock: mpvInputLock,
     onPreviewEnded: (reviewId) => {
       sendToOverlayWindows(IPC_CHANNELS.event.mediaTimingReviewPreviewEnded, reviewId);
     },
@@ -412,6 +422,7 @@ export function createMiningAssembly(deps: MiningAssemblyDeps) {
     setFieldGroupingResolver,
     createFieldGroupingCallback: fieldGroupingOverlayRuntime.createFieldGroupingCallback,
     mediaTimingReviewRuntime,
+    mpvInputLock,
     attachToAnkiIntegration,
     updateLastCardFromClipboard,
     refreshKnownWordCache,
