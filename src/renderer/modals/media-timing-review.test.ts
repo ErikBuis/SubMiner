@@ -650,6 +650,36 @@ test('a dropped line is cut from an edit only as whole words at its start or end
     }),
     'my wording',
   );
+  // An apostrophe or hyphen keeps the letters around it one word.
+  for (const [text, dropped, side] of [
+    ["It's fine", 'It', 'start'],
+    ['Well-known fact', 'Well', 'start'],
+    ['rock-solid plan', 'rock-', 'start'],
+    ["fine y'all", 'all', 'end'],
+    ['a well-known', 'known', 'end'],
+  ] as const) {
+    const line = { ...no, text: dropped, startTime: side === 'start' ? 6 : 10 };
+    const run = side === 'start' ? [line, mined] : [mined, { ...line, endTime: 12 }];
+    assert.equal(
+      applyTranslationLineChanges({
+        text,
+        before: lines(...run),
+        after: lines(mined),
+        format: false,
+      }),
+      text,
+    );
+  }
+  // Next to spaces or punctuation the line is still cut.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: "I- I'm fine",
+      before: lines({ ...no, text: 'I-' }, mined),
+      after: lines(mined),
+      format: false,
+    }),
+    "I'm fine",
+  );
   // Text written without spaces is still cut where the line ends.
   assert.equal(
     applyTranslationLineChanges({

@@ -229,12 +229,31 @@ const CONTINUATION_MARK_PATTERN = /\s*\(\.\.\.\)$/;
 const SPACED_WORD_CHAR =
   /^(?![\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}])[\p{L}\p{N}]$/u;
 
-function splitsWord(left: string | undefined, right: string | undefined): boolean {
+/** An apostrophe or hyphen joins the letters on both sides into one word: "It's", "well-known". */
+const IN_WORD_JOINER = /^['\u2019\u2010\u2011-]$/u;
+
+const isSpacedWordChar = (char: string | undefined): boolean =>
+  char !== undefined && SPACED_WORD_CHAR.test(char);
+
+/** True when a cut at `index` of `text` would end inside a word. */
+function splitsWord(text: string, index: number): boolean {
+  const left = index > 0 ? text.charAt(index - 1) : undefined;
+  const right = index < text.length ? text.charAt(index) : undefined;
+  if (isSpacedWordChar(left) && isSpacedWordChar(right)) return true;
+  // A joiner on either side of the cut, with letters around it: "It|'s", "rock-|solid".
+  if (
+    isSpacedWordChar(left) &&
+    right !== undefined &&
+    IN_WORD_JOINER.test(right) &&
+    isSpacedWordChar(text.charAt(index + 1) || undefined)
+  ) {
+    return true;
+  }
   return (
     left !== undefined &&
-    right !== undefined &&
-    SPACED_WORD_CHAR.test(left) &&
-    SPACED_WORD_CHAR.test(right)
+    IN_WORD_JOINER.test(left) &&
+    isSpacedWordChar(right) &&
+    isSpacedWordChar(index > 1 ? text.charAt(index - 2) : undefined)
   );
 }
 
@@ -254,7 +273,7 @@ function cutLoosePrefix(text: string, prefix: string): string | null {
   const match = text.match(new RegExp(`^\\s*${pattern}`, 'iu'));
   if (!match) return null;
   const cut = match[0];
-  if (splitsWord(cut.charAt(cut.length - 1), text.charAt(cut.length) || undefined)) return null;
+  if (splitsWord(text, cut.length)) return null;
   return text.slice(cut.length).trimStart();
 }
 
@@ -267,7 +286,7 @@ function cutLooseSuffix(text: string, suffix: string): string | null {
   if (pattern === null) return text;
   const match = text.match(new RegExp(`${pattern}\\s*$`, 'iu'));
   if (!match || match.index === undefined) return null;
-  if (splitsWord(text.charAt(match.index - 1) || undefined, match[0].charAt(0))) return null;
+  if (splitsWord(text, match.index)) return null;
   return text.slice(0, match.index).trimEnd();
 }
 
