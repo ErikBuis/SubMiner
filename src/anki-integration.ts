@@ -656,6 +656,8 @@ export class AnkiIntegration {
       getAnimatedImageLeadInSeconds: (noteInfo) => this.getAnimatedImageLeadInSeconds(noteInfo),
       extractFields: (fields) => this.extractFields(fields),
       processSentence: (mpvSentence, noteFields) => this.processSentence(mpvSentence, noteFields),
+      generateSentenceFurigana: (text, noteFields) =>
+        this.generateSentenceFurigana(text, noteFields),
       setCardTypeFields: (updatedFields, availableFieldNames, cardKind) =>
         this.setCardTypeFields(updatedFields, availableFieldNames, cardKind),
       mergeFieldValue: (existing, newValue, overwrite) =>
@@ -762,13 +764,8 @@ export class AnkiIntegration {
       processSentence: (mpvSentence, noteFields) => this.processSentence(mpvSentence, noteFields),
       processSentenceFurigana: (sentenceFurigana, noteFields) =>
         this.processSentenceFurigana(sentenceFurigana, noteFields),
-      generateSentenceFurigana: async (text, noteFields) =>
-        this.generateSentenceFuriganaCallback?.(
-          text,
-          this.config.behavior?.highlightWord === false
-            ? undefined
-            : this.getSentenceHighlightText(noteFields),
-        ) ?? null,
+      generateSentenceFurigana: (text, noteFields) =>
+        this.generateSentenceFurigana(text, noteFields),
       setCardTypeFields: (updatedFields, availableFieldNames, cardKind) =>
         this.setCardTypeFields(updatedFields, availableFieldNames, cardKind),
       resolveConfiguredFieldName: (noteInfo, ...preferredNames) =>
@@ -1053,6 +1050,18 @@ export class AnkiIntegration {
       existingSentence.match(/<b>(.*?)<\/b>/)?.[1] ||
       getPreferredWordValueFromExtractedFields(noteFields, this.config).trim()
     );
+  }
+
+  /** Bolds the note's word when given its fields and highlightWord is on. */
+  private async generateSentenceFurigana(
+    text: string,
+    noteFields?: Record<string, string>,
+  ): Promise<string | null> {
+    const highlightedText =
+      noteFields && this.config.behavior?.highlightWord !== false
+        ? this.getSentenceHighlightText(noteFields)
+        : undefined;
+    return (await this.generateSentenceFuriganaCallback?.(text, highlightedText)) ?? null;
   }
 
   private processSentence(mpvSentence: string, noteFields: Record<string, string>): string {
