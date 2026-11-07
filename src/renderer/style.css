@@ -2007,8 +2007,22 @@ body:focus-visible,
   transform: translateY(1px);
 }
 
-.media-timing-review-content button:focus-visible {
-  outline: 2px solid var(--ctp-yellow);
+/* Keyboard focus is blue on every control, apart from the yellow and purple edge colors. */
+.media-timing-review-content button:focus-visible,
+.media-timing-review-content input:focus-visible {
+  outline: 2px solid var(--ctp-blue);
+  outline-offset: 2px;
+}
+
+/* The handle and the translation take focus without Tab too (on open, on a click), so
+   they only show the ring once Tab has been used. */
+.media-timing-review-modal[data-keyboard-nav] .media-timing-review-translation-input:focus-visible {
+  outline: 2px solid var(--ctp-blue);
+  outline-offset: 2px;
+}
+
+.media-timing-review-modal[data-keyboard-nav] .media-timing-review-handle:focus-visible::after {
+  outline: 2px solid var(--ctp-blue);
   outline-offset: 2px;
 }
 
@@ -2109,11 +2123,6 @@ body:focus-visible,
   margin: 0;
   accent-color: var(--ctp-green);
   cursor: pointer;
-}
-
-.media-timing-review-media-toggle input:focus-visible {
-  outline: 2px solid var(--ctp-yellow);
-  outline-offset: 2px;
 }
 
 .media-timing-review-media-toggle:has(input:disabled) {

@@ -80,6 +80,38 @@ export const MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS: Record<
   discard: 'mediaTimingReviewDiscard',
 };
 
+const FOCUSABLE_SELECTOR = 'button, input, textarea, select, [tabindex]:not([tabindex="-1"])';
+
+/** The controls Tab can reach on the visible step of the review, in document order. */
+export function listMediaTimingReviewFocusTargets(root: ParentNode): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (element) =>
+      !(element as HTMLButtonElement).disabled &&
+      element.closest('.hidden, [inert]') === null &&
+      element.getClientRects().length > 0 &&
+      getComputedStyle(element).visibility !== 'hidden',
+  );
+}
+
+/**
+ * Where Tab or Shift+Tab should go so focus wraps around the dialog instead of leaving
+ * it. Null means the browser's own move already stays inside.
+ */
+export function wrapMediaTimingReviewFocus(
+  targets: readonly HTMLElement[],
+  active: Element | null,
+  backwards: boolean,
+): HTMLElement | null {
+  if (targets.length === 0) return null;
+  const first = targets[0]!;
+  const last = targets[targets.length - 1]!;
+  const index = active === null ? -1 : targets.indexOf(active as HTMLElement);
+  if (index === -1) return backwards ? last : first;
+  if (backwards && active === first) return last;
+  if (!backwards && active === last) return first;
+  return null;
+}
+
 /** A controller press only counts when a mouse click could have reached the button. */
 export function isMediaTimingReviewButtonAvailable(button: HTMLButtonElement): boolean {
   return !button.disabled && button.closest('.hidden') === null;
@@ -1682,6 +1714,7 @@ export function createMediaTimingReviewModal(
     options.syncSettingsModalSubtitleSuppression();
     ctx.dom.overlay.classList.add('interactive');
     if (ctx.platform.shouldToggleMouseIgnore) window.electronAPI.setIgnoreMouseEvents(false);
+    delete ctx.dom.mediaTimingReviewModal.dataset.keyboardNav;
     ctx.dom.mediaTimingReviewModal.classList.remove('hidden');
     ctx.dom.mediaTimingReviewModal.setAttribute('aria-hidden', 'false');
     window.electronAPI.notifyOverlayModalOpened('media-timing-review');
@@ -1692,10 +1725,33 @@ export function createMediaTimingReviewModal(
     queueWaveformLoad();
   }
 
+  /**
+   * Tab and Shift+Tab walk every control of the visible step and wrap at the ends, so
+   * focus never leaves the dialog. Focus rings on the handles and the translation only
+   * show once Tab was used, so the start handle's focus on open stays invisible.
+   */
+  function handleTabKey(event: KeyboardEvent): void {
+    const modal = ctx.dom.mediaTimingReviewModal;
+    modal.dataset.keyboardNav = 'true';
+    // The hidden step's controls are filtered out, so the whole modal is the scope.
+    const target = wrapMediaTimingReviewFocus(
+      listMediaTimingReviewFocusTargets(modal),
+      document.activeElement,
+      event.shiftKey,
+    );
+    if (target === null) return;
+    event.preventDefault();
+    target.focus();
+  }
+
   function handleMediaTimingReviewKeydown(event: KeyboardEvent): boolean {
     if (!ctx.state.mediaTimingReviewModalOpen) return false;
     // Keys that belong to an IME composition in the translation (Escape cancels it).
     if (event.target === ctx.dom.mediaTimingReviewTranslation && event.isComposing) return false;
+    if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      handleTabKey(event);
+      return true;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       if (!ctx.dom.mediaTimingReviewCancelStep.classList.contains('hidden')) showEditor();
@@ -1808,6 +1864,10 @@ export function createMediaTimingReviewModal(
   }
 
   function wireDomEvents(): void {
+    // A pointer user does not need the keyboard focus rings until Tab is pressed again.
+    ctx.dom.mediaTimingReviewModal.addEventListener('pointerdown', () => {
+      delete ctx.dom.mediaTimingReviewModal.dataset.keyboardNav;
+    });
     ctx.dom.mediaTimingReviewFrameSlider.addEventListener('input', () => {
       if (!resolveInFlight) framePicker.choose(Number(ctx.dom.mediaTimingReviewFrameSlider.value));
     });
