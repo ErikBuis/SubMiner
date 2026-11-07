@@ -184,6 +184,37 @@ test('mined lines missing from the card sentence are left out', () => {
   assert.equal(unmatched?.translation, 'A long line. SIGN');
 });
 
+test('a mined line counts as in the sentence without its speaker label', () => {
+  // Bocchi the Rock! ep. 1 around 07:00: the card sentence drops the label （ひとり）.
+  const primary = [
+    line('（ひとり）かっ… かっこいい～！', 419.732, 422.485),
+    line('一気にバンド女子だ', 422.569, 424.279),
+  ];
+  const secondary = [
+    line('I look... super cool!', 419.78, 422.62),
+    line("I'm already a total rocker chick!", 422.62, 424.54),
+  ];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 419.732,
+    endTime: 424.279,
+    sentenceText: 'かっ… かっこいい～！ 一気にバンド女子だ',
+  });
+  assert.equal(aligned?.translation, "I look... super cool! I'm already a total rocker chick!");
+});
+
+test('a line holding only a label stays out of a sentence without it', () => {
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('（歓声）', 0, 2), line('一', 2, 4)],
+    secondaryLines: [line('(Cheering)', 0, 2), line('One.', 2, 4)],
+    startTime: 0,
+    endTime: 4,
+    sentenceText: '一',
+  });
+  assert.equal(aligned?.translation, 'One.');
+});
+
 test('a slightly offset dialogue translation beats a sign covering the line', () => {
   const aligned = alignSentenceTranslation({
     primaryLines: [line('看板', 0, 10), line('一', 1, 2)],
