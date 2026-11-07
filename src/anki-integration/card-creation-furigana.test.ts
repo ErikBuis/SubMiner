@@ -262,6 +262,41 @@ test('audio card keeps the furigana when the sentence did not change', async () 
   assert.equal('SentenceFurigana' in (updates[0] ?? {}), false);
 });
 
+test('audio card matches the note sentence field case-insensitively', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const calls: FuriganaCall[] = [];
+  const defaults = createCardCreationDeps();
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      client: createFakeClient({
+        findNotes: async () => [42],
+        notesInfo: async () => [
+          {
+            noteId: 42,
+            fields: { sentence: { value: '<b>字幕</b>' }, SentenceFurigana: { value: 'kept' } },
+          },
+        ],
+        updateNoteFields: async (_noteId, fields) => {
+          updates.push(fields);
+        },
+      }),
+      resolveNoteFieldName: (noteInfo, preferredName) =>
+        Object.keys(noteInfo.fields).find(
+          (name) => name.toLowerCase() === preferredName?.toLowerCase(),
+        ) ?? defaults.resolveNoteFieldName(noteInfo, preferredName),
+      generateSentenceFurigana: async (text, noteFields) => {
+        calls.push({ text, noteFields });
+        return 'regenerated';
+      },
+    }),
+  );
+
+  await service.markLastCardAsAudioCard();
+
+  assert.deepEqual(calls, []);
+  assert.equal('SentenceFurigana' in (updates[0] ?? {}), false);
+});
+
 test('audio card writes furigana to the configured sentenceFurigana field', async () => {
   const updates: Array<Record<string, string>> = [];
   const service = createAudioCardService({

@@ -623,11 +623,17 @@ export class CardCreationService {
 
         // The note's furigana spells the word card's sentence; a new line needs its own.
         const sentenceFuriganaField = this.resolveSentenceFuriganaField(noteInfo);
+        const noteSentenceField = sentenceField
+          ? this.deps.resolveNoteFieldName(noteInfo, sentenceField)
+          : null;
         if (
           sentenceField &&
           sentenceFuriganaField &&
-          sentenceFuriganaField !== sentenceField &&
-          !sameSentenceText(sentenceText, noteInfo.fields[sentenceField]?.value ?? '')
+          sentenceFuriganaField !== (noteSentenceField ?? sentenceField) &&
+          !sameSentenceText(
+            sentenceText,
+            noteSentenceField ? (noteInfo.fields[noteSentenceField]?.value ?? '') : '',
+          )
         ) {
           updatedFields[sentenceFuriganaField] = await this.generateSentenceFurigana(
             sentenceText,
