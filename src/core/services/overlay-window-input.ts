@@ -83,6 +83,12 @@ export function handleOverlayWindowBlurred(options: {
     return false;
   }
 
+  // The Windows modal is owned by mpv rather than topmost, so leaving it in place on blur
+  // lets other apps cover it; re-raising here would pin it above everything again.
+  if ((options.platform ?? process.platform) === 'win32') {
+    return false;
+  }
+
   options.ensureOverlayWindowLevel();
   return true;
 }

@@ -82,6 +82,7 @@ function makeDeps(recorder: Recorder, state: FixtureState) {
     overlayModalRuntime: {
       notifyOverlayModalOpened: spy('modal.notifyOpened', noop),
       handleOverlayModalClosed: spy('modal.handleClosed', noop),
+      handleModalWindowDestroyed: spy('modal.handleWindowDestroyed', noop),
       sendToActiveOverlayWindow: spy('modal.sendToActive', () => false),
       openRuntimeOptionsPalette: spy('modal.openRuntimeOptionsPalette', noop),
     },

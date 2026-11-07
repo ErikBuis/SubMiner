@@ -73,6 +73,7 @@ export interface OverlayAssemblyDeps {
     OverlayModalRuntime,
     | 'notifyOverlayModalOpened'
     | 'handleOverlayModalClosed'
+    | 'handleModalWindowDestroyed'
     | 'sendToActiveOverlayWindow'
     | 'openRuntimeOptionsPalette'
   >;
@@ -339,6 +340,7 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
             // A destroyed modal window never reports its modals closed.
             deps.getJimakuAutoOpenRuntime().handleJimakuModalClosed();
             overlayManager.setModalWindow(null);
+            deps.overlayModalRuntime.handleModalWindowDestroyed();
           }
         },
       },
@@ -497,6 +499,7 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
     screen: deps.screen,
     overlayManager: {
       getMainWindow: () => overlayManager.getMainWindow(),
+      getModalWindow: () => overlayManager.getModalWindow(),
       getVisibleOverlayVisible: () => overlayManager.getVisibleOverlayVisible(),
     },
     overlayContentMeasurementStore: {

@@ -41,6 +41,7 @@ function setup(t: TestContext, platform: NodeJS.Platform) {
     },
     overlayManager: {
       getMainWindow: () => mainWindow,
+      getModalWindow: () => null,
       getVisibleOverlayVisible: () => true,
     },
     overlayContentMeasurementStore: {

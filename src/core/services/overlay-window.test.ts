@@ -170,11 +170,34 @@ test('handleOverlayWindowBlurred preserves modal window stacking', () => {
       moveWindowTop: () => {
         calls.push('move-modal');
       },
+      platform: 'linux',
     }),
     true,
   );
 
   assert.deepEqual(calls, ['ensure-modal']);
+});
+
+test('handleOverlayWindowBlurred leaves the Windows modal window below other apps', () => {
+  const calls: string[] = [];
+
+  assert.equal(
+    handleOverlayWindowBlurred({
+      kind: 'modal',
+      windowVisible: true,
+      isOverlayVisible: () => false,
+      ensureOverlayWindowLevel: () => {
+        calls.push('ensure-modal');
+      },
+      moveWindowTop: () => {
+        calls.push('move-modal');
+      },
+      platform: 'win32',
+    }),
+    false,
+  );
+
+  assert.deepEqual(calls, []);
 });
 
 test('ensureOverlayWindowLevel promotes Linux overlay above fullscreen mpv without changing workspaces', () => {
