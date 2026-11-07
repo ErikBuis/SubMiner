@@ -192,12 +192,16 @@ export interface ControllerNoneBinding {
 export interface ControllerButtonInputBinding {
   kind: 'button';
   buttonIndex: number;
+  /** Makes this a combo: it fires when this input is pressed while `hold` is down. */
+  hold?: ControllerRawInput;
 }
 
 export interface ControllerAxisDirectionInputBinding {
   kind: 'axis';
   axisIndex: number;
   direction: ControllerAxisDirection;
+  /** Makes this a combo: it fires when this input is pressed while `hold` is down. */
+  hold?: ControllerRawInput;
 }
 
 export interface ControllerAxisInputBinding {
@@ -243,13 +247,13 @@ export interface ControllerBindingsConfig {
   holdSecondarySub?: ControllerDiscreteBindingConfig;
   previousEntry?: ControllerDiscreteBindingConfig;
   nextEntry?: ControllerDiscreteBindingConfig;
+  toggleCharacterNavigation?: ControllerDiscreteBindingConfig;
   previousSubtitle?: ControllerDiscreteBindingConfig;
   nextSubtitle?: ControllerDiscreteBindingConfig;
   replaySubtitle?: ControllerDiscreteBindingConfig;
   playNextSubtitle?: ControllerDiscreteBindingConfig;
   leftStickHorizontal?: ControllerAxisBindingConfig;
   leftStickVertical?: ControllerAxisBindingConfig;
-  rightStickHorizontal?: ControllerAxisBindingConfig;
   rightStickVertical?: ControllerAxisBindingConfig;
 }
 
@@ -266,13 +270,13 @@ export interface ResolvedControllerBindingsConfig {
   holdSecondarySub?: ResolvedControllerDiscreteBinding;
   previousEntry?: ResolvedControllerDiscreteBinding;
   nextEntry?: ResolvedControllerDiscreteBinding;
+  toggleCharacterNavigation?: ResolvedControllerDiscreteBinding;
   previousSubtitle?: ResolvedControllerDiscreteBinding;
   nextSubtitle?: ResolvedControllerDiscreteBinding;
   replaySubtitle?: ResolvedControllerDiscreteBinding;
   playNextSubtitle?: ResolvedControllerDiscreteBinding;
   leftStickHorizontal?: ResolvedControllerAxisBinding;
   leftStickVertical?: ResolvedControllerAxisBinding;
-  rightStickHorizontal?: ResolvedControllerAxisBinding;
   rightStickVertical?: ResolvedControllerAxisBinding;
 }
 
@@ -339,6 +343,9 @@ export type ControllerReviewInput =
   | { kind: 'axis'; axisIndex: number; direction: ControllerAxisDirection }
   | { kind: 'face'; letter: ControllerFaceLetter }
   | { kind: 'dpad'; direction: ControllerDpadDirection };
+
+/** An input as Learn records it: a raw button index or a raw axis direction. */
+export type ControllerRawInput = Extract<ControllerReviewInput, { kind: 'button' | 'axis' }>;
 
 /** Press `press`, optionally while holding `hold`. */
 export type ControllerReviewBindingConfig =
