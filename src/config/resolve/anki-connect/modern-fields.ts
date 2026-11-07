@@ -17,6 +17,7 @@ export function applyModernFieldsResolution(
     'miscInfo',
     'translation',
     'wordCardTranslation',
+    'definition',
   ] as const) {
     applyModernValue(
       context,

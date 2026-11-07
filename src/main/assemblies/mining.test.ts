@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildReviewTranslationContext,
   resolveTimedSentenceTranslation,
   widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
@@ -222,5 +223,55 @@ test('a sentence widened with sub-delay keeps its media range on the video clock
       maxSentenceSeconds: 0,
     }),
     { text: '今日は いい天気ですね', startTime: 12, endTime: 14 },
+  );
+});
+
+test('the review gets translation lines on the video clock with sub-delay', () => {
+  // The review offers adjacent lines on the video clock, so the translation each one
+  // brings along must be keyed there too: file line 12-14 plays at 14-16.
+  type TracksProvider = () => SubtitleTracksForTranslation | null;
+  let provideTracks: TracksProvider | null = null;
+  const integration = new Proxy(
+    {},
+    {
+      get: (_target, name: string) => (callback: unknown) => {
+        if (name === 'setSubtitleTracksForTranslationProvider') {
+          provideTracks = callback as TracksProvider;
+        }
+      },
+    },
+  ) as AnkiIntegrationLike;
+  const mining = createMiningAssembly(
+    makeDeps({
+      appState: {
+        ...makeDeps().appState,
+        mpvClient: { currentSubDelay: 2 } as MpvClientLike,
+        activeParsedSubtitleCues: [
+          { text: '今', startTime: 10, endTime: 12 },
+          { text: '次', startTime: 12, endTime: 14 },
+        ],
+      },
+      getSecondarySubtitleCues: () => [
+        { text: 'Now', startTime: 12, endTime: 14 },
+        { text: 'Next', startTime: 14, endTime: 16 },
+      ],
+    }),
+  );
+  mining.attachToAnkiIntegration(integration);
+  assert.ok(provideTracks);
+
+  const context = buildReviewTranslationContext({
+    startTime: 12,
+    endTime: 14,
+    tracks: (provideTracks as TracksProvider)(),
+  });
+  assert.deepEqual(
+    context.lineTranslations.find((entry) => entry.text === '次'),
+    {
+      text: '次',
+      startTime: 14,
+      endTime: 16,
+      lines: [{ text: 'Next', startTime: 14, endTime: 16 }],
+    },
   );
 });

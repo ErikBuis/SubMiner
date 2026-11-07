@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   alignSentenceTranslation,
+  assignLineTranslations,
   buildSentenceTranslationGroups,
   formatCardTranslation,
+  isSourceLanguageText,
   joinSubtitleLineTexts,
   type TimedSubtitleText,
 } from './sentence-translation-alignment';
@@ -363,6 +365,30 @@ test('widening reaches across a sign with its own translation', () => {
   assert.equal(aligned?.text, '前半 後半');
   assert.equal(aligned?.startTime, 0);
   assert.equal(aligned?.translation, 'First half, second half.');
+});
+
+test('assignLineTranslations gives co-timed speakers their own translations', () => {
+  const assigned = assignLineTranslations(
+    [line('－行くぞ', 1, 3), line('－待って', 1, 3), line('今日は', 4, 5), line('いい天気', 5, 6)],
+    [line("- Let's go.", 1, 3), line('- Wait.', 1, 3), line('Nice weather today.', 4, 6)],
+  );
+  assert.deepEqual(
+    assigned.map(({ translationLines }) => translationLines.map((entry) => entry.text)),
+    [["- Let's go."], ['- Wait.'], ['Nice weather today.'], ['Nice weather today.']],
+  );
+});
+
+test('isSourceLanguageText rejects source cues that are separate pieces of the sentence', () => {
+  assert.equal(
+    isSourceLanguageText(['今日は', '明日も'], '今日はいい天気ですね 明日も晴れます'),
+    true,
+  );
+  assert.equal(isSourceLanguageText(['Nice weather.', 'Sunny tomorrow.'], '今日は 明日も'), false);
+});
+
+test('isSourceLanguageText keeps literal comparison signs apart from tags', () => {
+  assert.equal(isSourceLanguageText(['1 < 2 et 3 > 2'], '1 < 2 and 3 > 2'), false);
+  assert.equal(isSourceLanguageText(['<i>今日は</i>'], '今日は'), true);
 });
 
 test('widening keeps out a mined-range line the card sentence left out', () => {

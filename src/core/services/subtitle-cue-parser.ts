@@ -10,6 +10,7 @@ import {
 } from './ass-text';
 import { hasAssAnimationEvidence, mergeDuplicateCues } from './subtitle-cue-dedup';
 import { widenHalfwidthKana } from '../utils/halfwidth-kana';
+import { HTML_SUBTITLE_TAG_PATTERN } from '../../shared/subtitle-markup';
 
 /** Vertical third of the screen a cue is authored to occupy. */
 export type AssVerticalBand = 'top' | 'middle' | 'bottom';
@@ -75,8 +76,6 @@ export interface AnnotatedSubtitleCue extends SubtitleCue {
 }
 
 export type SubtitleSourceFormat = 'ass' | 'srt';
-
-const HTML_SUBTITLE_TAG_PATTERN = /<\/?[A-Za-z][^>\n]*>/g;
 
 const SRT_TIMING_PATTERN =
   /^\s*(?:(\d{1,2}):)?(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{2}):(\d{2})[,.](\d{1,3})/;

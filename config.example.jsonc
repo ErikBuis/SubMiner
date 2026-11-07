@@ -912,7 +912,8 @@
       "sentenceFurigana": "SentenceFurigana", // Card field that receives the sentence with furigana, regenerated when SubMiner changes the sentence.
       "miscInfo": "MiscInfo", // Card field that receives the miscellaneous info pattern (see ankiConnect.metadata.pattern).
       "translation": "SelectionText", // Card field that receives the current selection or translated text.
-      "wordCardTranslation": "" // Card field that word cards mined from the dictionary popup fill with the secondary subtitle translating the mined sentence (for example SentenceTranslation in Kiku, or SelectionText to fill it like sentence card mining). Empty: word cards get no translation.
+      "wordCardTranslation": "", // Card field that word cards mined from the dictionary popup fill with the secondary subtitle translating the mined sentence (for example SentenceTranslation in Kiku, or SelectionText to fill it like sentence card mining). Empty: word cards get no translation.
+      "definition": "MainDefinition" // Card field holding the dictionary definition. Only read, to show the meaning in the media timing review.
     }, // Fields setting.
     "ai": {
       "enabled": false, // Enable AI provider usage for Anki translation/enrichment flows. Values: true | false
