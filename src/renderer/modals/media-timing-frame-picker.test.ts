@@ -36,9 +36,11 @@ test('a chosen frame stays fixed until Reset restores midpoint tracking', async 
   await tick(5);
   await complete(0, 11);
   assert.equal(picker.getScreenshotTime(), undefined);
+  assert.equal(picker.getState().message, '');
   picker.choose(13);
   await tick(5);
   await complete(1, 13);
+  assert.equal(picker.getState().message, 'Selected frame stays fixed when you trim audio.');
   picker.updateMidpoint(12);
   await tick(5);
   assert.equal(picker.getScreenshotTime(), 13);
