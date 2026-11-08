@@ -22,6 +22,8 @@ type UpdateOverlayWindowBounds = typeof updateOverlayWindowBounds;
 export interface OverlayManagerOptions {
   updateOverlayWindowBounds?: UpdateOverlayWindowBounds;
   shouldPromoteWindowOnBoundsUpdate?: (window: BrowserWindow) => boolean;
+  /** Adjusts the bounds the modal window gets, e.g. to leave mpv's title bar uncovered. */
+  resolveModalWindowGeometry?: (geometry: WindowGeometry) => WindowGeometry;
 }
 
 export function createOverlayManager(options: OverlayManagerOptions = {}): OverlayManager {
@@ -51,7 +53,8 @@ export function createOverlayManager(options: OverlayManagerOptions = {}): Overl
     setOverlayWindowBounds: (geometry) => {
       updateWindowBounds(geometry, mainWindow);
     },
-    setModalWindowBounds: (geometry) => updateWindowBounds(geometry, modalWindow),
+    setModalWindowBounds: (geometry) =>
+      updateWindowBounds(options.resolveModalWindowGeometry?.(geometry) ?? geometry, modalWindow),
     getVisibleOverlayVisible: () => visibleOverlayVisible,
     setVisibleOverlayVisible: (visible) => {
       visibleOverlayVisible = visible;

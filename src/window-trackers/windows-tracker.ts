@@ -59,6 +59,7 @@ export class WindowsWindowTracker extends BaseWindowTracker {
   private targetWindowMinimized = false;
   private readonly targetMpvSocketPath: string | null;
   private currentTargetWindowHwnd: number | null = null;
+  private currentContentGeometry: WindowGeometry | null = null;
   private targetMpvPid: number | null = null;
   private pidLookupInFlight = false;
   private lastPidLookupAtMs: number | null = null;
@@ -93,6 +94,10 @@ export class WindowsWindowTracker extends BaseWindowTracker {
 
   override isTargetWindowMinimized(): boolean {
     return this.targetWindowMinimized;
+  }
+
+  override getContentGeometry(): WindowGeometry | null {
+    return this.isTracking() ? this.currentContentGeometry : null;
   }
 
   getTargetWindowHandle(): number | null {
@@ -148,9 +153,12 @@ export class WindowsWindowTracker extends BaseWindowTracker {
     }
   }
 
-  private selectBestMatch(
-    result: MpvPollResult,
-  ): { geometry: WindowGeometry; focused: boolean; hwnd: number } | null {
+  private selectBestMatch(result: MpvPollResult): {
+    geometry: WindowGeometry;
+    contentGeometry: WindowGeometry | null;
+    focused: boolean;
+    hwnd: number;
+  } | null {
     if (result.matches.length === 0) return null;
 
     const focusedMatch = result.matches.find((m) => m.isForeground);
@@ -160,6 +168,7 @@ export class WindowsWindowTracker extends BaseWindowTracker {
 
     return {
       geometry: best.bounds,
+      contentGeometry: best.contentBounds ?? null,
       focused: best.isForeground,
       hwnd: best.hwnd,
     };
@@ -244,6 +253,8 @@ export class WindowsWindowTracker extends BaseWindowTracker {
         this.resetTrackingLossState();
         this.targetWindowMinimized = false;
         this.currentTargetWindowHwnd = best.hwnd;
+        // Set before updateGeometry so geometry-change listeners already see the new client area.
+        this.currentContentGeometry = best.contentGeometry;
         this.updateGeometry(best.geometry, best.focused);
         this.updateTargetWindowFocused(best.focused);
         return;
