@@ -14,6 +14,7 @@ import type {
 } from '../handlers/media-timing-review-controller.js';
 import type { RendererDom } from '../utils/dom';
 import { createModalFocusGuard } from './modal-focus-guard';
+import { applyMediaTimingReviewHotkeyTooltips } from './media-timing-review-hotkeys';
 import {
   findBestOverlappingLine,
   isSourceLanguageText,
@@ -2051,6 +2052,7 @@ export function createMediaTimingReviewModal(
   }
 
   function wireDomEvents(): void {
+    applyMediaTimingReviewHotkeyTooltips(ctx.dom);
     // A pointer user does not need the keyboard focus rings until Tab is pressed again.
     // Listen for click, not pointerdown: the Yomitan hover shield swallows presses inside
     // the dialog. Clicks made by Enter (detail 0) keep keyboard navigation on.
