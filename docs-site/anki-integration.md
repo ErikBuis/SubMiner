@@ -162,9 +162,9 @@ During preview, the yellow cursor follows the audio player's position through th
 | Cancel                   | `Escape`                                                              |
 | Move between controls    | `Tab` / `Shift+Tab`, or the arrow keys by position on screen          |
 | Press the focused button | `Enter`                                                               |
-| Edit the translation     | Click it, or `Enter` on it; `Escape` or `Enter` stops typing          |
+| Edit the translation     | Click it, or `Enter` on it; `Escape` stops typing                     |
 
-The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. Click it, or reach it with the keyboard and press `Enter`, to type. `Escape` or `Enter` stops typing without closing the dialog, and `Ctrl/Cmd+Enter` exports right away. Line breaks (`Shift+Enter`) are written as spaces. Your edit is kept when you export without media.
+The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. Click it, or reach it with the keyboard and press `Enter`, to type. `Escape` stops typing without closing the dialog, and `Ctrl/Cmd+Enter` exports right away. `Enter` while typing adds a line break, which is written to the card as a space. Your edit is kept when you export without media.
 
 The confirmed range is used as is, with no extra padding. Added lines go into the sentence field. Reset restores the original timing and removes added lines.
 
