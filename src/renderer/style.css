@@ -1597,12 +1597,12 @@ body:focus-visible,
 }
 
 .media-timing-review-meaning {
-  max-height: 84px;
-  overflow: auto;
   color: var(--ctp-subtext1);
   font-size: 13px;
   line-height: 1.4;
   white-space: pre-wrap;
+  /* Grows with its text like the sentence; the dialog scrolls instead of the field. */
+  overflow-wrap: anywhere;
 }
 
 .media-timing-review-translation {
