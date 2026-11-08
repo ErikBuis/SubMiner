@@ -151,18 +151,20 @@ During preview, the yellow cursor follows the audio player's position through th
 | Action                   | How                                                                   |
 | ------------------------ | --------------------------------------------------------------------- |
 | Trim                     | Drag either edge, or click the waveform to move the nearer edge there |
-| Nudge an edge            | Arrow keys on a focused edge (100 ms, `Shift` for 500 ms)             |
+| Nudge an edge            | Arrow keys on an edge you clicked (100 ms, `Shift` for 500 ms)        |
 | Move an edge by buttons  | −2.0s / −0.1s / +0.1s / +2.0s for the start (left) and end (right)    |
 | Slide the clip           | Drag the middle                                                       |
 | Reach past the view      | Move an edge past it; the timeline widens to keep the edge in view    |
 | Pick the screenshot      | Screenshot slider or Frame buttons (static images only)               |
 | Add previous / next line | `P` / `N` (`Shift+P` / `Shift+N` removes)                             |
 | Preview                  | `Space` or Play selection                                             |
-| Export the card          | `Enter` or Export card                                                |
+| Export the card          | `Ctrl/Cmd+Enter` or Export card                                       |
 | Cancel                   | `Escape`                                                              |
-| Reach any control        | `Tab` / `Shift+Tab`, then `Space` or `Enter` presses a focused button |
+| Move between controls    | `Tab` / `Shift+Tab`, or the arrow keys by position on screen          |
+| Press the focused button | `Enter`                                                               |
+| Edit the translation     | Click it, or `Enter` on it; `Escape` or `Enter` stops typing          |
 
-The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. `Enter` in the translation still exports the card, and line breaks are written as spaces. Your edit is kept when you export without media.
+The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. Click it, or reach it with the keyboard and press `Enter`, to type. `Escape` or `Enter` stops typing without closing the dialog, and `Ctrl/Cmd+Enter` exports right away. Line breaks (`Shift+Enter`) are written as spaces. Your edit is kept when you export without media.
 
 Play selection, Export card and the key hints stay at the bottom of the dialog, so they never scroll away. The exported range is used as is, with no extra padding. Added lines go into the sentence field. Reset, between the start and end buttons, restores the mined clip and timeline view for the lines on the card. Added lines, the translation and the screenshot stay as they are. Reset all, next to Cancel, undoes every change, unticks Without media and returns the review to how it opened.
 
