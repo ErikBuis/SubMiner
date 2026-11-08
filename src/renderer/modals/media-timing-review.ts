@@ -885,7 +885,7 @@ export function createMediaTimingReviewModal(
 
   /**
    * The translation only takes typing while it is being edited: a click, or Enter while
-   * it is focused, starts that, and Escape, Enter or leaving the field ends it. Until
+   * it is focused, starts that, and Escape or leaving the field ends it. Until
    * then it is a stop for Tab and the arrow keys like any button, so Space, P and N keep
    * their review meaning there.
    */
@@ -1496,17 +1496,14 @@ export function createMediaTimingReviewModal(
     const exportShortcut =
       event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey;
     if (event.target === translation && translationEditing) {
-      // Typing goes to the translation. Escape or Enter leaves it without cancelling the
-      // review, and Ctrl/Cmd+Enter still exports. Shift+Enter types a line break.
+      // Typing goes to the translation, and Enter types a line break. Escape leaves it
+      // without cancelling the review, and Ctrl/Cmd+Enter still exports.
       if (exportShortcut) {
         event.preventDefault();
         confirmSelection();
         return true;
       }
-      if (
-        event.key === 'Escape' ||
-        (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey)
-      ) {
+      if (event.key === 'Escape') {
         event.preventDefault();
         stopTranslationEditing();
         return true;
