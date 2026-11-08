@@ -309,7 +309,20 @@
                 </div>
               </div>
             </div>
-            <blockquote id="mediaTimingReviewText" class="media-timing-review-text"></blockquote>
+            <blockquote
+              id="mediaTimingReviewText"
+              class="media-timing-review-text"
+              tabindex="0"
+              aria-label="Sentence on card"
+            ></blockquote>
+            <textarea
+              id="mediaTimingReviewSentence"
+              class="media-timing-review-sentence-input hidden"
+              rows="1"
+              spellcheck="false"
+              readonly
+              aria-label="Sentence on card"
+            ></textarea>
 
             <div
               id="mediaTimingReviewTranslationRow"

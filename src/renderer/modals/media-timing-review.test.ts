@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { CONTROLLER_REVIEW_ACTIONS } from '../../shared/controller-review';
 import {
+  applySentenceLineChange,
   buildMediaTimingReviewTranslation,
   MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS,
   isMediaTimingReviewButtonAvailable,
@@ -543,4 +544,67 @@ test('keyboard navigation skips the mouse-only handles and screenshot slider', (
   // The translation only takes typing after Enter or a click.
   const translation = html.match(/<textarea\s+id="mediaTimingReviewTranslation"[^>]*>/)?.[0] ?? '';
   assert.match(translation, /\sreadonly\s/);
+  // So does the sentence, whose subtitle lines are a Tab and arrow-key stop of their own.
+  const sentence = html.match(/<textarea\s+id="mediaTimingReviewSentence"[^>]*>/)?.[0] ?? '';
+  assert.match(sentence, /\sreadonly\s/);
+  const lines = html.match(/<blockquote\s+id="mediaTimingReviewText"[^>]*>/)?.[0] ?? '';
+  assert.match(lines, /tabindex="0"/);
+});
+
+test('lines added to or removed from a typed sentence go in or out at its ends', () => {
+  const typed = '荷物が届くのは、明日かな';
+  const withPrevious = applySentenceLineChange({
+    text: typed,
+    line: 'まだ来てないんだよね',
+    side: 'previous',
+    added: true,
+  });
+  assert.equal(withPrevious, 'まだ来てないんだよね 荷物が届くのは、明日かな');
+  const withBoth = applySentenceLineChange({
+    text: withPrevious,
+    line: 'じゃあ、一緒に待とうか',
+    side: 'next',
+    added: true,
+  });
+  assert.equal(withBoth, 'まだ来てないんだよね 荷物が届くのは、明日かな じゃあ、一緒に待とうか');
+  assert.equal(
+    applySentenceLineChange({
+      text: withBoth,
+      line: 'まだ来てないんだよね',
+      side: 'previous',
+      added: false,
+    }),
+    '荷物が届くのは、明日かな じゃあ、一緒に待とうか',
+  );
+  assert.equal(
+    applySentenceLineChange({
+      text: withBoth,
+      line: 'じゃあ、一緒に待とうか',
+      side: 'next',
+      added: false,
+    }),
+    'まだ来てないんだよね 荷物が届くのは、明日かな',
+  );
+});
+
+test('a removed line the user rewrote stays in the typed sentence', () => {
+  const typed = 'まだ来てないね 荷物が届くのは明日かな';
+  assert.equal(
+    applySentenceLineChange({
+      text: typed,
+      line: 'まだ来てないんだよね',
+      side: 'previous',
+      added: false,
+    }),
+    typed,
+  );
+  // Adding to an emptied sentence gives just the line; an empty line changes nothing.
+  assert.equal(
+    applySentenceLineChange({ text: '  ', line: 'うん', side: 'next', added: true }),
+    'うん',
+  );
+  assert.equal(
+    applySentenceLineChange({ text: typed, line: ' ', side: 'next', added: true }),
+    typed,
+  );
 });

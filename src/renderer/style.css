@@ -1578,6 +1578,41 @@ body:focus-visible,
   color: var(--ctp-text);
 }
 
+.media-timing-review-text {
+  cursor: text;
+}
+
+.media-timing-review-text:focus {
+  outline: none;
+}
+
+/* The sentence once edited: as typed, in the place and look of the lines it replaces. It
+   grows with its text, so only the dialog scrolls. */
+.media-timing-review-sentence-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 0;
+  margin: 0 0 12px;
+  padding: 8px 14px;
+  border: 0;
+  border-left: 3px solid var(--ctp-mauve);
+  border-radius: 0 10px 10px 0;
+  background: var(--ctp-mantle);
+  color: var(--ctp-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 560;
+  line-height: 1.45;
+  field-sizing: content;
+  overflow: hidden;
+  resize: none;
+}
+
+.media-timing-review-sentence-input:focus {
+  outline: none;
+}
+
 /* Card fields shown read-only above the sentence; the translation below is editable. */
 .media-timing-review-card {
   display: grid;
@@ -2013,6 +2048,22 @@ body:focus-visible,
 .media-timing-review-modal[data-keyboard-nav]
   .media-timing-review-translation-input:read-write:focus-visible {
   outline-color: var(--ctp-teal);
+}
+
+/* The sentence works like the translation: blue when selected, mauve while typing. */
+.media-timing-review-modal[data-keyboard-nav] .media-timing-review-text:focus-visible,
+.media-timing-review-modal[data-keyboard-nav] .media-timing-review-sentence-input:focus-visible {
+  outline: 2px solid var(--ctp-blue);
+  outline-offset: 2px;
+}
+
+.media-timing-review-sentence-input:read-only {
+  caret-color: transparent;
+}
+
+.media-timing-review-modal[data-keyboard-nav]
+  .media-timing-review-sentence-input:read-write:focus-visible {
+  outline-color: var(--ctp-mauve);
 }
 
 .media-timing-review-modal[data-keyboard-nav] .media-timing-review-handle:focus-visible::after {
