@@ -58,6 +58,14 @@ export abstract class BaseWindowTracker {
     return this.currentGeometry;
   }
 
+  /**
+   * The target window's client area (the video without title bar and borders), in the same
+   * coordinates as getGeometry(). Null when that is the whole window or the tracker can't tell.
+   */
+  getContentGeometry(): WindowGeometry | null {
+    return null;
+  }
+
   isTracking(): boolean {
     return this.windowFound;
   }

@@ -72,6 +72,53 @@ test('WindowsWindowTracker updates geometry from poll output', () => {
   assert.equal(tracker.isTargetWindowFocused(), true);
 });
 
+test('WindowsWindowTracker reports the client area of a windowed mpv', () => {
+  const contentBounds = { x: 11, y: 52, width: 1278, height: 687 };
+  let geometrySeenByListener: unknown = 'not called';
+  const tracker = new WindowsWindowTracker(undefined, {
+    pollMpvWindows: () => {
+      const result = mpvVisible({ x: 10, y: 20, width: 1280, height: 720 });
+      result.matches[0]!.contentBounds = contentBounds;
+      return result;
+    },
+  });
+  tracker.onGeometryChange = () => {
+    geometrySeenByListener = tracker.getContentGeometry();
+  };
+
+  assert.equal(tracker.getContentGeometry(), null);
+  (tracker as unknown as { pollGeometry: () => void }).pollGeometry();
+
+  assert.deepEqual(tracker.getContentGeometry(), contentBounds);
+  assert.deepEqual(geometrySeenByListener, contentBounds);
+});
+
+test('WindowsWindowTracker reports no client area when mpv has none or is lost', () => {
+  let result: MpvPollResult = mpvVisible();
+  result.matches[0]!.contentBounds = { x: 1, y: 32, width: 1278, height: 687 };
+  const tracker = new WindowsWindowTracker(undefined, {
+    pollMpvWindows: () => result,
+    maxConsecutiveMisses: 1,
+    trackingLossGraceMs: 0,
+  });
+  const poll = () => (tracker as unknown as { pollGeometry: () => void }).pollGeometry();
+
+  poll();
+  assert.notEqual(tracker.getContentGeometry(), null);
+
+  result = mpvVisible();
+  poll();
+  assert.equal(tracker.getContentGeometry(), null);
+
+  result = mpvVisible();
+  result.matches[0]!.contentBounds = { x: 1, y: 32, width: 1278, height: 687 };
+  poll();
+  result = mpvNotFound;
+  poll();
+  assert.equal(tracker.isTracking(), false);
+  assert.equal(tracker.getContentGeometry(), null);
+});
+
 test('WindowsWindowTracker preserves an unfocused initial match', () => {
   const tracker = new WindowsWindowTracker(undefined, {
     pollMpvWindows: () => mpvVisible({ x: 10, y: 20, width: 1280, height: 720, focused: false }),
