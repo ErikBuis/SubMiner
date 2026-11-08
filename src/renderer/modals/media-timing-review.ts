@@ -1609,8 +1609,10 @@ export function createMediaTimingReviewModal(
 
   function wireDomEvents(): void {
     // A pointer user does not need the keyboard focus rings until Tab is pressed again.
-    ctx.dom.mediaTimingReviewModal.addEventListener('pointerdown', () => {
-      delete ctx.dom.mediaTimingReviewModal.dataset.keyboardNav;
+    // Listen for click, not pointerdown: the Yomitan hover shield swallows presses inside
+    // the dialog. Clicks made by Enter (detail 0) keep keyboard navigation on.
+    ctx.dom.mediaTimingReviewModal.addEventListener('click', (event) => {
+      if (event.detail > 0) delete ctx.dom.mediaTimingReviewModal.dataset.keyboardNav;
     });
     ctx.dom.mediaTimingReviewFrameSlider.addEventListener('input', () => {
       if (!resolveInFlight) framePicker.choose(Number(ctx.dom.mediaTimingReviewFrameSlider.value));
@@ -1654,8 +1656,8 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewPlay.addEventListener('click', () => void togglePreview());
     ctx.dom.mediaTimingReviewReset.addEventListener('click', () => resetTiming());
     ctx.dom.mediaTimingReviewResetAll.addEventListener('click', () => resetAll());
-    // A click into the translation edits it straight away.
-    ctx.dom.mediaTimingReviewTranslation.addEventListener('pointerdown', () => {
+    // A click into the translation edits it straight away (the caret stays where it landed).
+    ctx.dom.mediaTimingReviewTranslation.addEventListener('click', () => {
       if (!ctx.dom.mediaTimingReviewTranslation.disabled) setTranslationEditing(true);
     });
     ctx.dom.mediaTimingReviewTranslation.addEventListener('blur', () => {
