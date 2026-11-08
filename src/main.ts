@@ -236,6 +236,7 @@ import {
 import { ensureLinuxRuntimePluginAssets } from './main/runtime/linux-runtime-plugin-assets';
 import { createUpdateServiceRuntime } from './main/runtime/update/update-service-runtime';
 import { shouldSuppressVisibleOverlayRaiseForSeparateWindow } from './main/runtime/settings-window-z-order';
+import { resolveModalWindowGeometry } from './main/runtime/modal-window-geometry';
 import { type StartupState, applyStartupState, createAppState } from './main/state';
 import { ConfigService, DEFAULT_CONFIG, generateConfigTemplate } from './config';
 import { resolveConfigDir } from './config/path-resolution';
@@ -360,6 +361,8 @@ const bootServices = createMainBootServices({
           mainWindow: overlayManager.getMainWindow(),
           separateWindows: getOverlayForegroundSeparateWindows(),
         }),
+      resolveModalWindowGeometry: (geometry) =>
+        resolveModalWindowGeometry(geometry, appState.windowTracker),
     }),
   createOverlayModalInputState,
   createOverlayContentMeasurementStore: ({ logger }) => {
