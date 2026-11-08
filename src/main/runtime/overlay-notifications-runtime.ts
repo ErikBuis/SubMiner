@@ -37,6 +37,11 @@ export interface OverlayNotificationsRuntimeDeps {
   getMpvClient: () => MpvIpcClient | null;
   getAnkiIntegration: () => AnkiIntegration | null;
   getRuntimeOptionsManager: () => RuntimeOptionsManager | null;
+  /**
+   * Called right before asking Anki to open a card, while the click that asked for it still
+   * counts as the user's last input. On Windows this lets Anki's browser come to the front.
+   */
+  allowForegroundHandoff?: () => void;
 }
 
 export function createOverlayNotificationsRuntime(deps: OverlayNotificationsRuntimeDeps): {
@@ -143,6 +148,7 @@ export function createOverlayNotificationsRuntime(deps: OverlayNotificationsRunt
   }
 
   async function openAnkiCardFromNotification(noteId: number): Promise<void> {
+    deps.allowForegroundHandoff?.();
     const activeIntegrationOpen = deps.getAnkiIntegration()?.openNoteInAnki(noteId);
     if (activeIntegrationOpen) {
       await activeIntegrationOpen;
