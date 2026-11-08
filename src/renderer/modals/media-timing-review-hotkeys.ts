@@ -20,7 +20,7 @@ export const MEDIA_TIMING_REVIEW_BUTTON_HOTKEYS: Partial<
   Record<ButtonDomKey, MediaTimingReviewButtonHotkey>
 > = {
   mediaTimingReviewPlay: { action: 'Play or stop the selection', keys: 'Space' },
-  mediaTimingReviewConfirm: { action: 'Export the card', keys: 'Enter' },
+  mediaTimingReviewConfirm: { action: 'Export the card', keys: 'Ctrl+Enter' },
   mediaTimingReviewCancel: { action: 'Stop reviewing', keys: 'Esc' },
   mediaTimingReviewCancelBack: { action: 'Go back to the review', keys: 'Esc' },
   mediaTimingReviewPrevAdd: { action: 'Add the previous line', keys: 'P' },
