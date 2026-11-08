@@ -10,6 +10,8 @@ import {
   applyTranslationLineChanges,
   MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS,
   isMediaTimingReviewButtonAvailable,
+  mediaTimingReviewArrowDirection,
+  pickMediaTimingReviewArrowTarget,
   buildMediaTimingLineSelection,
   buildMediaTimingWaveformPath,
   constrainMediaTimingSelection,
@@ -855,4 +857,73 @@ test('review lines prefer the note furigana on the card text and generated readi
     annotateReviewLine({ line: 'ねえ', own: false, noteFurigana: null, generated }),
     null,
   );
+});
+
+test('arrow keys move to the control next to the focused one on screen', () => {
+  const box = (left: number, top: number, width = 60, height = 24) => ({
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+  });
+  // Row 1: header buttons on the right. Row 2: a full-width translation field.
+  // Row 3: three buttons. Row 4: one button far right, lower down.
+  const resetAll = box(500, 0);
+  const cancel = box(570, 0);
+  const translation = box(0, 50, 640, 50);
+  const left = box(0, 130);
+  const middle = box(290, 130);
+  const right = box(580, 130);
+  const exportCard = box(580, 300);
+  const boxes = [resetAll, cancel, translation, left, middle, right, exportCard];
+  const pick = (from: number, direction: Parameters<typeof pickMediaTimingReviewArrowTarget>[2]) =>
+    pickMediaTimingReviewArrowTarget(boxes[from]!, boxes, direction, from);
+
+  // Left and right stay on the row and stop at its ends.
+  assert.equal(pick(3, 'right'), 4);
+  assert.equal(pick(4, 'right'), 5);
+  assert.equal(pick(5, 'right'), -1);
+  assert.equal(pick(4, 'left'), 3);
+  assert.equal(pick(3, 'left'), -1);
+  assert.equal(pick(2, 'left'), -1);
+  assert.equal(pick(1, 'left'), 0);
+  // Up and down take the next control above or below, the best lined up first.
+  assert.equal(pick(2, 'up'), 0);
+  assert.equal(pick(2, 'down'), 4);
+  assert.equal(pick(3, 'up'), 2);
+  assert.equal(pick(5, 'down'), 6);
+  // Nothing lined up below: the only control below still counts.
+  assert.equal(pick(3, 'down'), 6);
+  assert.equal(pick(6, 'up'), 5);
+  assert.equal(pick(6, 'down'), -1);
+  assert.equal(pick(0, 'up'), -1);
+
+  // A control straight below wins over a slightly nearer one far off to the side.
+  const from = box(0, 0);
+  const offSide = box(200, 40);
+  const straight = box(0, 150);
+  assert.equal(pickMediaTimingReviewArrowTarget(from, [offSide, straight], 'down'), 1);
+});
+
+test('arrow directions come from the arrow keys only', () => {
+  assert.equal(mediaTimingReviewArrowDirection('ArrowUp'), 'up');
+  assert.equal(mediaTimingReviewArrowDirection('ArrowDown'), 'down');
+  assert.equal(mediaTimingReviewArrowDirection('ArrowLeft'), 'left');
+  assert.equal(mediaTimingReviewArrowDirection('ArrowRight'), 'right');
+  assert.equal(mediaTimingReviewArrowDirection('Enter'), null);
+});
+
+test('keyboard navigation skips the mouse-only handles and screenshot slider', () => {
+  const html = readFileSync('src/renderer/index.html', 'utf8');
+  for (const id of [
+    'mediaTimingReviewStartHandle',
+    'mediaTimingReviewEndHandle',
+    'mediaTimingReviewFrameSlider',
+  ]) {
+    const tag = html.match(new RegExp(`<[a-z]+\\s+id="${id}"[^>]*>`))?.[0] ?? '';
+    assert.match(tag, /tabindex="-1"/, `${id} should be out of the Tab order`);
+  }
+  // The translation only takes typing after Enter or a click.
+  const translation = html.match(/<textarea\s+id="mediaTimingReviewTranslation"[^>]*>/)?.[0] ?? '';
+  assert.match(translation, /\sreadonly\s/);
 });
