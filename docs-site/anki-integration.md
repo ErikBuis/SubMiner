@@ -26,6 +26,8 @@ Set `ankiConnect.behavior.autoUpdateNewCards` to `false` to stop automatic filli
 
 If a Yomitan field template uses `{popup-selection-text}` and you select several meanings in the popup, they arrive on separate lines. To get one line instead, turn on **Join selected definitions on one line** in Yomitan's Anki settings. Meanings are then joined with `; ` and synonyms with `, `; both separators can be changed there. Tags and labels next to the definitions are left out.
 
+A custom field template that falls back to the definition when nothing is selected can use the `formatGlossaryFlat` helper for that fallback, as in `{{{formatGlossaryFlat definition}}}`. It writes the whole definition on one line: meanings joined with `; ` and synonyms with `, ` (pass `senseSeparator="..."` or `glossSeparator="..."` to change them, and `dictionary="..."` to use one dictionary only). Notes, references and JMdict's table of other spellings are left out.
+
 ### Proxy mode setup (Yomitan / texthooker) {#proxy-mode-setup-yomitan-texthooker}
 
 ```jsonc
