@@ -56,9 +56,7 @@ export function createMediaTimingFramePicker(options: {
       state.timestamp = result.timestamp;
       state.dataUrl = result.dataUrl;
       state.blockConfirm = false;
-      state.message = state.manual
-        ? 'Selected frame stays fixed when you trim audio.'
-        : 'Following the audio midpoint.';
+      state.message = state.manual ? 'Selected frame stays fixed when you trim audio.' : '';
     } catch (error) {
       if (reviewId !== request.reviewId || sequence !== request.sequence) return;
       state.message = error instanceof Error ? error.message : 'Screenshot preview is unavailable.';
