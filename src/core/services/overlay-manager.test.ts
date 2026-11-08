@@ -76,6 +76,30 @@ test('overlay manager applies bounds for main and modal windows', () => {
   assert.deepEqual(modalCalls, [{ x: 80, y: 90, width: 100, height: 110 }]);
 });
 
+test('overlay manager lets the modal window bounds be adjusted', () => {
+  const manager = createOverlayManager({
+    resolveModalWindowGeometry: (geometry) => ({ ...geometry, y: geometry.y + 31 }),
+  });
+  const calls: Electron.Rectangle[] = [];
+  const window = {
+    isDestroyed: () => false,
+    getTitle: () => 'SubMiner Overlay',
+    setBounds: (bounds: Electron.Rectangle) => {
+      calls.push(bounds);
+    },
+  } as unknown as Electron.BrowserWindow;
+  manager.setMainWindow(window);
+  manager.setModalWindow(window);
+
+  manager.setOverlayWindowBounds({ x: 0, y: 0, width: 30, height: 40 });
+  manager.setModalWindowBounds({ x: 0, y: 0, width: 30, height: 40 });
+
+  assert.deepEqual(calls, [
+    { x: 0, y: 0, width: 30, height: 40 },
+    { x: 0, y: 31, width: 30, height: 40 },
+  ]);
+});
+
 test('overlay manager can suppress z-order promotion during bounds updates', () => {
   const calls: string[] = [];
   const createManager = createOverlayManager as unknown as (options: {

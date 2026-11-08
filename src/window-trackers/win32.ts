@@ -1,4 +1,5 @@
 import koffi from 'koffi';
+import { resolveClientAreaBounds, type WindowBounds } from './window-client-area';
 
 const user32 = koffi.load('user32.dll');
 const dwmapi = koffi.load('dwmapi.dll');
@@ -9,6 +10,12 @@ const RECT = koffi.struct('RECT', {
   Top: 'int',
   Right: 'int',
   Bottom: 'int',
+});
+
+// Registered by name for the ClientToScreen prototype below.
+koffi.struct('POINT', {
+  x: 'int',
+  y: 'int',
 });
 
 // Registered by name for the DwmExtendFrameIntoClientArea prototype below.
@@ -45,6 +52,10 @@ const SetWindowLongPtrW = user32.func(
 );
 const GetWindowFn = user32.func('intptr __stdcall GetWindow(intptr hwnd, uint uCmd)');
 const GetWindowRect = user32.func('bool __stdcall GetWindowRect(intptr hwnd, _Out_ RECT *lpRect)');
+const GetClientRect = user32.func('bool __stdcall GetClientRect(intptr hwnd, _Out_ RECT *lpRect)');
+const ClientToScreen = user32.func(
+  'bool __stdcall ClientToScreen(intptr hwnd, _Inout_ POINT *lpPoint)',
+);
 
 const DwmGetWindowAttribute = dwmapi.func(
   'int __stdcall DwmGetWindowAttribute(intptr hwnd, uint dwAttribute, _Out_ RECT *pvAttribute, uint cbAttribute)',
@@ -124,16 +135,13 @@ function assertGetWindowLongSucceeded(operation: string, result: number): number
   throw new Error(`${operation} failed (${GetLastError()})`);
 }
 
-export interface WindowBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+export type { WindowBounds };
 
 export interface MpvWindowMatch {
   hwnd: number;
   bounds: WindowBounds;
+  /** The client area (the video, without title bar and borders), when it can be read. */
+  contentBounds?: WindowBounds;
   area: number;
   isForeground: boolean;
 }
@@ -158,6 +166,19 @@ function getWindowBounds(hwnd: number): WindowBounds | null {
   if (width <= 0 || height <= 0) return null;
 
   return { x: rect.Left, y: rect.Top, width, height };
+}
+
+function getClientAreaScreenRect(hwnd: number): WindowBounds | null {
+  const rect = { Left: 0, Top: 0, Right: 0, Bottom: 0 };
+  if (!GetClientRect(hwnd, rect)) return null;
+  const origin = { x: 0, y: 0 };
+  if (!ClientToScreen(hwnd, origin)) return null;
+  return {
+    x: origin.x,
+    y: origin.y,
+    width: rect.Right - rect.Left,
+    height: rect.Bottom - rect.Top,
+  };
 }
 
 function getProcessNameByPid(pid: number): string | null {
@@ -240,9 +261,11 @@ export function findMpvWindows(targetPid?: number | null): MpvPollResult {
     const isForeground = foregroundHwnd !== 0 && hwnd === foregroundHwnd;
     if (isForeground) hasFocused = true;
 
+    const contentBounds = resolveClientAreaBounds(bounds, getClientAreaScreenRect(hwnd));
     matches.push({
       hwnd,
       bounds,
+      ...(contentBounds ? { contentBounds } : {}),
       area: bounds.width * bounds.height,
       isForeground,
     });
