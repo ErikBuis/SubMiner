@@ -225,6 +225,7 @@ import {
   VIEW_CHANGELOG_ACTION_ID,
 } from './main/runtime/update/update-notifications';
 import { createOverlayNotificationsRuntime } from './main/runtime/overlay-notifications-runtime';
+import { allowWindowsForegroundHandoff } from './window-trackers/windows-helper';
 import {
   runUpdateCliCommand,
   writeUpdateCliCommandResponse,
@@ -1079,6 +1080,14 @@ const overlayNotificationsRuntime = createOverlayNotificationsRuntime({
   getMpvClient: () => appState.mpvClient,
   getAnkiIntegration: () => appState.ankiIntegration,
   getRuntimeOptionsManager: () => appState.runtimeOptionsManager,
+  allowForegroundHandoff:
+    process.platform === 'win32'
+      ? () => {
+          if (!allowWindowsForegroundHandoff()) {
+            logger.debug('Windows refused to hand the foreground to Anki.');
+          }
+        }
+      : undefined,
 });
 const {
   flushQueuedMpvOsdNotifications,

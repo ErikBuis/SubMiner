@@ -5,6 +5,7 @@ import type { BrowserWindow } from 'electron';
 import { OVERLAY_WINDOW_CONTENT_READY_FLAG } from '../../core/services/overlay-window-flags';
 import type { MpvIpcClient } from '../../core/services';
 import type { ResolvedConfig } from '../../types';
+import type { AnkiIntegration } from '../../anki-integration';
 import { createOverlayNotificationsRuntime } from './overlay-notifications-runtime';
 
 function createRuntimeHarness(contentReady: boolean) {
@@ -57,4 +58,30 @@ test('reporting overlay readiness after an mpv connect resends ready only for lo
   const loading = createRuntimeHarness(false);
   loading.runtime.reportOverlayContentReadyToPlugin();
   assert.deepEqual(loading.scriptMessages(), []);
+});
+
+test('opening a card from a notification hands the foreground over before Anki opens it', async () => {
+  const calls: string[] = [];
+  const runtime = createOverlayNotificationsRuntime({
+    getResolvedConfig: () => ({}) as ResolvedConfig,
+    getMainOverlayWindow: () => null,
+    getVisibleOverlayVisible: () => false,
+    broadcastToOverlayWindows: () => {},
+    showMpvOsd: () => {},
+    getMpvClient: () => null,
+    getAnkiIntegration: () =>
+      ({
+        openNoteInAnki: async (noteId: number) => {
+          calls.push(`open ${noteId}`);
+        },
+      }) as unknown as AnkiIntegration,
+    getRuntimeOptionsManager: () => null,
+    allowForegroundHandoff: () => {
+      calls.push('handoff');
+    },
+  });
+
+  await runtime.openAnkiCardFromNotification(42);
+
+  assert.deepEqual(calls, ['handoff', 'open 42']);
 });
