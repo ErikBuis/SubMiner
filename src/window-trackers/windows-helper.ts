@@ -112,3 +112,12 @@ export function getWindowsForegroundProcessName(): string | null {
     return null;
   }
 }
+
+/** See allowAnyProcessToSetForeground in win32.ts. */
+export function allowWindowsForegroundHandoff(): boolean {
+  try {
+    return loadWin32().allowAnyProcessToSetForeground();
+  } catch {
+    return false;
+  }
+}

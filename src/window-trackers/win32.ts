@@ -25,6 +25,9 @@ const EnumWindows = user32.func('bool __stdcall EnumWindows(WNDENUMPROC *cb, int
 const IsWindowVisible = user32.func('bool __stdcall IsWindowVisible(intptr hwnd)');
 const IsIconic = user32.func('bool __stdcall IsIconic(intptr hwnd)');
 const GetForegroundWindow = user32.func('intptr __stdcall GetForegroundWindow()');
+const AllowSetForegroundWindow = user32.func(
+  'bool __stdcall AllowSetForegroundWindow(uint dwProcessId)',
+);
 const SetWindowPos = user32.func(
   'bool __stdcall SetWindowPos(intptr hwnd, intptr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags)',
 );
@@ -345,4 +348,15 @@ export function lowerOverlay(overlayHwnd: number): void {
   resetLastError();
   const bottomResult = SetWindowPos(overlayHwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_FLAGS);
   assertSetWindowPosSucceeded('lowerOverlay bottom adjustment', bottomResult);
+}
+
+const ASFW_ANY = 0xffffffff;
+
+/**
+ * Lets the next window another process brings up (Anki's browser) take the foreground.
+ * Windows only allows this while SubMiner itself may set the foreground, i.e. right after
+ * the user clicked one of its windows. Without it the window opens behind mpv.
+ */
+export function allowAnyProcessToSetForeground(): boolean {
+  return AllowSetForegroundWindow(ASFW_ANY);
 }
