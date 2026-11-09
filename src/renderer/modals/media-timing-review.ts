@@ -71,6 +71,125 @@ export const MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS: Record<
   discard: 'mediaTimingReviewDiscard',
 };
 
+const FOCUSABLE_SELECTOR = 'button, input, textarea, select, [tabindex]:not([tabindex="-1"])';
+
+/**
+ * The controls Tab and the arrow keys can reach on the visible step of the review, in
+ * document order. The edge handles and the screenshot slider are mouse-only
+ * (tabindex -1): the nudge and frame buttons do the same from the keyboard.
+ */
+export function listMediaTimingReviewFocusTargets(root: ParentNode): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (element) =>
+      element.tabIndex >= 0 &&
+      !(element as HTMLButtonElement).disabled &&
+      element.closest('.hidden, [inert]') === null &&
+      element.getClientRects().length > 0 &&
+      getComputedStyle(element).visibility !== 'hidden',
+  );
+}
+
+/**
+ * Where Tab or Shift+Tab should go so focus wraps around the dialog instead of leaving
+ * it. Null means the browser's own move already stays inside.
+ */
+export function wrapMediaTimingReviewFocus(
+  targets: readonly HTMLElement[],
+  active: Element | null,
+  backwards: boolean,
+): HTMLElement | null {
+  if (targets.length === 0) return null;
+  const first = targets[0]!;
+  const last = targets[targets.length - 1]!;
+  const index = active === null ? -1 : targets.indexOf(active as HTMLElement);
+  if (index === -1) return backwards ? last : first;
+  if (backwards && active === first) return last;
+  if (!backwards && active === last) return first;
+  return null;
+}
+
+/**
+ * Whether focus sits on something inside the dialog. The dialog root itself does not
+ * count: a click on plain text focuses it, and keys then start from the first or last
+ * control as if focus were outside.
+ */
+export function isMediaTimingReviewFocusInside(
+  modal: Pick<Node, 'contains'>,
+  active: Node | null,
+): boolean {
+  return active !== null && active !== modal && modal.contains(active);
+}
+
+export type MediaTimingReviewArrowDirection = 'up' | 'down' | 'left' | 'right';
+
+export type MediaTimingReviewBox = { left: number; top: number; right: number; bottom: number };
+
+export function mediaTimingReviewArrowDirection(
+  key: string,
+): MediaTimingReviewArrowDirection | null {
+  switch (key) {
+    case 'ArrowUp':
+      return 'up';
+    case 'ArrowDown':
+      return 'down';
+    case 'ArrowLeft':
+      return 'left';
+    case 'ArrowRight':
+      return 'right';
+    default:
+      return null;
+  }
+}
+
+/** How far a vertical move may stray sideways, relative to how far it goes down or up. */
+const ARROW_SIDEWAYS_WEIGHT = 2;
+/** Boxes may overlap this much and still count as lying past each other. */
+const ARROW_OVERLAP_TOLERANCE_PX = 2;
+
+/**
+ * Index of the control an arrow key moves to from the box `from`, by where the controls
+ * sit on screen, or -1 when nothing lies that way. Left and right stay on the same row.
+ * Up and down take the control past `from` that is closest, counting sideways distance
+ * double, so a control straight above or below wins over a nearer one off to the side.
+ */
+export function pickMediaTimingReviewArrowTarget(
+  from: MediaTimingReviewBox,
+  candidates: readonly MediaTimingReviewBox[],
+  direction: MediaTimingReviewArrowDirection,
+  skipIndex = -1,
+): number {
+  const fromCenterX = (from.left + from.right) / 2;
+  const fromCenterY = (from.top + from.bottom) / 2;
+  let best = -1;
+  let bestScore = Infinity;
+  candidates.forEach((box, index) => {
+    if (index === skipIndex) return;
+    const centerX = (box.left + box.right) / 2;
+    const centerY = (box.top + box.bottom) / 2;
+    let score: number;
+    if (direction === 'left' || direction === 'right') {
+      const sameRow = box.top < from.bottom && box.bottom > from.top;
+      const ahead = direction === 'right' ? centerX - fromCenterX : fromCenterX - centerX;
+      if (!sameRow || ahead <= 0) return;
+      score = ahead + Math.abs(centerY - fromCenterY);
+    } else {
+      const ahead = direction === 'down' ? box.top - from.bottom : from.top - box.bottom;
+      if (ahead < -ARROW_OVERLAP_TOLERANCE_PX) return;
+      const sideways = Math.max(0, box.left - from.right, from.left - box.right);
+      // The center distance only breaks ties between controls that all line up.
+      score =
+        Math.max(0, ahead) +
+        ARROW_SIDEWAYS_WEIGHT * sideways +
+        Math.abs(centerX - fromCenterX) / 100;
+    }
+    if (score < bestScore) {
+      bestScore = score;
+      best = index;
+    }
+  });
+  return best;
+}
+
 /** A controller press only counts when a mouse click could have reached the button. */
 export function isMediaTimingReviewButtonAvailable(button: HTMLButtonElement): boolean {
   return !button.disabled && button.closest('.hidden') === null;
@@ -434,6 +553,7 @@ export function createMediaTimingReviewModal(
   let trailingTrimPending = false;
   /** Once the user types in the translation it no longer follows added or removed lines. */
   let translationEdited = false;
+  let translationEditing = false;
   let resolveInFlight = false;
   let previewPlaying = false;
   let previewTimer: ReturnType<typeof setTimeout> | null = null;
@@ -774,6 +894,29 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewTranslationState.textContent = translationEdited ? 'edited' : 'auto';
   }
 
+  /**
+   * The translation only takes typing while it is being edited: a click, or Enter while
+   * it is focused, starts that, and Escape or leaving the field ends it. Until
+   * then it is a stop for Tab and the arrow keys like any button, so Space, P and N keep
+   * their review meaning there.
+   */
+  function setTranslationEditing(editing: boolean): void {
+    translationEditing = editing;
+    ctx.dom.mediaTimingReviewTranslation.readOnly = !editing;
+  }
+
+  function startTranslationEditing(): void {
+    const input = ctx.dom.mediaTimingReviewTranslation;
+    setTranslationEditing(true);
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+
+  function stopTranslationEditing(): void {
+    setTranslationEditing(false);
+    // The field stays focused, so show the ring that says it is selected, not edited.
+    ctx.dom.mediaTimingReviewModal.dataset.keyboardNav = 'true';
+  }
+
   function setTranslation(text: string, edited: boolean): void {
     ctx.dom.mediaTimingReviewTranslation.value = text;
     translationEdited = edited;
@@ -1063,7 +1206,16 @@ export function createMediaTimingReviewModal(
     highlightEdge(null);
   }
 
+  function isKeyboardNavActive(): boolean {
+    return ctx.dom.mediaTimingReviewModal.dataset.keyboardNav !== undefined;
+  }
+
+  /**
+   * Arrow keys nudge an edge handle that was clicked or focused on open. Once Tab or an
+   * arrow key started keyboard navigation, they move between controls instead.
+   */
   function handleEdgeKeydown(event: KeyboardEvent, edge: 'start' | 'end'): void {
+    if (isKeyboardNavActive()) return;
     const step = event.shiftKey ? COARSE_ADJUST_SECONDS : FINE_ADJUST_SECONDS;
     if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') nudgeEdge(edge, -step);
     else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') nudgeEdge(edge, step);
@@ -1281,6 +1433,8 @@ export function createMediaTimingReviewModal(
     options.syncSettingsModalSubtitleSuppression();
     ctx.dom.overlay.classList.add('interactive');
     if (ctx.platform.shouldToggleMouseIgnore) window.electronAPI.setIgnoreMouseEvents(false);
+    delete ctx.dom.mediaTimingReviewModal.dataset.keyboardNav;
+    setTranslationEditing(false);
     ctx.dom.mediaTimingReviewModal.classList.remove('hidden');
     ctx.dom.mediaTimingReviewModal.setAttribute('aria-hidden', 'false');
     window.electronAPI.notifyOverlayModalOpened('media-timing-review');
@@ -1291,41 +1445,124 @@ export function createMediaTimingReviewModal(
     queueWaveformLoad();
   }
 
+  /**
+   * Tab and Shift+Tab walk every control of the visible step and wrap at the ends, so
+   * focus never leaves the dialog. Focus rings on the handles and the translation only
+   * show once Tab was used, so the start handle's focus on open stays invisible.
+   */
+  function handleTabKey(event: KeyboardEvent): void {
+    const modal = ctx.dom.mediaTimingReviewModal;
+    modal.dataset.keyboardNav = 'true';
+    // The hidden step's controls are filtered out, so the whole modal is the scope.
+    const targets = listMediaTimingReviewFocusTargets(modal);
+    const active = document.activeElement;
+    // From a mouse-only control (the start handle focused on open, the slider) the
+    // browser's own move already goes to the next control after it.
+    if (
+      active instanceof HTMLElement &&
+      isMediaTimingReviewFocusInside(modal, active) &&
+      !targets.includes(active)
+    ) {
+      return;
+    }
+    const target = wrapMediaTimingReviewFocus(targets, active, event.shiftKey);
+    if (target === null) return;
+    event.preventDefault();
+    target.focus();
+  }
+
+  /** Arrow keys move the keyboard highlight to the control next to it on screen. */
+  function moveFocusByArrow(direction: MediaTimingReviewArrowDirection): void {
+    const modal = ctx.dom.mediaTimingReviewModal;
+    modal.dataset.keyboardNav = 'true';
+    const targets = listMediaTimingReviewFocusTargets(modal);
+    if (targets.length === 0) return;
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !isMediaTimingReviewFocusInside(modal, active)) {
+      targets[0]!.focus();
+      return;
+    }
+    const index = pickMediaTimingReviewArrowTarget(
+      active.getBoundingClientRect(),
+      targets.map((target) => target.getBoundingClientRect()),
+      direction,
+      targets.indexOf(active),
+    );
+    if (index !== -1) targets[index]!.focus();
+  }
+
+  /** Enter presses a focused button or checkbox, as Space would elsewhere. */
+  function pressFocusedControl(target: EventTarget | null): void {
+    if (target instanceof HTMLButtonElement && !target.disabled) target.click();
+    else if (target instanceof HTMLInputElement && target.type === 'checkbox' && !target.disabled)
+      target.click();
+  }
+
   function handleMediaTimingReviewKeydown(event: KeyboardEvent): boolean {
     if (!ctx.state.mediaTimingReviewModalOpen) return false;
+    const translation = ctx.dom.mediaTimingReviewTranslation;
     // Keys that belong to an IME composition in the translation (Escape cancels it).
-    if (event.target === ctx.dom.mediaTimingReviewTranslation && event.isComposing) return false;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      if (!ctx.dom.mediaTimingReviewCancelStep.classList.contains('hidden')) showEditor();
-      else requestCancel();
+    if (event.target === translation && event.isComposing) return false;
+    if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      handleTabKey(event);
       return true;
     }
-    if (event.target === ctx.dom.mediaTimingReviewTranslation) {
-      // Typing goes to the translation; only plain Enter still confirms the card.
-      if (event.key === 'Enter' && !event.shiftKey) {
+    const onEditor = ctx.dom.mediaTimingReviewCancelStep.classList.contains('hidden');
+    const exportShortcut =
+      event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey;
+    if (event.target === translation && translationEditing) {
+      // Typing goes to the translation, and Enter types a line break. Escape leaves it
+      // without cancelling the review, and Ctrl/Cmd+Enter still exports.
+      if (exportShortcut) {
         event.preventDefault();
         confirmSelection();
         return true;
       }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        stopTranslationEditing();
+        return true;
+      }
       return false;
     }
-    if (
-      event.code === 'Space' &&
-      event.target instanceof Element &&
-      !event.target.closest('button, input[type="checkbox"]')
-    ) {
+    if (event.key === 'Escape') {
       event.preventDefault();
-      void togglePreview();
+      if (!onEditor) showEditor();
+      else requestCancel();
+      return true;
+    }
+    const direction = mediaTimingReviewArrowDirection(event.key);
+    if (direction !== null && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      // A clicked edge handle already nudged its edge (see handleEdgeKeydown).
+      if (event.defaultPrevented) return true;
+      // Everything else, the screenshot slider included, moves the highlight.
+      event.preventDefault();
+      moveFocusByArrow(direction);
       return true;
     }
     if (
-      event.key === 'Enter' &&
-      ctx.dom.mediaTimingReviewCancelStep.classList.contains('hidden') &&
-      !(event.target instanceof Element && event.target.closest('button'))
+      event.target === ctx.dom.mediaTimingReviewFrameSlider &&
+      ['Home', 'End', 'PageUp', 'PageDown'].includes(event.key)
     ) {
+      // The screenshot moves with the Frame buttons only, never by keys on the slider.
       event.preventDefault();
-      confirmSelection();
+      return true;
+    }
+    if (exportShortcut) {
+      event.preventDefault();
+      if (onEditor) confirmSelection();
+      return true;
+    }
+    if (event.key === 'Enter' && !event.shiftKey && !event.altKey) {
+      event.preventDefault();
+      if (event.target === translation) startTranslationEditing();
+      else pressFocusedControl(event.target);
+      return true;
+    }
+    if (event.code === 'Space') {
+      // Space always previews, even on a focused button: Enter presses buttons.
+      event.preventDefault();
+      if (onEditor) void togglePreview();
       return true;
     }
     if (
@@ -1384,6 +1621,12 @@ export function createMediaTimingReviewModal(
   }
 
   function wireDomEvents(): void {
+    // A pointer user does not need the keyboard focus rings until Tab is pressed again.
+    // Listen for click, not pointerdown: the Yomitan hover shield swallows presses inside
+    // the dialog. Clicks made by Enter (detail 0) keep keyboard navigation on.
+    ctx.dom.mediaTimingReviewModal.addEventListener('click', (event) => {
+      if (event.detail > 0) delete ctx.dom.mediaTimingReviewModal.dataset.keyboardNav;
+    });
     ctx.dom.mediaTimingReviewFrameSlider.addEventListener('input', () => {
       if (!resolveInFlight) framePicker.choose(Number(ctx.dom.mediaTimingReviewFrameSlider.value));
     });
@@ -1392,15 +1635,6 @@ export function createMediaTimingReviewModal(
       if (!resolveInFlight && !state.loading && state.timestamp !== undefined)
         framePicker.choose(state.timestamp, direction);
     };
-    ctx.dom.mediaTimingReviewFrameSlider.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
-        event.preventDefault();
-        stepFrame(-1);
-      } else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
-        event.preventDefault();
-        stepFrame(1);
-      }
-    });
     ctx.dom.mediaTimingReviewFramePrevious.addEventListener('click', () => stepFrame(-1));
     ctx.dom.mediaTimingReviewFrameNext.addEventListener('click', () => stepFrame(1));
     ctx.dom.mediaTimingReviewFrameReset.addEventListener('click', () => {
@@ -1435,6 +1669,16 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewPlay.addEventListener('click', () => void togglePreview());
     ctx.dom.mediaTimingReviewReset.addEventListener('click', () => resetTiming());
     ctx.dom.mediaTimingReviewResetAll.addEventListener('click', () => resetAll());
+    // A click into the translation edits it straight away (the caret stays where it landed).
+    ctx.dom.mediaTimingReviewTranslation.addEventListener('click', () => {
+      if (!ctx.dom.mediaTimingReviewTranslation.disabled) setTranslationEditing(true);
+    });
+    ctx.dom.mediaTimingReviewTranslation.addEventListener('blur', () => {
+      // Focus is still here when only the window lost it (Alt+Tab), so keep editing.
+      if (document.activeElement !== ctx.dom.mediaTimingReviewTranslation) {
+        setTranslationEditing(false);
+      }
+    });
     ctx.dom.mediaTimingReviewTranslation.addEventListener('input', () => {
       if (translationEdited) return;
       translationEdited = true;

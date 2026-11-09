@@ -337,6 +337,7 @@
                 class="media-timing-review-translation-input"
                 rows="2"
                 spellcheck="true"
+                readonly
                 aria-label="Translation on card"
               ></textarea>
             </div>
@@ -395,7 +396,7 @@
                   id="mediaTimingReviewStartHandle"
                   class="media-timing-review-handle media-timing-review-handle-start"
                   role="slider"
-                  tabindex="0"
+                  tabindex="-1"
                   aria-label="Clip start"
                   aria-orientation="horizontal"
                 ></div>
@@ -403,7 +404,7 @@
                   id="mediaTimingReviewEndHandle"
                   class="media-timing-review-handle media-timing-review-handle-end"
                   role="slider"
-                  tabindex="0"
+                  tabindex="-1"
                   aria-label="Clip end"
                   aria-orientation="horizontal"
                 ></div>
@@ -511,6 +512,7 @@
                   max="1"
                   step="0.001"
                   value="0"
+                  tabindex="-1"
                   aria-label="Screenshot time"
                 />
                 <div class="media-timing-frame-buttons">
@@ -583,7 +585,7 @@
                 >
                 <span><kbd>Drag</kbd> trim or move clip</span>
                 <span><kbd>P</kbd>/<kbd>N</kbd> add line</span>
-                <span><kbd>Enter</kbd> export</span>
+                <span><kbd>Ctrl+Enter</kbd> export</span>
                 <span><kbd>Esc</kbd> cancel</span>
               </div>
             </div>
