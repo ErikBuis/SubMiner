@@ -107,9 +107,9 @@ This is informational. Tokenization uses Yomitan, not MeCab. Install MeCab only 
 - Ubuntu/Debian: `sudo apt install mecab libmecab-dev mecab-ipadic-utf8`
 - macOS: `brew install mecab mecab-ipadic`
 
-## "AnkiConnect: unable to connect"
+## "Can't reach Anki"
 
-Anki must be running with the AnkiConnect add-on. See [Anki integration prerequisites](/anki-integration#prerequisites).
+Anki must be running with the AnkiConnect add-on. Until it is, Yomitan hides the add-card buttons in the dictionary popup. See [Anki integration prerequisites](/anki-integration#prerequisites).
 
 - Direct mode: check that `ankiConnect.url` matches the AnkiConnect port.
 - Proxy mode: check `ankiConnect.proxy.upstreamUrl`, and point external Yomitan or browser clients at the SubMiner proxy.

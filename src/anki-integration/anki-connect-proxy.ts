@@ -1,6 +1,10 @@
 import http, { IncomingMessage, ServerResponse } from 'node:http';
 import axios, { AxiosInstance } from 'axios';
 import type { PluginMiningProvenance } from '../plugin-api';
+import { ANKI_UNREACHABLE_MESSAGE } from './anki-unreachable';
+
+/** Repeat the "can't reach Anki" warning at most this often while Anki stays closed. */
+const UNREACHABLE_NOTICE_INTERVAL_MS = 30_000;
 
 interface StartProxyOptions {
   host: string;
@@ -33,6 +37,7 @@ export interface AnkiConnectProxyServerDeps {
   logWarn: (message: string, ...args: unknown[]) => void;
   logError: (message: string, ...args: unknown[]) => void;
   notifyUnavailable?: (message: string) => void;
+  now?: () => number;
 }
 
 export class AnkiConnectProxyServer {
@@ -45,6 +50,7 @@ export class AnkiConnectProxyServer {
   private readyPromise: Promise<void> | null = null;
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((error: Error) => void) | null = null;
+  private lastUnreachableNoticeAt: number | null = null;
 
   constructor(private readonly deps: AnkiConnectProxyServerDeps) {
     this.client = axios.create({
@@ -212,6 +218,8 @@ export class AnkiConnectProxyServer {
       this.copyUpstreamHeaders(res, upstreamResponse.headers as Record<string, unknown>);
       res.statusCode = upstreamResponse.status;
       res.end(responseBody);
+      // Anki answered, so the next outage warns right away.
+      this.lastUnreachableNoticeAt = null;
 
       if (req.method === 'POST') {
         this.maybeEnqueueFromRequest(requestJson, responseBody, provenance);
@@ -220,7 +228,25 @@ export class AnkiConnectProxyServer {
       this.deps.logWarn('[anki-proxy] Failed to forward request:', (error as Error).message);
       res.statusCode = 502;
       res.end('Bad Gateway');
+      this.notifyUnreachable();
     }
+  }
+
+  /**
+   * Yomitan hides its add-card buttons when Anki can't be reached, without saying why. Warn
+   * on the first failed request, then at most every UNREACHABLE_NOTICE_INTERVAL_MS, since a
+   * single lookup sends several requests.
+   */
+  private notifyUnreachable(): void {
+    const now = this.deps.now?.() ?? Date.now();
+    if (
+      this.lastUnreachableNoticeAt !== null &&
+      now - this.lastUnreachableNoticeAt < UNREACHABLE_NOTICE_INTERVAL_MS
+    ) {
+      return;
+    }
+    this.lastUnreachableNoticeAt = now;
+    this.deps.notifyUnavailable?.(ANKI_UNREACHABLE_MESSAGE);
   }
 
   private maybeEnqueueFromRequest(

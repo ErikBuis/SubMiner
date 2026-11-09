@@ -767,3 +767,74 @@ test('proxy continues without a local listener when its address is already bound
     await once(occupiedServer, 'close');
   }
 });
+
+test('proxy warns when Anki cannot be reached, without repeating for every request', async () => {
+  // Reserve a port, then free it so nothing answers there (Anki closed).
+  const reserved = http.createServer();
+  reserved.listen(0, '127.0.0.1');
+  await once(reserved, 'listening');
+  const reservedAddress = reserved.address();
+  assert.ok(reservedAddress && typeof reservedAddress === 'object');
+  const ankiPort = reservedAddress.port;
+  await new Promise<void>((resolve) => reserved.close(() => resolve()));
+
+  let now = 1_000;
+  const notices: string[] = [];
+  const proxy = new AnkiConnectProxyServer({
+    shouldAutoUpdateNewCards: () => false,
+    processNewCard: async () => undefined,
+    notifyUnavailable: (message) => notices.push(message),
+    now: () => now,
+    logInfo: () => undefined,
+    logWarn: () => undefined,
+    logError: () => undefined,
+  });
+  let anki: http.Server | null = null;
+
+  try {
+    proxy.start({ host: '127.0.0.1', port: 0, upstreamUrl: `http://127.0.0.1:${ankiPort}` });
+    const proxyServer = (proxy as unknown as { server: http.Server | null }).server;
+    assert.ok(proxyServer);
+    if (!proxyServer.listening) {
+      await once(proxyServer, 'listening');
+    }
+    const proxyAddress = proxyServer.address();
+    assert.ok(proxyAddress && typeof proxyAddress === 'object');
+    const send = () =>
+      fetch(`http://127.0.0.1:${proxyAddress.port}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'version', version: 6 }),
+      });
+
+    // One lookup sends several requests: warn once, clearly.
+    assert.equal((await send()).status, 502);
+    now = 2_000;
+    assert.equal((await send()).status, 502);
+    assert.deepEqual(notices, ["Can't reach Anki. Open Anki (with AnkiConnect) to add cards."]);
+
+    // Still closed half a minute later: remind again.
+    now = 31_000;
+    assert.equal((await send()).status, 502);
+    assert.equal(notices.length, 2);
+
+    // Anki opens, then closes again soon after: the new outage warns right away.
+    anki = http.createServer((_req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ result: 6, error: null }));
+    });
+    anki.listen(ankiPort, '127.0.0.1');
+    await once(anki, 'listening');
+    now = 32_000;
+    assert.equal((await send()).status, 200);
+    assert.equal(notices.length, 2);
+    await new Promise<void>((resolve) => anki!.close(() => resolve()));
+    anki = null;
+    now = 33_000;
+    assert.equal((await send()).status, 502);
+    assert.equal(notices.length, 3);
+  } finally {
+    proxy.stop();
+    anki?.close();
+  }
+});
