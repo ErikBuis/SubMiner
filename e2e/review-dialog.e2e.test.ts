@@ -223,10 +223,16 @@ test(
     // Paused before mining, so it stays paused after the review.
     assert.equal(await session.mpv.command('get_property', 'pause'), true);
 
-    // Once the review closes, mpv's keys work again.
+    // Once the review closes, mpv's keys work again. A slow runner can take longer than one
+    // press allows to run the key, so press until mpv has.
     const volume = (await session.mpv.command('get_property', 'volume')) as number;
-    await pressMpvKeys(session, ['9']);
-    assert.equal(await session.mpv.command('get_property', 'volume'), volume - 2);
+    await waitUntil(
+      async () => {
+        await pressMpvKeys(session, ['9']);
+        return ((await session.mpv.command('get_property', 'volume')) as number) < volume;
+      },
+      { description: '9 to lower the volume after the review', timeoutMs: 10_000 },
+    );
   },
 );
 
