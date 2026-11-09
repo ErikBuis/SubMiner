@@ -786,6 +786,13 @@ test('pressing minus after plus takes the added line back out of an edited trans
   const tweaked = { text: 'One before, the line I mined', lines: followed };
   assert.equal(press(tweaked, { translationPreviousShift: 0 }).text, 'The line I mined');
 
+  // Minus only looks at the text as it is now: an edit that was typed back to the
+  // followed text loses the line like a translation that was never edited.
+  const typedBack = { text: 'One before, the mined line', lines: followed };
+  assert.equal(press(typedBack, { translationPreviousShift: 0 }).text, 'The mined line');
+  const typedBackNext = { ...withNext, text: 'my own wording  AND after, (...)' };
+  assert.equal(press(typedBackNext, { translationNextShift: 0 }).text, 'My own wording');
+
   // Once the added part is rewritten, minus leaves the text alone.
   const rewritten = { ...withPrevious, text: 'Just before, My own wording' };
   assert.equal(
