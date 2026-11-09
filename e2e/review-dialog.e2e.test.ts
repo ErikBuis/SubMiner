@@ -48,6 +48,13 @@ const REVIEW_OPEN = `(() => {
   return Boolean(modal && !modal.classList.contains('hidden'));
 })()`;
 
+// The sentence the review shows, without any furigana readings drawn over it.
+const REVIEW_SENTENCE_TEXT = `(() => {
+  const sentence = document.getElementById('mediaTimingReviewText').cloneNode(true);
+  sentence.querySelectorAll('rt, rp').forEach((reading) => reading.remove());
+  return sentence.textContent.trim();
+})()`;
+
 // The review opens in the dedicated modal window when the app has one, else in the overlay.
 /** What each renderer page shows, for a failure message. */
 async function describeRendererPages(session: E2eSession): Promise<string> {
@@ -188,12 +195,7 @@ test(
     await session.mpv.command('set_property', 'screenshot-dir', screenshotDir);
     const { review, mining } = await openSentenceReview(session);
     try {
-      assert.equal(
-        await review.evaluate<string>(
-          `document.getElementById('mediaTimingReviewText').textContent.trim()`,
-        ),
-        cue.text,
-      );
+      assert.equal(await review.evaluate<string>(REVIEW_SENTENCE_TEXT), cue.text);
       const before = await mpvState(session);
       assert.equal(before.pause, true);
       assert.equal(before.sid, 1);
