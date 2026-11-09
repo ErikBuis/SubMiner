@@ -129,7 +129,6 @@ function createManualUpdateService(overrides: Partial<CardCreationDeps> = {}): {
     }),
     getFallbackDurationSeconds: () => 10,
     appendKnownWordsFromNoteInfo: () => undefined,
-    removeKnownWordNote: () => undefined,
     isUpdateInProgress: () => false,
     setUpdateInProgress: () => undefined,
     trackLastAddedNoteId: () => undefined,
@@ -564,7 +563,7 @@ test('createSentenceCard relies on Anki progress notification without standalone
   assert.deepEqual(statusMessages, []);
 });
 
-test('discarding an audio-card timing review deletes the note before evicting its cache entry', async () => {
+test('cancelling an audio-card timing review leaves the earlier mined note untouched', async () => {
   const events: string[] = [];
   const statusMessages: string[] = [];
   const { service } = createManualUpdateService({
@@ -585,7 +584,9 @@ test('discarding an audio-card timing review deletes the note before evicting it
           fields: { Expression: { value: '単語' } },
         },
       ],
-      updateNoteFields: async () => undefined,
+      updateNoteFields: async (noteId) => {
+        events.push(`update:${noteId}`);
+      },
       storeMediaFile: async () => undefined,
       findNotes: async () => [42],
       retrieveMediaFile: async () => '',
@@ -594,9 +595,6 @@ test('discarding an audio-card timing review deletes the note before evicting it
       },
     },
     reviewMediaTiming: async () => ({ action: 'discard' }),
-    removeKnownWordNote: (noteId) => {
-      events.push(`cache:${noteId}`);
-    },
     showStatusNotification: (message) => {
       statusMessages.push(message);
     },
@@ -604,8 +602,8 @@ test('discarding an audio-card timing review deletes the note before evicting it
 
   await service.markLastCardAsAudioCard();
 
-  assert.deepEqual(events, ['delete:42', 'cache:42']);
-  assert.deepEqual(statusMessages, ['Card deleted.']);
+  assert.deepEqual(events, []);
+  assert.deepEqual(statusMessages, ['Card left unchanged.']);
 });
 
 test('keeping an audio card without media skips generation and preserves the note', async () => {

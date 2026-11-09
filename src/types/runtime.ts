@@ -313,9 +313,7 @@ export type ControllerReviewAction =
   | 'endForward'
   | 'nextLineAdd'
   | 'nextLineRemove'
-  | 'useOriginal'
   | 'keepEditing'
-  | 'skipMedia'
   | 'discard';
 
 /** Every button on the duplicate-card field grouping dialog, named by what it does. */
