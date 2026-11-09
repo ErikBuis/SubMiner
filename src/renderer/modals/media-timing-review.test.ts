@@ -4,6 +4,8 @@ import test from 'node:test';
 import { CONTROLLER_REVIEW_ACTIONS } from '../../shared/controller-review';
 import {
   buildMediaTimingReviewTranslation,
+  buildMediaTimingReviewTranslationPreview,
+  applyTranslationLineChanges,
   MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS,
   isMediaTimingReviewButtonAvailable,
   buildMediaTimingLineSelection,
@@ -374,6 +376,442 @@ test('an added line whose secondary text is its own text adds no translation', (
       format: false,
     }),
     '',
+  );
+});
+
+test('review translation shifts add and drop secondary lines at either end', () => {
+  const lines = [
+    { text: 'Two before,', startTime: 4, endTime: 6 },
+    { text: 'one before,', startTime: 6, endTime: 8 },
+    { text: 'the mined line', startTime: 8, endTime: 10 },
+    { text: 'and after.', startTime: 10, endTime: 12 },
+  ];
+  const base = {
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'The mined line',
+    initialTranslationLines: [lines[2]!],
+    translationLines: lines,
+    format: false,
+  };
+  const unchanged = buildMediaTimingReviewTranslationPreview(base);
+  assert.equal(unchanged.text, 'The mined line');
+  assert.deepEqual(
+    [
+      unchanged.canAddPrevious,
+      unchanged.canRemovePrevious,
+      unchanged.canAddNext,
+      unchanged.canRemoveNext,
+    ],
+    [true, false, true, false],
+  );
+
+  const widened = buildMediaTimingReviewTranslationPreview({
+    ...base,
+    translationPreviousShift: 5,
+    translationNextShift: 1,
+  });
+  assert.equal(widened.text, 'Two before, one before, the mined line and after.');
+  // Shifts past the available lines are clamped, so one press takes them back.
+  assert.equal(widened.previousShift, 2);
+  assert.equal(widened.canAddPrevious, false);
+  assert.equal(widened.canAddNext, false);
+
+  // Dropping lines keeps at least one.
+  const narrowed = buildMediaTimingReviewTranslationPreview({
+    ...base,
+    initialTranslationLines: [lines[1]!, lines[2]!],
+    translationPreviousShift: -1,
+    translationNextShift: -1,
+  });
+  assert.equal(narrowed.text, 'the mined line');
+  assert.equal(narrowed.previousShift, -1);
+  assert.equal(narrowed.nextShift, 0);
+  assert.equal(narrowed.canRemovePrevious, false);
+  assert.equal(narrowed.canRemoveNext, false);
+});
+
+test('review translation shifts keep a translation taken from the screen in the middle', () => {
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'From the screen',
+    initialTranslationLines: [],
+    translationLines: [
+      { text: 'Before', startTime: 6, endTime: 8 },
+      { text: 'overlapping', startTime: 8, endTime: 10 },
+      { text: 'after', startTime: 10, endTime: 12 },
+    ],
+    format: false,
+    translationPreviousShift: 1,
+    translationNextShift: 1,
+  });
+  assert.equal(preview.text, 'Before From the screen after');
+  assert.equal(preview.canRemovePrevious, true);
+  assert.equal(preview.canAddNext, false);
+});
+
+test('review translation shifts can drop a line added at the other end', () => {
+  const lineA = { text: 'A', startTime: 8, endTime: 10 };
+  const lineB = { text: 'B', startTime: 10, endTime: 12 };
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'A',
+    initialTranslationLines: [lineA],
+    translationLines: [lineA, lineB],
+    format: false,
+    translationPreviousShift: -1,
+    translationNextShift: 1,
+  });
+  assert.equal(preview.text, 'B');
+  assert.equal(preview.previousShift, -1);
+  assert.equal(preview.nextShift, 1);
+  assert.equal(preview.canRemovePrevious, false);
+});
+
+test('review translation shifts grow a screen translation from the lines before it', () => {
+  // Sorted by start, the long cue comes first although it ends after the clip.
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'From the screen',
+    initialTranslationLines: [],
+    translationLines: [
+      { text: 'Sign', startTime: 0, endTime: 30 },
+      { text: 'Before', startTime: 6, endTime: 8 },
+    ],
+    format: false,
+    translationPreviousShift: 1,
+  });
+  assert.equal(preview.text, 'Before From the screen');
+});
+
+test('review translation buttons are available only when a press changes the lines', () => {
+  const lines = [
+    { text: 'Sign', startTime: 0, endTime: 30 },
+    { text: 'Before', startTime: 6, endTime: 8 },
+  ];
+  const base = {
+    previousLines: [],
+    nextLines: [],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'From the screen',
+    initialTranslationLines: [],
+    translationLines: lines,
+    format: false,
+  };
+  // The long sign starts first but runs past the clip, so it is no earlier line.
+  const added = buildMediaTimingReviewTranslationPreview({ ...base, translationPreviousShift: 1 });
+  assert.equal(added.canAddPrevious, false);
+  assert.equal(added.canRemovePrevious, true);
+  assert.equal(
+    buildMediaTimingReviewTranslationPreview({ ...base, translationPreviousShift: 2 }).text,
+    'Before From the screen',
+  );
+});
+
+test('review translation buttons skip a background line no dialogue line has', () => {
+  // Bocchi the Rock! ep. 1 at 00:33: a TV line runs alongside the narration.
+  const own = {
+    text: 'With no club activity, she comes straight home.',
+    startTime: 30.3,
+    endTime: 33.72,
+  };
+  const tv = { text: "And here, we'll stir-fry it a bit.", startTime: 33.72, endTime: 36.85 };
+  const narration = { text: 'The only messages she receives…', startTime: 35.35, endTime: 40.94 };
+  const preview = buildMediaTimingReviewTranslationPreview({
+    previousLines: [],
+    nextLines: [],
+    text: '部活も入らず 放課後は即帰宅',
+    originalStartTime: 30.343,
+    originalEndTime: 33.68,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: own.text,
+    initialTranslationLines: [own],
+    translationLines: [own, tv, narration],
+    lineTranslations: [
+      { text: '部活も入らず 放課後は即帰宅', startTime: 30.343, endTime: 33.68, lines: [own] },
+      { text: '（テレビ番組の音声）', startTime: 33.764, endTime: 34.681, lines: [tv] },
+      {
+        text: '（ひとり）スマホに届くのは',
+        startTime: 35.474,
+        endTime: 36.808,
+        lines: [narration],
+      },
+    ],
+    format: false,
+    translationNextShift: 1,
+  });
+  assert.equal(preview.text, `${own.text} ${narration.text}`);
+});
+
+test('an edited translation keeps the edit when lines come and go at its ends', () => {
+  const a = { text: 'Before,', startTime: 6, endTime: 8 };
+  const b = { text: 'the mined line', startTime: 8, endTime: 10 };
+  const c = { text: 'and after.', startTime: 10, endTime: 12 };
+  const lines = (...run: (typeof a)[]) => ({ leadingLines: run, trailingLines: run });
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'My own wording',
+      before: lines(b),
+      after: lines(a, b, c),
+      format: false,
+    }),
+    'Before, My own wording and after.',
+  );
+  // A dropped line leaves only when the edit still starts or ends with it.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'before, my wording and after.',
+      before: lines(a, b, c),
+      after: lines(b),
+      format: false,
+    }),
+    'my wording',
+  );
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'Rewritten completely',
+      before: lines(a, b),
+      after: lines(b),
+      format: false,
+    }),
+    'Rewritten completely',
+  );
+  // Formatting moves the continuation mark to the new end.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'Lost in that thought, (...)',
+      before: lines(b),
+      after: lines(b, c),
+      format: true,
+    }),
+    'Lost in that thought, and after.',
+  );
+});
+
+test('a dropped line is cut from an edit only as whole words at its start or end', () => {
+  const no = { text: 'No', startTime: 6, endTime: 8 };
+  const mined = { text: 'the mined line', startTime: 8, endTime: 10 };
+  const here = { text: 'here.', startTime: 10, endTime: 12 };
+  const lines = (...run: (typeof no)[]) => ({ leadingLines: run, trailingLines: run });
+  // "No" is not the start of "Nobody", and "here." is not the end of "There.".
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'Nobody knows',
+      before: lines(no, mined),
+      after: lines(mined),
+      format: false,
+    }),
+    'Nobody knows',
+  );
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'Over There.',
+      before: lines(mined, here),
+      after: lines(mined),
+      format: false,
+    }),
+    'Over There.',
+  );
+  // Spacing and case inside the dropped line do not matter.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'no,  my wording\nHERE.',
+      before: lines({ ...no, text: 'No,' }, mined, here),
+      after: lines(mined),
+      format: false,
+    }),
+    'my wording',
+  );
+  // An apostrophe or hyphen keeps the letters around it one word.
+  for (const [text, dropped, side] of [
+    ["It's fine", 'It', 'start'],
+    ['Well-known fact', 'Well', 'start'],
+    ['rock-solid plan', 'rock-', 'start'],
+    ["fine y'all", 'all', 'end'],
+    ['a well-known', 'known', 'end'],
+  ] as const) {
+    const line = { ...no, text: dropped, startTime: side === 'start' ? 6 : 10 };
+    const run = side === 'start' ? [line, mined] : [mined, { ...line, endTime: 12 }];
+    assert.equal(
+      applyTranslationLineChanges({
+        text,
+        before: lines(...run),
+        after: lines(mined),
+        format: false,
+      }),
+      text,
+    );
+  }
+  // Next to spaces or punctuation the line is still cut.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: "I- I'm fine",
+      before: lines({ ...no, text: 'I-' }, mined),
+      after: lines(mined),
+      format: false,
+    }),
+    "I'm fine",
+  );
+  // Text written without spaces is still cut where the line ends.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: '你好我的翻译',
+      before: lines({ ...no, text: '你好' }, mined),
+      after: lines(mined),
+      format: false,
+    }),
+    '我的翻译',
+  );
+});
+
+test('a continuation mark followed by typed whitespace still moves with the end', () => {
+  const mined = { text: 'the mined line', startTime: 8, endTime: 10 };
+  const after = { text: 'and after,', startTime: 10, endTime: 12 };
+  const lines = (...run: (typeof mined)[]) => ({ leadingLines: run, trailingLines: run });
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'My own wording and after, (...) \n',
+      before: lines(mined, after),
+      after: lines(mined),
+      format: true,
+    }),
+    'My own wording',
+  );
+});
+
+test('an edit that no longer starts or ends with a dropped line stays exactly as typed', () => {
+  const before = { text: 'Before,', startTime: 6, endTime: 8 };
+  const mined = { text: 'the mined line', startTime: 8, endTime: 10 };
+  const lines = (...run: (typeof before)[]) => ({ leadingLines: run, trailingLines: run });
+  // Formatting would capitalize this and mark the comma; nothing was cut, so it stays.
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'something else entirely,  ',
+      before: lines(before, mined),
+      after: lines(mined),
+      format: true,
+    }),
+    'something else entirely,  ',
+  );
+});
+
+test('pressing minus after plus takes the added line back out of an edited translation', () => {
+  const lines = [
+    { text: 'one before,', startTime: 6, endTime: 8 },
+    { text: 'the mined line', startTime: 8, endTime: 10 },
+    { text: 'and after,', startTime: 10, endTime: 12 },
+  ];
+  const base = {
+    previousLines: [{ text: '前の行', startTime: 6, endTime: 8 }],
+    nextLines: [{ text: '次の行', startTime: 10, endTime: 12 }],
+    text: '対象の行',
+    originalStartTime: 8,
+    originalEndTime: 10,
+    previousCount: 0,
+    nextCount: 0,
+    initialTranslation: 'The mined line',
+    initialTranslationLines: [lines[1]!],
+    translationLines: lines,
+    format: true,
+  };
+  // Mirrors the modal: each press rebuilds the preview, and an edited text only takes the
+  // lines that came or went since the last press.
+  const press = (
+    state: { text: string; lines: ReturnType<typeof buildMediaTimingReviewTranslationPreview> },
+    change: Partial<typeof base> & {
+      translationPreviousShift?: number;
+      translationNextShift?: number;
+    },
+  ) => {
+    const lines = buildMediaTimingReviewTranslationPreview({ ...base, ...change });
+    return {
+      text: applyTranslationLineChanges({
+        text: state.text,
+        before: state.lines,
+        after: lines,
+        format: base.format,
+      }),
+      lines,
+    };
+  };
+  const opened = { text: 'My own wording', lines: buildMediaTimingReviewTranslationPreview(base) };
+
+  // The translation's own buttons.
+  const withPrevious = press(opened, { translationPreviousShift: 1 });
+  assert.equal(withPrevious.text, 'One before, My own wording');
+  assert.equal(press(withPrevious, { translationPreviousShift: 0 }).text, 'My own wording');
+  const withNext = press(opened, { translationNextShift: 1 });
+  assert.equal(withNext.text, 'My own wording and after, (...)');
+  assert.equal(press(withNext, { translationNextShift: 0 }).text, 'My own wording');
+
+  // The sentence buttons bring the added line's translation along.
+  const withLine = press(opened, { nextCount: 1 });
+  assert.equal(withLine.text, 'My own wording and after, (...)');
+  assert.equal(press(withLine, { nextCount: 0 }).text, 'My own wording');
+
+  // A line added before the edit is taken out the same way.
+  const followed = buildMediaTimingReviewTranslationPreview({
+    ...base,
+    translationPreviousShift: 1,
+  });
+  assert.equal(followed.text, 'One before, the mined line');
+  const tweaked = { text: 'One before, the line I mined', lines: followed };
+  assert.equal(press(tweaked, { translationPreviousShift: 0 }).text, 'The line I mined');
+
+  // Minus only looks at the text as it is now: an edit that was typed back to the
+  // followed text loses the line like a translation that was never edited.
+  const typedBack = { text: 'One before, the mined line', lines: followed };
+  assert.equal(press(typedBack, { translationPreviousShift: 0 }).text, 'The mined line');
+  const typedBackNext = { ...withNext, text: 'my own wording  AND after, (...)' };
+  assert.equal(press(typedBackNext, { translationNextShift: 0 }).text, 'My own wording');
+
+  // Once the added part is rewritten, minus leaves the text alone.
+  const rewritten = { ...withPrevious, text: 'Just before, My own wording' };
+  assert.equal(
+    press(rewritten, { translationPreviousShift: 0 }).text,
+    'Just before, My own wording',
+  );
+});
+
+test('an edited screen translation gets lines on the side they belong to', () => {
+  const before = { text: 'Earlier', startTime: 4, endTime: 6 };
+  const after = { text: 'later', startTime: 12, endTime: 14 };
+  assert.equal(
+    applyTranslationLineChanges({
+      text: 'Typed text',
+      before: { leadingLines: [], trailingLines: [] },
+      after: { leadingLines: [before], trailingLines: [after] },
+      format: false,
+    }),
+    'Earlier Typed text later',
   );
 });
 
