@@ -34,7 +34,6 @@ import { protectEscapedBrackets } from '../../shared/furigana-markup';
 import { removeSpeakerLabels } from '../../shared/subtitle-speaker-labels';
 
 const INITIAL_TIMELINE_MARGIN_SECONDS = 2;
-const REVIEW_DECISION_TIMEOUT_MS = 5 * 60_000;
 
 interface ReviewMpvClient {
   connected: boolean;
@@ -116,7 +115,6 @@ export interface MediaTimingReviewRuntimeDeps {
     previous: MediaTimingReviewContextLine[];
     next: MediaTimingReviewContextLine[];
   };
-  decisionTimeoutMs?: number;
   openModal: (payload: MediaTimingReviewOpenPayload, signal: AbortSignal) => Promise<boolean>;
   /** Blocks mpv's own key and mouse bindings while the modal is open. */
   inputLock?: Pick<MpvInputLock, 'lock' | 'unlock'>;
@@ -274,9 +272,9 @@ export function collectMediaTimingContextLines(options: {
 }
 
 /**
- * Result for requests that name a review main has already resolved or disposed (decision
- * watchdog, overlay teardown, duplicate modal). The renderer closes on it instead of
- * leaving the user with controls that can never succeed.
+ * Result for requests that name a review main has already resolved or disposed (overlay
+ * teardown, a crashed modal renderer, duplicate modal). The renderer closes on it instead
+ * of leaving the user with controls that can never succeed.
  */
 function staleReviewResult(): MediaTimingReviewActionResult {
   return { ok: false, stale: true, message: 'This timing review is no longer active.' };
@@ -665,21 +663,15 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
       return { action: 'use-original' };
     }
 
-    const decisionWatchdog = setTimeout(
-      () => resolveDecision({ action: 'use-original' }),
-      Math.max(0, deps.decisionTimeoutMs ?? REVIEW_DECISION_TIMEOUT_MS),
-    );
+    // No time limit: the user may leave the dialog open for as long as they like. The review
+    // ends on a decision, when mpv closes, or when the dialog's window closes or its renderer dies.
     let decision: MediaTimingReviewDecision = { action: 'use-original' };
-    try {
-      const decisionResult = await Promise.race([
-        decisionPromise.then((value) => ({ kind: 'decided' as const, value })),
-        lifecycle.cancelled.then(() => ({ kind: 'cancelled' as const })),
-      ]);
-      if (decisionResult.kind === 'decided') {
-        decision = decisionResult.value;
-      }
-    } finally {
-      clearTimeout(decisionWatchdog);
+    const decisionResult = await Promise.race([
+      decisionPromise.then((value) => ({ kind: 'decided' as const, value })),
+      lifecycle.cancelled.then(() => ({ kind: 'cancelled' as const })),
+    ]);
+    if (decisionResult.kind === 'decided') {
+      decision = decisionResult.value;
     }
     await cleanupActiveReview(review);
     return decision;
@@ -699,7 +691,7 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
     restoreCancelled = false;
     try {
       const decision = await runReview(request, lifecycle);
-      // Whatever ended the review (a decision, the watchdog, the overlay closing as the
+      // Whatever ended the review (a decision, mpv closing, the overlay closing as the
       // app quits), the card would now get media and source info from the wrong player state.
       return hasMediaClosed(lifecycle) ? { action: 'media-closed' } : decision;
     } catch {
@@ -733,7 +725,7 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
         return staleReviewResult();
       }
       await previewSession.play(request.startTime, request.endTime);
-      // Playback spans the whole clip, so the review can end (watchdog, teardown) while
+      // Playback spans the whole clip, so the review can end (overlay teardown) while
       // it runs; reporting success would leave the modal open on a dead review.
       if (active !== current) {
         return staleReviewResult();
@@ -919,7 +911,7 @@ export function createMediaTimingReviewRuntime(deps: MediaTimingReviewRuntimeDep
 
   /**
    * mpv disconnected or loaded other media. Ends a pending review right away, so its
-   * dialog closes and the card is left as it was, instead of waiting for the watchdog.
+   * dialog closes and the card is left as it was.
    */
   function handleMediaClosed(): void {
     const request = currentRequest;

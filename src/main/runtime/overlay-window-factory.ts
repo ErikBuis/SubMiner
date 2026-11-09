@@ -19,6 +19,7 @@ export function createCreateOverlayWindowHandler<TWindow>(deps: {
       onWindowDidFinishLoad?: () => void;
       onWindowContentReady?: () => void;
       onWindowClosed: (windowKind: OverlayWindowKind, window: TWindow) => void;
+      onWindowRendererGone?: (windowKind: OverlayWindowKind, window: TWindow) => void;
       yomitanSession?: Session | null;
     },
   ) => TWindow;
@@ -35,6 +36,7 @@ export function createCreateOverlayWindowHandler<TWindow>(deps: {
   onWindowDidFinishLoad?: () => void;
   onWindowContentReady?: () => void;
   onWindowClosed: (windowKind: OverlayWindowKind, window: TWindow) => void;
+  onWindowRendererGone?: (windowKind: OverlayWindowKind, window: TWindow) => void;
   getYomitanSession?: () => Session | null;
 }) {
   return (kind: OverlayWindowKind): TWindow => {
@@ -53,6 +55,7 @@ export function createCreateOverlayWindowHandler<TWindow>(deps: {
       onWindowDidFinishLoad: deps.onWindowDidFinishLoad,
       onWindowContentReady: deps.onWindowContentReady,
       onWindowClosed: deps.onWindowClosed,
+      onWindowRendererGone: deps.onWindowRendererGone,
       yomitanSession: deps.getYomitanSession?.() ?? null,
     });
   };

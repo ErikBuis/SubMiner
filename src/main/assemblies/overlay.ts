@@ -343,6 +343,12 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
             deps.overlayModalRuntime.handleModalWindowDestroyed();
           }
         },
+        onWindowRendererGone: (windowKind, window) => {
+          // A dead modal renderer can never answer an open card review. Closing its window
+          // runs the teardown above (ending the review), and the next modal gets a fresh one.
+          if (windowKind !== 'modal' || overlayManager.getModalWindow() !== window) return;
+          if (!window.isDestroyed()) window.destroy();
+        },
       },
       getMainWindow: () => overlayManager.getMainWindow(),
       isWindowDestroyed: (window) => window.isDestroyed(),
