@@ -1,5 +1,5 @@
 import http, { IncomingMessage, ServerResponse } from 'node:http';
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import type { PluginMiningProvenance } from '../plugin-api';
 import { ANKI_UNREACHABLE_MESSAGE } from './anki-unreachable';
 
@@ -203,14 +203,22 @@ export class AnkiConnectProxyServer {
         ['addNote', 'addNotes', 'multi', 'updateNoteFields'].includes(action)
           ? (this.deps.captureMiningProvenance?.() ?? null)
           : null;
-      const upstreamResponse = await this.client.request<ArrayBuffer>({
-        url: targetUrl,
-        method: req.method,
-        data: req.method === 'POST' ? forwardedBody : undefined,
-        headers: {
-          'content-type': contentType,
-        },
-      });
+      let upstreamResponse: AxiosResponse<ArrayBuffer>;
+      try {
+        upstreamResponse = await this.client.request<ArrayBuffer>({
+          url: targetUrl,
+          method: req.method,
+          data: req.method === 'POST' ? forwardedBody : undefined,
+          headers: {
+            'content-type': contentType,
+          },
+        });
+      } catch (error) {
+        // Only a failed request to Anki itself means Anki can't be reached; HTTP error
+        // statuses resolve (validateStatus), so this is a network error or the timeout.
+        this.notifyUnreachable();
+        throw error;
+      }
 
       const responseBody: Buffer = Buffer.isBuffer(upstreamResponse.data)
         ? upstreamResponse.data
@@ -228,7 +236,6 @@ export class AnkiConnectProxyServer {
       this.deps.logWarn('[anki-proxy] Failed to forward request:', (error as Error).message);
       res.statusCode = 502;
       res.end('Bad Gateway');
-      this.notifyUnreachable();
     }
   }
 

@@ -835,6 +835,60 @@ test('proxy warns when Anki cannot be reached, without repeating for every reque
     assert.equal(notices.length, 3);
   } finally {
     proxy.stop();
-    anki?.close();
+    if (anki) await new Promise<void>((resolve) => anki!.close(() => resolve()));
+  }
+});
+
+test('proxy does not blame Anki for its own failures', async () => {
+  let upstreamHits = 0;
+  const upstream = http.createServer((_req, res) => {
+    upstreamHits++;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ result: 42, error: null }));
+  });
+  upstream.listen(0, '127.0.0.1');
+  await once(upstream, 'listening');
+  const upstreamAddress = upstream.address();
+  assert.ok(upstreamAddress && typeof upstreamAddress === 'object');
+
+  const notices: string[] = [];
+  const proxy = new AnkiConnectProxyServer({
+    captureMiningProvenance: () => {
+      throw new Error('provenance unavailable');
+    },
+    shouldAutoUpdateNewCards: () => false,
+    processNewCard: async () => undefined,
+    notifyUnavailable: (message) => notices.push(message),
+    logInfo: () => undefined,
+    logWarn: () => undefined,
+    logError: () => undefined,
+  });
+
+  try {
+    proxy.start({
+      host: '127.0.0.1',
+      port: 0,
+      upstreamUrl: `http://127.0.0.1:${upstreamAddress.port}`,
+    });
+    const proxyServer = (proxy as unknown as { server: http.Server | null }).server;
+    assert.ok(proxyServer);
+    if (!proxyServer.listening) {
+      await once(proxyServer, 'listening');
+    }
+    const proxyAddress = proxyServer.address();
+    assert.ok(proxyAddress && typeof proxyAddress === 'object');
+
+    const response = await fetch(`http://127.0.0.1:${proxyAddress.port}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'addNote', version: 6, params: { note: {} } }),
+    });
+
+    assert.equal(response.status, 502);
+    assert.equal(upstreamHits, 0);
+    assert.deepEqual(notices, []);
+  } finally {
+    proxy.stop();
+    await new Promise<void>((resolve) => upstream.close(() => resolve()));
   }
 });
