@@ -412,6 +412,7 @@ export function createMediaTimingReviewModal(
       dom.mediaTimingReviewFrameTime.textContent,
     );
     dom.mediaTimingReviewFrameStatus.textContent = state.message;
+    dom.mediaTimingReviewFrameStatus.title = state.message;
     dom.mediaTimingReviewFrameImage.classList.toggle('hidden', !state.dataUrl);
     if (state.dataUrl) dom.mediaTimingReviewFrameImage.src = state.dataUrl;
     else dom.mediaTimingReviewFrameImage.removeAttribute('src');

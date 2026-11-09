@@ -1320,7 +1320,8 @@ body:focus-visible,
 
 .media-timing-review-content {
   width: min(720px, calc(100vw - 32px));
-  max-height: min(900px, calc(100vh - 32px));
+  /* Only the window height limits the dialog, so it scrolls only when it must. */
+  max-height: calc(100vh - 32px);
   overflow: auto;
   gap: 0;
   padding: 0;
@@ -1400,11 +1401,12 @@ body:focus-visible,
 
 .media-timing-frame-picker {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  /* A thumbnail-sized frame keeps the picker short enough for the dialog to fit. */
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 14px;
   align-items: center;
   margin: 10px 0 0;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid var(--ctp-surface1);
   border-radius: 10px;
   background: var(--ctp-mantle);
@@ -1442,7 +1444,7 @@ body:focus-visible,
 }
 .media-timing-frame-controls input {
   width: 100%;
-  margin: 12px 0;
+  margin: 8px 0;
   accent-color: var(--ctp-teal);
 }
 .media-timing-frame-buttons {
@@ -1464,10 +1466,14 @@ body:focus-visible,
   cursor: default;
 }
 .media-timing-frame-controls p {
-  margin: 8px 0 0;
-  min-height: 2.6em;
+  margin: 6px 0 0;
+  min-height: 1.4em;
+  overflow: hidden;
   color: var(--ctp-subtext0);
   font-size: 11px;
+  /* One line keeps the dialog height steady; the full message is in the title. */
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 @media (max-width: 520px) {
   .media-timing-frame-picker {
