@@ -167,8 +167,11 @@ During preview, the yellow cursor follows the audio player's position through th
 | Move between controls    | `Tab` / `Shift+Tab`, or the arrow keys by position on screen          |
 | Press the focused button | `Enter`                                                               |
 | Edit the translation     | Click it, or `Enter` on it; `Escape` stops typing                     |
+| Edit the sentence        | Click it, or `Enter` on it; `Escape` stops typing                     |
 
 The dialog also shows what else the card gets: the word and the meaning from `fields.definition` (word cards), and the translation when the card gets one. Nothing there needs a click: the timing keys work as before. The translation is editable. Until you type in it, it follows the lines you add or remove. Click it, or reach it with the keyboard and press `Enter`, to type. `Escape` stops typing without closing the dialog, and `Ctrl/Cmd+Enter` exports right away. `Enter` while typing adds a line break, which is written to the card as a space. Your edit is kept when you export without media.
+
+The sentence on the card is editable the same way: click it (the caret goes where you clicked) or press `Enter` on it. Once edited it shows as you typed it, without readings, and the line count says "edited". Lines you add or remove after that go in or out at its start or end, and a removed line you rewrote stays. Type it back to the original, clear it, or use Reset all to get the subtitle lines back. A line break shows as a space on the card.
 
 The confirmed range is used as is, with no extra padding. Added lines go into the sentence field. Reset restores the original timing and removes added lines.
 
