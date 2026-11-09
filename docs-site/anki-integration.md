@@ -154,7 +154,7 @@ During preview, the yellow cursor follows the audio player's position through th
 | Nudge an edge            | Arrow keys on a focused edge (100 ms, `Shift` for 500 ms)             |
 | Move an edge by buttons  | −2.0s / −0.1s / +0.1s / +2.0s for the start (left) and end (right)    |
 | Slide the clip           | Drag the middle                                                       |
-| Reach past the view      | Move an edge past it; the timeline widens to keep the edge in view    |
+| Reach past the view      | Move an edge to or past it; the timeline widens with 1 s to spare     |
 | Pick the screenshot      | Screenshot slider or Frame buttons (static images only)               |
 | Add previous / next line | `P` / `N` (`Shift+P` / `Shift+N` removes)                             |
 | Preview                  | `Space` or Play selection                                             |
