@@ -748,7 +748,8 @@ test('media timing review honors an overlay pause that arrives while setup reads
 
 test('media timing review waits for the user without a time limit', async () => {
   // The user may leave the dialog open (AFK) for as long as they like: nothing may schedule
-  // a long timer that gives up on the review behind their back.
+  // a long timer that gives up on the review behind their back. The setTimeout spy catches
+  // the old five-minute watchdog; the still-pending check below catches a short one.
   const realSetTimeout = globalThis.setTimeout;
   const scheduledDelays: number[] = [];
   globalThis.setTimeout = ((handler: TimerHandler, delay?: number, ...args: unknown[]) => {
