@@ -856,6 +856,23 @@ export function createMediaTimingReviewModal(
     if (timelineChanged) queueWaveformLoad(120);
   }
 
+  /** Returns the review to how it opened: lines, translation, timing, screenshot and media. */
+  function resetAll(): void {
+    if (!payload || resolveInFlight) return;
+    previousCount = 0;
+    nextCount = 0;
+    renderSentence();
+    setTranslation(payload.card?.translation?.text ?? '', false);
+    resetTiming();
+    ctx.dom.mediaTimingReviewWithoutMedia.checked = false;
+    framePicker.reset();
+    // Export card is only disabled without media while a screenshot blocks it.
+    renderFramePicker();
+    // Trimming the trailing silence was part of how the review opened.
+    trailingTrimPending = true;
+    queueWaveformLoad();
+  }
+
   function updateSelection(nextStart: number, nextEnd: number): void {
     if (!payload) return;
     const mediaEnd = payload.mediaDuration ?? Number.POSITIVE_INFINITY;
@@ -990,6 +1007,7 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewCancelStep.classList.add('hidden');
     ctx.dom.mediaTimingReviewEditor.classList.remove('hidden');
     ctx.dom.mediaTimingReviewCancel.classList.remove('hidden');
+    ctx.dom.mediaTimingReviewResetAll.classList.remove('hidden');
   }
 
   /** An audio card is made from a note mined earlier, so cancelling leaves that note alone. */
@@ -1010,6 +1028,7 @@ export function createMediaTimingReviewModal(
     stopPreview();
     ctx.dom.mediaTimingReviewEditor.classList.add('hidden');
     ctx.dom.mediaTimingReviewCancel.classList.add('hidden');
+    ctx.dom.mediaTimingReviewResetAll.classList.add('hidden');
     ctx.dom.mediaTimingReviewCancelStep.classList.remove('hidden');
     const discard = discardChoice(payload);
     ctx.dom.mediaTimingReviewCancelMessage.textContent = discard.message;
@@ -1358,6 +1377,7 @@ export function createMediaTimingReviewModal(
     );
     ctx.dom.mediaTimingReviewPlay.addEventListener('click', () => void togglePreview());
     ctx.dom.mediaTimingReviewReset.addEventListener('click', () => resetTiming());
+    ctx.dom.mediaTimingReviewResetAll.addEventListener('click', () => resetAll());
     ctx.dom.mediaTimingReviewTranslation.addEventListener('input', () => {
       if (translationEdited) return;
       translationEdited = true;
