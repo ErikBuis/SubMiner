@@ -128,6 +128,8 @@ export function createOverlayWindow(
     onWindowDidFinishLoad?: () => void;
     onWindowContentReady?: () => void;
     onWindowClosed: (kind: OverlayWindowKind, window: BrowserWindow) => void;
+    /** The window's renderer crashed or was killed; the window itself stays open. */
+    onWindowRendererGone?: (kind: OverlayWindowKind, window: BrowserWindow) => void;
     yomitanSession?: Session | null;
   },
 ): BrowserWindow {
@@ -156,6 +158,11 @@ export function createOverlayWindow(
     window.setTitle(OVERLAY_WINDOW_TITLES[kind]);
     options.onRuntimeOptionsChanged();
     options.onWindowDidFinishLoad?.();
+  });
+
+  window.webContents.on('render-process-gone', (_event, details) => {
+    logger.error(`Overlay ${kind} renderer gone: ${details.reason}`);
+    options.onWindowRendererGone?.(kind, window);
   });
 
   window.webContents.on('did-start-loading', () => {
