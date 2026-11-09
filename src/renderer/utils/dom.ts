@@ -56,6 +56,7 @@ export type RendererDom = {
   mediaTimingReviewModal: HTMLDivElement;
   mediaTimingReviewKind: HTMLDivElement;
   mediaTimingReviewText: HTMLElement;
+  mediaTimingReviewSentence: HTMLTextAreaElement;
   mediaTimingReviewTitle: HTMLElement;
   mediaTimingReviewCard: HTMLDivElement;
   mediaTimingReviewWordRow: HTMLDivElement;
@@ -301,6 +302,7 @@ export function resolveRendererDom(): RendererDom {
     mediaTimingReviewModal: getRequiredElement<HTMLDivElement>('mediaTimingReviewModal'),
     mediaTimingReviewKind: getRequiredElement<HTMLDivElement>('mediaTimingReviewKind'),
     mediaTimingReviewText: getRequiredElement<HTMLElement>('mediaTimingReviewText'),
+    mediaTimingReviewSentence: getRequiredElement<HTMLTextAreaElement>('mediaTimingReviewSentence'),
     mediaTimingReviewTitle: getRequiredElement<HTMLElement>('mediaTimingReviewTitle'),
     mediaTimingReviewCard: getRequiredElement<HTMLDivElement>('mediaTimingReviewCard'),
     mediaTimingReviewWordRow: getRequiredElement<HTMLDivElement>('mediaTimingReviewWordRow'),

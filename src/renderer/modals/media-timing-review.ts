@@ -263,6 +263,35 @@ export function buildMediaTimingLineSelection(options: {
   };
 }
 
+/**
+ * Puts a subtitle line the review added in front of (previous) or after (next) a sentence
+ * the user typed, or takes a removed one out again. A removed line only goes while the
+ * typed sentence still starts or ends with it, so text the user rewrote stays as typed.
+ */
+export function applySentenceLineChange(options: {
+  text: string;
+  line: string;
+  side: 'previous' | 'next';
+  added: boolean;
+}): string {
+  const text = options.text.trim();
+  const line = options.line.trim();
+  if (!line) return options.text;
+  if (options.added) {
+    if (!text) return line;
+    return options.side === 'previous' ? `${line} ${text}` : `${text} ${line}`;
+  }
+  if (options.side === 'previous') {
+    return text.startsWith(line) ? text.slice(line.length).trimStart() : options.text;
+  }
+  return text.endsWith(line) ? text.slice(0, text.length - line.length).trimEnd() : options.text;
+}
+
+/** Sentences that only differ in spacing are the same sentence on the card. */
+function sameSentence(a: string, b: string): boolean {
+  return a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
+}
+
 function dedupeSortedLines(
   lines: readonly MediaTimingReviewContextLine[],
 ): MediaTimingReviewContextLine[] {
@@ -862,6 +891,12 @@ export function createMediaTimingReviewModal(
     'leadingLines' | 'trailingLines'
   > | null = null;
   let translationEditing = false;
+  /**
+   * Once the user edits the card sentence it shows as typed in its own field (without the
+   * readings over the lines), and added or removed lines go in or out at its ends.
+   */
+  let sentenceEdited = false;
+  let sentenceEditing = false;
   let resolveInFlight = false;
   let previewPlaying = false;
   let previewTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1227,6 +1262,97 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewPrevRemove.disabled = previousCount <= 0;
     ctx.dom.mediaTimingReviewNextAdd.disabled = nextCount >= payload.nextLines.length;
     ctx.dom.mediaTimingReviewNextRemove.disabled = nextCount <= 0;
+    renderSentenceEdit();
+  }
+
+  /** Shows the typed sentence in place of the subtitle lines once it was edited. */
+  function renderSentenceEdit(): void {
+    const dom = ctx.dom;
+    const showInput = sentenceEdited || sentenceEditing;
+    dom.mediaTimingReviewText.classList.toggle('hidden', showInput);
+    dom.mediaTimingReviewSentence.classList.toggle('hidden', !showInput);
+    dom.mediaTimingReviewSentence.readOnly = !sentenceEditing;
+    const total = currentLineSelection().lineTexts.length;
+    const lines = total === 1 ? '1 line' : `${total} lines`;
+    dom.mediaTimingReviewLineCount.textContent =
+      editedSentence() !== null ? `${lines}, edited` : lines;
+  }
+
+  /**
+   * The sentence only takes typing while it is being edited: a click on it, or Enter while
+   * it is focused, starts that, and Escape or leaving the field ends it, like the
+   * translation. Edits start from the sentence the lines on the card make.
+   */
+  function startSentenceEditing(caret?: number): void {
+    if (!payload || resolveInFlight) return;
+    const input = ctx.dom.mediaTimingReviewSentence;
+    if (!sentenceEdited) input.value = currentLineSelection().sentence;
+    sentenceEditing = true;
+    renderSentenceEdit();
+    input.focus();
+    const position = caret === undefined ? input.value.length : clamp(caret, 0, input.value.length);
+    input.setSelectionRange(position, position);
+  }
+
+  /**
+   * Ends typing in the sentence. A sentence typed back to what the lines make, or cleared,
+   * is not an edit: the lines (and their readings) show again.
+   */
+  function stopSentenceEditing(options: { keepFocus: boolean }): void {
+    if (!sentenceEditing) return;
+    sentenceEditing = false;
+    const input = ctx.dom.mediaTimingReviewSentence;
+    const value = input.value.trim();
+    sentenceEdited = value.length > 0 && !sameSentence(value, currentLineSelection().sentence);
+    renderSentenceEdit();
+    if (!options.keepFocus) return;
+    // Focus stays on the sentence, with the ring that says it is selected, not edited.
+    ctx.dom.mediaTimingReviewModal.dataset.keyboardNav = 'true';
+    (sentenceEdited ? input : ctx.dom.mediaTimingReviewText).focus();
+  }
+
+  /** The sentence the user typed, or null when the card takes the lines' own sentence. */
+  function editedSentence(): string | null {
+    if (!sentenceEdited && !sentenceEditing) return null;
+    const value = ctx.dom.mediaTimingReviewSentence.value.trim();
+    return value && !sameSentence(value, currentLineSelection().sentence) ? value : null;
+  }
+
+  function clearSentenceEdit(): void {
+    sentenceEdited = false;
+    sentenceEditing = false;
+    ctx.dom.mediaTimingReviewSentence.value = '';
+    renderSentenceEdit();
+  }
+
+  /**
+   * Where a click on the subtitle lines landed in the sentence they make, so editing starts
+   * with the caret there. Undefined (the end) when the click selected nothing in them.
+   */
+  function sentenceCaretFromSelection(): number | undefined {
+    const selection = window.getSelection();
+    const container = ctx.dom.mediaTimingReviewText;
+    if (!selection || !selection.isCollapsed || !selection.anchorNode) return undefined;
+    if (!container.contains(selection.anchorNode)) return undefined;
+    const lineSelection = currentLineSelection();
+    if (lineSelection.sentence !== lineSelection.lineTexts.join(' ')) return undefined;
+    const lines = Array.from(container.children);
+    const lineIndex = lines.findIndex((line) => line.contains(selection.anchorNode));
+    if (lineIndex === -1) return undefined;
+    const line = lines[lineIndex]!;
+    // Count the text before the caret, leaving out readings drawn over the line.
+    let offset = 0;
+    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.parentElement?.closest('rt')) continue;
+      if (node === selection.anchorNode) {
+        offset += selection.anchorOffset;
+        break;
+      }
+      offset += node.textContent?.length ?? 0;
+    }
+    const before = lineSelection.lineTexts.slice(0, lineIndex);
+    return before.reduce((total, text) => total + text.length + 1, 0) + offset;
   }
 
   function renderCard(): void {
@@ -1349,7 +1475,12 @@ export function createMediaTimingReviewModal(
     // With lines added, main would resolve the translation anew (and lose one taken from
     // the screen), so the displayed one goes along unless it is the field's own content.
     const linesAdded = previousCount > 0 || nextCount > 0;
-    const followedChange = value !== initialValue || (linesAdded && !initial.fromField);
+    // Main also matches the translation against the card sentence, which a typed sentence
+    // need not spell out, so the one the review shows goes along. An empty one stays
+    // home: main then still tries its own translation of the typed sentence.
+    const typedSentence = editedSentence() !== null && value !== '';
+    const followedChange =
+      value !== initialValue || ((linesAdded || typedSentence) && !initial.fromField);
     // Lines added or dropped with the translation's own buttons are an explicit choice too.
     const adjusted = translationPreviousShift !== 0 || translationNextShift !== 0;
     return translationEdited || adjusted || followedChange ? { translation: value } : {};
@@ -1366,10 +1497,25 @@ export function createMediaTimingReviewModal(
     const current = direction === 'previous' ? previousCount : nextCount;
     const updated = clamp(current + delta, 0, available);
     if (updated === current) return;
+    const before = currentLineSelection();
     if (direction === 'previous') previousCount = updated;
     else nextCount = updated;
 
     const selection = currentLineSelection();
+    if (sentenceEdited || sentenceEditing) {
+      // The outermost line on that side is the one that came or went.
+      const added = updated > current;
+      const lines = direction === 'previous' ? (added ? selection : before).previous : null;
+      const nextLines = direction === 'next' ? (added ? selection : before).next : null;
+      const line = lines ? lines[0] : nextLines![nextLines!.length - 1];
+      const input = ctx.dom.mediaTimingReviewSentence;
+      input.value = applySentenceLineChange({
+        text: input.value,
+        line: line?.text ?? '',
+        side: direction,
+        added,
+      });
+    }
     const mediaEnd = payload.mediaDuration ?? Number.POSITIVE_INFINITY;
     let timelineChanged = false;
     let capped = false;
@@ -1435,6 +1581,7 @@ export function createMediaTimingReviewModal(
     if (!payload || resolveInFlight) return;
     previousCount = 0;
     nextCount = 0;
+    clearSentenceEdit();
     renderSentence();
     setTranslation(payload.card?.translation?.text ?? '', false);
     resetTiming();
@@ -1696,6 +1843,7 @@ export function createMediaTimingReviewModal(
       button.disabled = true;
     });
     ctx.dom.mediaTimingReviewTranslation.disabled = true;
+    ctx.dom.mediaTimingReviewSentence.disabled = true;
     try {
       const result = await window.electronAPI.resolveMediaTimingReview({
         reviewId: payload.reviewId,
@@ -1718,6 +1866,7 @@ export function createMediaTimingReviewModal(
         button.disabled = false;
       });
       ctx.dom.mediaTimingReviewTranslation.disabled = false;
+      ctx.dom.mediaTimingReviewSentence.disabled = false;
       renderSelection();
       renderSentence();
       followTranslation();
@@ -1731,14 +1880,18 @@ export function createMediaTimingReviewModal(
     const screenshotTime = withoutMedia ? undefined : framePicker.getScreenshotTime();
     const includesAdjacentLines = previousCount > 0 || nextCount > 0;
     const lines = currentLineSelection();
+    // A typed sentence replaces the one the lines make; the range still says which
+    // subtitle lines the card covers.
+    const typedSentence = editedSentence();
     void resolveReview({
       action: 'confirm',
       startTime: selectionStart,
       endTime: selectionEnd,
       ...(screenshotTime !== undefined ? { screenshotTime } : {}),
+      ...(typedSentence !== null ? { text: typedSentence } : {}),
       ...(includesAdjacentLines
         ? {
-            text: lines.sentence,
+            text: typedSentence ?? lines.sentence,
             sentenceStartTime: lines.rangeStart,
             sentenceEndTime: lines.rangeEnd,
           }
@@ -1809,6 +1962,7 @@ export function createMediaTimingReviewModal(
     timelineEnd = nextPayload.timelineEndTime;
     previousCount = 0;
     nextCount = 0;
+    clearSentenceEdit();
     startPadSeconds = Math.max(0, nextPayload.originalStartTime - nextPayload.selectionStartTime);
     endPadSeconds = Math.max(0, nextPayload.selectionEndTime - nextPayload.originalEndTime);
     trailingTrimPending = true;
@@ -1906,8 +2060,11 @@ export function createMediaTimingReviewModal(
   function handleMediaTimingReviewKeydown(event: KeyboardEvent): boolean {
     if (!ctx.state.mediaTimingReviewModalOpen) return false;
     const translation = ctx.dom.mediaTimingReviewTranslation;
-    // Keys that belong to an IME composition in the translation (Escape cancels it).
-    if (event.target === translation && event.isComposing) return false;
+    const sentence = ctx.dom.mediaTimingReviewSentence;
+    // Keys that belong to an IME composition in a field (Escape cancels it).
+    if ((event.target === translation || event.target === sentence) && event.isComposing) {
+      return false;
+    }
     if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) {
       handleTabKey(event);
       return true;
@@ -1926,6 +2083,20 @@ export function createMediaTimingReviewModal(
       if (event.key === 'Escape') {
         event.preventDefault();
         stopTranslationEditing();
+        return true;
+      }
+      return false;
+    }
+    if (event.target === sentence && sentenceEditing) {
+      // The sentence takes typing the same way: Enter is a line break, Escape stops editing.
+      if (exportShortcut) {
+        event.preventDefault();
+        confirmSelection();
+        return true;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        stopSentenceEditing({ keepFocus: true });
         return true;
       }
       return false;
@@ -1961,7 +2132,9 @@ export function createMediaTimingReviewModal(
     if (event.key === 'Enter' && !event.shiftKey && !event.altKey) {
       event.preventDefault();
       if (event.target === translation) startTranslationEditing();
-      else pressFocusedControl(event.target);
+      else if (event.target === sentence || event.target === ctx.dom.mediaTimingReviewText) {
+        startSentenceEditing();
+      } else pressFocusedControl(event.target);
       return true;
     }
     if (event.code === 'Space') {
@@ -2114,6 +2287,26 @@ export function createMediaTimingReviewModal(
       if (translationEdited) return;
       translationEdited = true;
       renderTranslationState();
+    });
+    // A click on the subtitle lines edits the sentence, unless it selected text in them.
+    ctx.dom.mediaTimingReviewText.addEventListener('click', () => {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed) return;
+      startSentenceEditing(sentenceCaretFromSelection());
+    });
+    ctx.dom.mediaTimingReviewSentence.addEventListener('click', () => {
+      const input = ctx.dom.mediaTimingReviewSentence;
+      if (input.disabled || sentenceEditing) return;
+      // The caret stays where the click put it.
+      sentenceEditing = true;
+      renderSentenceEdit();
+    });
+    ctx.dom.mediaTimingReviewSentence.addEventListener('input', () => renderSentenceEdit());
+    ctx.dom.mediaTimingReviewSentence.addEventListener('blur', () => {
+      // Focus is still here when only the window lost it (Alt+Tab), so keep editing.
+      if (document.activeElement !== ctx.dom.mediaTimingReviewSentence) {
+        stopSentenceEditing({ keepFocus: false });
+      }
     });
     ctx.dom.mediaTimingReviewPrevAdd.addEventListener('click', () => adjustLines('previous', 1));
     ctx.dom.mediaTimingReviewPrevRemove.addEventListener('click', () =>
