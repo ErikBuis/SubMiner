@@ -1,4 +1,5 @@
 import { STATS_MINING_TAG } from '../shared/anki-source';
+import { ANKI_UNREACHABLE_MESSAGE } from './anki-unreachable';
 
 export interface PollingRunnerDeps {
   getDeck: () => string | undefined;
@@ -136,7 +137,7 @@ export class PollingRunner {
       this.nextPollTime = Date.now() + this.backoffMs;
       if (!wasBackingOff) {
         this.deps.logWarn('AnkiConnect polling failed, backing off...');
-        this.deps.showStatusNotification('AnkiConnect: unable to connect');
+        this.deps.showStatusNotification(ANKI_UNREACHABLE_MESSAGE);
       }
       this.deps.logWarn((error as Error).message);
     } finally {

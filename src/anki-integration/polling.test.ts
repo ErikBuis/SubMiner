@@ -173,3 +173,37 @@ test('a failed source lookup skips plugin events without stopping counting or en
   assert.deepEqual(h.ready, []);
   assert.equal(h.warnings.length, 2);
 });
+
+test('polling runner warns once that Anki cannot be reached', async () => {
+  const originalDateNow = Date.now;
+  const notices: string[] = [];
+  let now = 120_000;
+  try {
+    Date.now = () => now;
+    const runner = new PollingRunner({
+      getDeck: () => undefined,
+      getPollingRate: () => 250,
+      findNotes: async () => {
+        throw new Error('connect ECONNREFUSED 127.0.0.1:8765');
+      },
+      shouldAutoUpdateNewCards: () => true,
+      processNewCard: async () => undefined,
+      isUpdateInProgress: () => false,
+      setUpdateInProgress: () => undefined,
+      getTrackedNoteIds: () => new Set(),
+      setTrackedNoteIds: () => undefined,
+      showStatusNotification: (message) => notices.push(message),
+      logDebug: () => undefined,
+      logInfo: () => undefined,
+      logWarn: () => undefined,
+    });
+
+    await runner.pollOnce();
+    now += 10_000;
+    await runner.pollOnce();
+
+    assert.deepEqual(notices, ["Can't reach Anki. Open Anki (with AnkiConnect) to add cards."]);
+  } finally {
+    Date.now = originalDateNow;
+  }
+});
