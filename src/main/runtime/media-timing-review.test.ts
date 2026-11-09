@@ -92,7 +92,6 @@ describe('buildMediaTimingReviewPayload', () => {
 async function startActiveMediaTimingReview(
   options: {
     maxMediaDuration?: number;
-    decisionTimeoutMs?: number;
     generateWaveform?: () => Promise<number[]>;
     play?: () => Promise<void>;
     paused?: boolean;
@@ -115,7 +114,6 @@ async function startActiveMediaTimingReview(
     getCurrentMediaPath: () => '/video/show.mkv',
     getMpvExecutablePath: () => 'mpv',
     generateWaveform: options.generateWaveform ?? (async () => []),
-    decisionTimeoutMs: options.decisionTimeoutMs,
     createPreviewSession: () => ({
       start: async () => undefined,
       play: async (startTime, endTime) => {
@@ -748,10 +746,48 @@ test('media timing review honors an overlay pause that arrives while setup reads
   ]);
 });
 
-test('media timing review watchdog falls back when the renderer stops responding', async () => {
-  const { pendingDecision } = await startActiveMediaTimingReview({ decisionTimeoutMs: 0 });
+test('media timing review waits for the user without a time limit', async () => {
+  // The user may leave the dialog open (AFK) for as long as they like: nothing may schedule
+  // a long timer that gives up on the review behind their back.
+  const realSetTimeout = globalThis.setTimeout;
+  const scheduledDelays: number[] = [];
+  globalThis.setTimeout = ((handler: TimerHandler, delay?: number, ...args: unknown[]) => {
+    scheduledDelays.push(Number(delay ?? 0));
+    return realSetTimeout(handler, delay, ...args);
+  }) as typeof setTimeout;
+  let started: Awaited<ReturnType<typeof startActiveMediaTimingReview>>;
+  try {
+    started = await startActiveMediaTimingReview();
+    await new Promise<void>((resolve) => realSetTimeout(resolve, 20));
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+  const { runtime, payload, pendingDecision } = started;
+  assert.deepEqual(
+    scheduledDelays.filter((delay) => delay >= 60_000),
+    [],
+  );
 
-  assert.deepEqual(await pendingDecision, { action: 'use-original' });
+  let settled = false;
+  void pendingDecision.then(() => {
+    settled = true;
+  });
+  await new Promise<void>((resolve) => realSetTimeout(resolve, 20));
+  assert.equal(settled, false);
+
+  // A button pressed after the long wait still reaches the live review.
+  assert.deepEqual(
+    await runtime.previewRange({ reviewId: payload.reviewId, startTime: 9.5, endTime: 12.5 }),
+    { ok: true },
+  );
+  assert.deepEqual(
+    runtime.resolveReview({
+      reviewId: payload.reviewId,
+      decision: { action: 'confirm', startTime: 9.5, endTime: 12.5 },
+    }),
+    { ok: true },
+  );
+  assert.deepEqual(await pendingDecision, { action: 'confirm', startTime: 9.5, endTime: 12.5 });
 });
 
 test('media timing review does not resume playback when the prior state is unavailable', async () => {
