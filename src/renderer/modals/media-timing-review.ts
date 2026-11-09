@@ -108,6 +108,18 @@ export function wrapMediaTimingReviewFocus(
   return null;
 }
 
+/**
+ * Whether focus sits on something inside the dialog. The dialog root itself does not
+ * count: a click on plain text focuses it, and keys then start from the first or last
+ * control as if focus were outside.
+ */
+export function isMediaTimingReviewFocusInside(
+  modal: Pick<Node, 'contains'>,
+  active: Node | null,
+): boolean {
+  return active !== null && active !== modal && modal.contains(active);
+}
+
 export type MediaTimingReviewArrowDirection = 'up' | 'down' | 'left' | 'right';
 
 export type MediaTimingReviewBox = { left: number; top: number; right: number; bottom: number };
@@ -1600,7 +1612,11 @@ export function createMediaTimingReviewModal(
     const active = document.activeElement;
     // From a mouse-only control (the start handle focused on open, the slider) the
     // browser's own move already goes to the next control after it.
-    if (active instanceof HTMLElement && modal.contains(active) && !targets.includes(active)) {
+    if (
+      active instanceof HTMLElement &&
+      isMediaTimingReviewFocusInside(modal, active) &&
+      !targets.includes(active)
+    ) {
       return;
     }
     const target = wrapMediaTimingReviewFocus(targets, active, event.shiftKey);
@@ -1616,7 +1632,7 @@ export function createMediaTimingReviewModal(
     const targets = listMediaTimingReviewFocusTargets(modal);
     if (targets.length === 0) return;
     const active = document.activeElement;
-    if (!(active instanceof HTMLElement) || !modal.contains(active)) {
+    if (!(active instanceof HTMLElement) || !isMediaTimingReviewFocusInside(modal, active)) {
       targets[0]!.focus();
       return;
     }

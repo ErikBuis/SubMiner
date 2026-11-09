@@ -7,6 +7,7 @@ import {
   buildMediaTimingReviewTranslation,
   MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS,
   isMediaTimingReviewButtonAvailable,
+  isMediaTimingReviewFocusInside,
   mediaTimingReviewArrowDirection,
   pickMediaTimingReviewArrowTarget,
   buildMediaTimingLineSelection,
@@ -475,6 +476,17 @@ test('Tab wraps focus around the review instead of leaving it', () => {
   assert.equal(wrapMediaTimingReviewFocus(targets, outside, false), first);
   assert.equal(wrapMediaTimingReviewFocus(targets, null, true), last);
   assert.equal(wrapMediaTimingReviewFocus([], first, false), null);
+});
+
+test('focus on the dialog root counts as outside for Tab and the arrow keys', () => {
+  const inside = { id: 'inside' } as unknown as Node;
+  const outside = { id: 'outside' } as unknown as Node;
+  const modal = { contains: (node: Node | null) => node === modal || node === inside } as Node;
+  assert.equal(isMediaTimingReviewFocusInside(modal, inside), true);
+  // A click on plain text in the dialog focuses the root.
+  assert.equal(isMediaTimingReviewFocusInside(modal, modal), false);
+  assert.equal(isMediaTimingReviewFocusInside(modal, outside), false);
+  assert.equal(isMediaTimingReviewFocusInside(modal, null), false);
 });
 
 test('arrow keys move to the control next to the focused one on screen', () => {
