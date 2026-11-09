@@ -510,44 +510,46 @@
               </div>
             </div>
 
-            <div
-              id="mediaTimingReviewStatus"
-              class="media-timing-review-status"
-              role="status"
-              aria-live="polite"
-            ></div>
-            <div class="media-timing-review-footer">
-              <div class="media-timing-review-preview-actions">
+            <div class="media-timing-review-dock">
+              <div class="media-timing-review-footer">
+                <div class="media-timing-review-preview-actions">
+                  <button
+                    id="mediaTimingReviewPlay"
+                    class="media-timing-review-play-button"
+                    type="button"
+                  >
+                    <span class="media-timing-review-play-glyph" aria-hidden="true"></span>
+                    <span id="mediaTimingReviewPlayLabel">Play selection</span>
+                  </button>
+                  <button
+                    id="mediaTimingReviewReset"
+                    class="media-timing-review-quiet-button"
+                    type="button"
+                  >
+                    Reset timing
+                  </button>
+                </div>
+                <div
+                  id="mediaTimingReviewStatus"
+                  class="media-timing-review-status"
+                  role="status"
+                  aria-live="polite"
+                ></div>
                 <button
-                  id="mediaTimingReviewPlay"
-                  class="media-timing-review-play-button"
+                  id="mediaTimingReviewConfirm"
+                  class="media-timing-review-confirm-button"
                   type="button"
                 >
-                  <span class="media-timing-review-play-glyph" aria-hidden="true"></span>
-                  <span id="mediaTimingReviewPlayLabel">Play selection</span>
-                </button>
-                <button
-                  id="mediaTimingReviewReset"
-                  class="media-timing-review-quiet-button"
-                  type="button"
-                >
-                  Reset timing
+                  Use this timing
                 </button>
               </div>
-              <button
-                id="mediaTimingReviewConfirm"
-                class="media-timing-review-confirm-button"
-                type="button"
-              >
-                Use this timing
-              </button>
-            </div>
-            <div class="media-timing-review-hints" aria-hidden="true">
-              <span><kbd>Space</kbd> preview</span>
-              <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> nudge focused edge</span>
-              <span><kbd>P</kbd>/<kbd>N</kbd> add prev/next line</span>
-              <span><kbd>Enter</kbd> confirm</span>
-              <span><kbd>Esc</kbd> cancel</span>
+              <div class="media-timing-review-hints" aria-hidden="true">
+                <span><kbd>Space</kbd> preview</span>
+                <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> nudge focused edge</span>
+                <span><kbd>P</kbd>/<kbd>N</kbd> add prev/next line</span>
+                <span><kbd>Enter</kbd> confirm</span>
+                <span><kbd>Esc</kbd> cancel</span>
+              </div>
             </div>
           </div>
 
