@@ -1,4 +1,4 @@
 type: changed
 area: anki
 
-- The card review keeps Play selection, the export button and the key hints in a footer that stays visible while the dialog scrolls. The confirm button is now called Export card, Reset timing sits with the other timing buttons, and the screenshot picker moved below the timing controls.
+- The card review's confirm button is now called Export card (green, with Play selection in blue), Reset timing sits in the fine-timing row between the Start and End buttons, and the screenshot picker moved below the timing controls. The arrow-key hint shows drawn arrow keys.
