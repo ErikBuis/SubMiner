@@ -123,6 +123,7 @@ async function pressMpvKeys(session: E2eSession, keys: readonly string[]): Promi
 // The app ignores a mining command while it is still adding media to the previous card (it
 // only shows "Anki update already in progress" on the OSD), and on slower runners that update
 // outlasts the mining command. So before mining, wait for the last card's media update.
+const MINING_RETRY_MS = 15_000;
 async function waitForPreviousCardMedia(session: E2eSession): Promise<void> {
   const requests = session.anki.requests;
   const lastAdd = requests.map((request) => request.action).lastIndexOf('addNote');
@@ -154,23 +155,36 @@ async function openSentenceReview(
   session.anki.requests.length = 0;
   // The command returns once the card is made, which waits for the review. Awaiting it here
   // would wait for a review nobody answers.
-  const mining = session.runAppCommand('--mine-sentence');
-  // A mining command that fails before the review opens should fail the test with its own
-  // error, not with a timeout waiting for the review.
+  // The app also ignores a mining command while it checks Anki for new cards, which it does
+  // every few seconds, so a command can be lost. Send it again while no review has opened. A
+  // command that arrives while a review is opening or open is turned away too, so the repeat
+  // can't open a second review.
+  const attempts: Promise<void>[] = [];
   let miningError: unknown;
-  mining.catch((error: unknown) => {
-    miningError = error;
-  });
+  let lastAttempt = 0;
+  const mine = () => {
+    lastAttempt = Date.now();
+    const attempt = session.runAppCommand('--mine-sentence');
+    attempts.push(attempt);
+    // A mining command that fails before the review opens should fail the test with its own
+    // error, not with a timeout waiting for the review.
+    attempt.catch((error: unknown) => {
+      miningError = error;
+    });
+  };
+  mine();
   try {
     const review = await waitUntil(
       async () => {
         if (miningError) throw miningError;
-        return findOpenReview(session);
+        const open = await findOpenReview(session);
+        if (!open && Date.now() - lastAttempt > MINING_RETRY_MS) mine();
+        return open;
       },
       // The first review on a fresh macOS runner can take well over 30 s to show.
       { description: 'the media timing review to open', timeoutMs: 90_000 },
     );
-    return { review, mining };
+    return { review, mining: Promise.all(attempts).then(() => undefined) };
   } catch (error) {
     // CI keeps the logs as an artifact, but the end of the app log in the error is quicker.
     const appLog = path.join(session.root, 'app.log');
