@@ -24,6 +24,7 @@ export function createOnWillQuitCleanupDeps(deps: {
   stopConfigHotReload: () => void;
   restorePreviousSecondarySubVisibility: () => void;
   restoreMpvSubVisibility: () => void;
+  releaseMpvInputLock: () => void;
   isAppReady: () => boolean;
   unregisterAllGlobalShortcuts: () => void;
   stopSubtitleWebsocket: () => void;
@@ -74,6 +75,7 @@ export function createOnWillQuitCleanupDeps(deps: {
     stopConfigHotReload: () => deps.stopConfigHotReload(),
     restorePreviousSecondarySubVisibility: () => deps.restorePreviousSecondarySubVisibility(),
     restoreMpvSubVisibility: () => deps.restoreMpvSubVisibility(),
+    releaseMpvInputLock: () => deps.releaseMpvInputLock(),
     unregisterAllGlobalShortcuts: () => {
       if (!deps.isAppReady()) return;
       deps.unregisterAllGlobalShortcuts();
