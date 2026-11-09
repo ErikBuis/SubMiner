@@ -48,6 +48,8 @@ export async function startMpv(options: {
       '--pause',
       '--keep-open=yes',
       '--ao=null',
+      // Tests press many keys at once over IPC, more than mpv's default 7-key buffer holds.
+      '--input-key-fifo-size=256',
       `--geometry=${E2E_SCREEN.width}x${E2E_SCREEN.height}+0+0`,
       ...videoOutputArgs(options.display),
       `--input-ipc-server=${options.socketPath}`,

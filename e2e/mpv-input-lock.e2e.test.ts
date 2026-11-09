@@ -132,6 +132,9 @@ function useMpv(): Promise<Started> {
         '--keep-open=yes',
         '--vo=null',
         '--ao=null',
+        // The test presses 14 keys at once, more than mpv's default 7-key buffer holds, and a
+        // key mpv drops never reaches the lock.
+        '--input-key-fifo-size=256',
         `--screenshot-dir=${screenshotDir}`,
         `--script=${pluginLoaderDir}`,
         `--script=${probePath}`,
