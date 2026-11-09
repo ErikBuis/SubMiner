@@ -42,7 +42,8 @@ body {
 
 html:focus-visible,
 body:focus-visible,
-#overlay:focus-visible {
+#overlay:focus-visible,
+#mediaTimingReviewModal:focus-visible {
   outline: none;
 }
 
