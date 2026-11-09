@@ -210,10 +210,13 @@
           </div>
         </div>
       </div>
+      <!-- tabindex: a press on plain text focuses the dialog itself, not #overlay outside it,
+           so the modal focus guard leaves the press alone and the mouse can select text. -->
       <div
         id="mediaTimingReviewModal"
         class="modal media-timing-review-modal hidden"
         aria-hidden="true"
+        tabindex="-1"
       >
         <div
           class="modal-content media-timing-review-content"
