@@ -230,6 +230,8 @@ export class AnkiIntegration {
   // Sentence cards are made one at a time, in the order they were mined.
   private sentenceCardQueue: Promise<unknown> = Promise.resolve();
   private queuedSentenceCards = 0;
+  // Lines queued or being made, so mining the same line again meanwhile doesn't make it twice.
+  private pendingSentenceCardKeys = new Set<string>();
   private uiFeedbackState: UiFeedbackState = createUiFeedbackState();
   private parseWarningKeys = new Set<string>();
   private fieldGroupingCallback:
@@ -1637,8 +1639,8 @@ export class AnkiIntegration {
 
   /**
    * Mines a sentence card. When SubMiner is still busy with Anki (an earlier card, a poll for new
-   * cards, a manual update), the card waits for that work instead of being dropped, so every
-   * mining keypress makes a card. The sentence and timing are the ones from when it was mined.
+   * cards, a manual update), the card waits for that work instead of being dropped. The sentence
+   * and timing are the ones from when it was mined.
    */
   async createSentenceCard(
     sentence: string,
@@ -1648,6 +1650,13 @@ export class AnkiIntegration {
   ): Promise<boolean> {
     const mustWait = this.updateInProgress || this.queuedSentenceCards > 0;
     const videoPath = this.mpvClient?.currentVideoPath;
+    // Pressing the key again because nothing seemed to happen shouldn't make a second card.
+    const lineKey = JSON.stringify([videoPath, sentence, startTime, endTime]);
+    if (this.pendingSentenceCardKeys.has(lineKey)) {
+      this.showStatusNotification('This line is already being added');
+      return false;
+    }
+    this.pendingSentenceCardKeys.add(lineKey);
     const previous = this.sentenceCardQueue;
     this.queuedSentenceCards += 1;
     const run = (async () => {
@@ -1666,6 +1675,8 @@ export class AnkiIntegration {
         this.showStatusNotification('Card not added: the video changed while it was queued');
         return false;
       }
+      // Only microtasks ran since the wait saw SubMiner idle, and polls and other commands start
+      // from timers or IPC, so the busy check inside card creation can't refuse this card.
       return this.createSentenceCardNow(sentence, startTime, endTime, secondarySubText);
     })();
     this.sentenceCardQueue = run.catch(() => undefined);
@@ -1673,6 +1684,7 @@ export class AnkiIntegration {
       return await run;
     } finally {
       this.queuedSentenceCards -= 1;
+      this.pendingSentenceCardKeys.delete(lineKey);
     }
   }
 
