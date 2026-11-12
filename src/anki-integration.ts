@@ -231,6 +231,13 @@ export class AnkiIntegration {
   private overlayNotificationDismissCallback: ((id: string) => void) | null = null;
   private overlayUpdateProgressActive = false;
   private updateInProgress = false;
+  // Resolved each time updateInProgress turns false; see waitForUpdateIdle.
+  private updateIdleWaiters: Array<() => void> = [];
+  // Sentence cards are made one at a time, in the order they were mined.
+  private sentenceCardQueue: Promise<unknown> = Promise.resolve();
+  private queuedSentenceCards = 0;
+  // Lines queued or being made, so mining the same line again meanwhile doesn't make it twice.
+  private pendingSentenceCardKeys = new Set<string>();
   private uiFeedbackState: UiFeedbackState = createUiFeedbackState();
   private parseWarningKeys = new Set<string>();
   private fieldGroupingCallback:
@@ -534,9 +541,7 @@ export class AnkiIntegration {
         this.reportCardsReady(noteIds);
       },
       isUpdateInProgress: () => this.updateInProgress,
-      setUpdateInProgress: (value) => {
-        this.updateInProgress = value;
-      },
+      setUpdateInProgress: (value) => this.setUpdateInProgress(value),
       getTrackedNoteIds: () => this.previousNoteIds,
       setTrackedNoteIds: (noteIds) => {
         this.previousNoteIds = noteIds;
@@ -674,9 +679,7 @@ export class AnkiIntegration {
       getFallbackDurationSeconds: () => this.getFallbackDurationSeconds(),
       appendKnownWordsFromNoteInfo: (noteInfo) => this.appendKnownWordsFromNoteInfo(noteInfo),
       isUpdateInProgress: () => this.updateInProgress,
-      setUpdateInProgress: (value) => {
-        this.updateInProgress = value;
-      },
+      setUpdateInProgress: (value) => this.setUpdateInProgress(value),
       trackLastAddedNoteId: (noteId) => {
         this.previousNoteIds.add(noteId);
       },
@@ -1424,7 +1427,7 @@ export class AnkiIntegration {
     action: () => Promise<T>,
   ): Promise<T> {
     if (!this.shouldUseOsdNotifications()) {
-      this.updateInProgress = true;
+      this.setUpdateInProgress(true);
       if (this.shouldUseOverlayNotifications()) {
         this.overlayUpdateProgressActive = true;
         this.overlayNotificationCallback?.({
@@ -1438,16 +1441,14 @@ export class AnkiIntegration {
       try {
         return await action();
       } finally {
-        this.updateInProgress = false;
+        this.setUpdateInProgress(false);
         this.endUpdateProgress();
       }
     }
     return withUpdateProgress(
       this.uiFeedbackState,
       {
-        setUpdateInProgress: (value: boolean) => {
-          this.updateInProgress = value;
-        },
+        setUpdateInProgress: (value: boolean) => this.setUpdateInProgress(value),
         showOsdNotification: (text: string) => {
           this.showOsdNotification(text);
         },
@@ -1455,6 +1456,20 @@ export class AnkiIntegration {
       initialMessage,
       action,
     );
+  }
+
+  private setUpdateInProgress(value: boolean): void {
+    this.updateInProgress = value;
+    if (value) return;
+    const waiters = this.updateIdleWaiters;
+    this.updateIdleWaiters = [];
+    for (const resolve of waiters) resolve();
+  }
+
+  private async waitForUpdateIdle(): Promise<void> {
+    while (this.updateInProgress) {
+      await new Promise<void>((resolve) => this.updateIdleWaiters.push(resolve));
+    }
   }
 
   private showOsdNotification(text: string): void {
@@ -1646,7 +1661,58 @@ export class AnkiIntegration {
     return this.cardCreationService.markLastCardAsAudioCard();
   }
 
+  /**
+   * Mines a sentence card. When SubMiner is still busy with Anki (an earlier card, a poll for new
+   * cards, a manual update), the card waits for that work instead of being dropped. The sentence
+   * and timing are the ones from when it was mined.
+   */
   async createSentenceCard(
+    sentence: string,
+    startTime: number,
+    endTime: number,
+    secondarySubText?: string,
+  ): Promise<boolean> {
+    const mustWait = this.updateInProgress || this.queuedSentenceCards > 0;
+    const videoPath = this.mpvClient?.currentVideoPath;
+    // Pressing the key again because nothing seemed to happen shouldn't make a second card.
+    const lineKey = JSON.stringify([videoPath, sentence, startTime, endTime]);
+    if (this.pendingSentenceCardKeys.has(lineKey)) {
+      this.showStatusNotification('This line is already being added');
+      return false;
+    }
+    this.pendingSentenceCardKeys.add(lineKey);
+    const previous = this.sentenceCardQueue;
+    this.queuedSentenceCards += 1;
+    const run = (async () => {
+      // Most waits are a quick poll for new cards, so only say something once the wait is felt.
+      const queuedNotice = mustWait
+        ? setTimeout(() => this.showStatusNotification('Anki is busy, card queued'), 500)
+        : null;
+      try {
+        await previous;
+        await this.waitForUpdateIdle();
+      } finally {
+        if (queuedNotice) clearTimeout(queuedNotice);
+      }
+      if (mustWait && this.mpvClient?.currentVideoPath !== videoPath) {
+        // The media would come from the wrong video.
+        this.showStatusNotification('Card not added: the video changed while it was queued');
+        return false;
+      }
+      // Only microtasks ran since the wait saw SubMiner idle, and polls and other commands start
+      // from timers or IPC, so the busy check inside card creation can't refuse this card.
+      return this.createSentenceCardNow(sentence, startTime, endTime, secondarySubText);
+    })();
+    this.sentenceCardQueue = run.catch(() => undefined);
+    try {
+      return await run;
+    } finally {
+      this.queuedSentenceCards -= 1;
+      this.pendingSentenceCardKeys.delete(lineKey);
+    }
+  }
+
+  private async createSentenceCardNow(
     sentence: string,
     startTime: number,
     endTime: number,

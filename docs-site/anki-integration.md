@@ -222,6 +222,8 @@ Manual clipboard updates (`Ctrl/Cmd+V`) always replace the sentence audio, whate
 
 `Ctrl/Cmd+S` creates a standalone sentence card from the current line, and `Ctrl/Cmd+Shift+S` then a digit combines several lines. The card uses the note type named in `ankiConnect.isLapis.sentenceCardModel`, which must exist in Anki. If it is empty, no card is created.
 
+If SubMiner is still busy with Anki when you mine (for example the previous card is still getting its audio and screenshot), the new card waits its turn instead of being dropped. Cards are made in the order you mined them. Mining the same line again while it is still being added only shows "This line is already being added", and a queued card is skipped (with a message) if you switch to another video before its turn. Audio cards, clipboard updates and manual field grouping don't wait: they show "Anki update already in progress" and you press them again.
+
 ```jsonc
 "ankiConnect": {
   "isLapis": {
