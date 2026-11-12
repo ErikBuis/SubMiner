@@ -64,6 +64,8 @@ type IntegrationInternals = {
   };
   config: AnkiConnectConfig;
   cardCreationService: { createSentenceCard: () => Promise<boolean> };
+  pollingRunner: { pollOnce: () => Promise<void> };
+  withUpdateProgress: <T>(initialMessage: string, action: () => Promise<T>) => Promise<T>;
   fieldGroupingService: { triggerFieldGroupingForLastAddedCard: () => Promise<void> };
   showNotification: (noteId: number, label: string | number, errorSuffix?: string) => Promise<void>;
   beginUpdateProgress: (message: string) => void;
@@ -467,6 +469,223 @@ test('AnkiIntegration reports a new sentence card ready only after field groupin
 
   assert.equal(await integration.createSentenceCard('duplicate sentence', 0, 1), true);
   assert.deepEqual(events, ['group', 'ready 42']);
+});
+
+// --- Mining while SubMiner is busy with Anki ------------------------------------
+
+/** Stands in for card creation, refusing like the real one does while an update is running. */
+function recordSentenceCards(integration: AnkiIntegration, events: string[]) {
+  const internals = internalsOf(integration);
+  const gates: Array<() => void> = [];
+  internals.cardCreationService = {
+    createSentenceCard: (async (sentence: string) => {
+      if ((integration as unknown as { updateInProgress: boolean }).updateInProgress) {
+        events.push(`refused ${sentence}`);
+        return false;
+      }
+      events.push(`start ${sentence}`);
+      await internals.withUpdateProgress(`Creating ${sentence}`, async () => {
+        await new Promise<void>((resolve) => gates.push(resolve));
+      });
+      events.push(`done ${sentence}`);
+      return true;
+    }) as never,
+  };
+  return {
+    /** Lets the oldest card that is still being made finish. */
+    finishNext: () => gates.shift()?.(),
+  };
+}
+
+function flushAsyncWork(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+test('AnkiIntegration waits for a poll for new cards instead of dropping a mined card', async () => {
+  const integration = createIntegration({ behavior: { notificationType: 'osd' } });
+  const internals = internalsOf(integration);
+  const events: string[] = [];
+  const cards = recordSentenceCards(integration, events);
+  let answerPoll: (noteIds: number[]) => void = () => undefined;
+  internals.client.findNotes = () =>
+    new Promise<number[]>((resolve) => {
+      answerPoll = resolve;
+    });
+
+  const poll = internals.pollingRunner.pollOnce();
+  const mined = integration.createSentenceCard('猫が好き', 0, 1);
+  await flushAsyncWork();
+  assert.deepEqual(events, []);
+
+  answerPoll([]);
+  await poll;
+  await flushAsyncWork();
+  assert.deepEqual(events, ['start 猫が好き']);
+  cards.finishNext();
+  assert.equal(await mined, true);
+  assert.deepEqual(events, ['start 猫が好き', 'done 猫が好き']);
+});
+
+test('AnkiIntegration makes cards mined in quick succession one after another, in order', async () => {
+  const integration = createIntegration({ behavior: { notificationType: 'osd' } });
+  const events: string[] = [];
+  const cards = recordSentenceCards(integration, events);
+
+  const first = integration.createSentenceCard('一', 0, 1);
+  const second = integration.createSentenceCard('二', 1, 2);
+  const third = integration.createSentenceCard('三', 2, 3);
+  await flushAsyncWork();
+  assert.deepEqual(events, ['start 一']);
+
+  cards.finishNext();
+  await flushAsyncWork();
+  assert.deepEqual(events, ['start 一', 'done 一', 'start 二']);
+  cards.finishNext();
+  await flushAsyncWork();
+  cards.finishNext();
+  assert.deepEqual(await Promise.all([first, second, third]), [true, true, true]);
+  assert.deepEqual(events, ['start 一', 'done 一', 'start 二', 'done 二', 'start 三', 'done 三']);
+});
+
+test('AnkiIntegration says a card is queued only when the wait is long enough to notice', async () => {
+  const osdMessages: string[] = [];
+  const integration = createIntegration(
+    { behavior: { notificationType: 'osd' } },
+    { osd: (text) => osdMessages.push(text) },
+  );
+  const events: string[] = [];
+  const cards = recordSentenceCards(integration, events);
+
+  const first = integration.createSentenceCard('一', 0, 1);
+  const second = integration.createSentenceCard('二', 1, 2);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(osdMessages.includes('Anki is busy, card queued'), false);
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(osdMessages.filter((text) => text === 'Anki is busy, card queued').length, 1);
+
+  cards.finishNext();
+  await flushAsyncWork();
+  cards.finishNext();
+  assert.deepEqual(await Promise.all([first, second]), [true, true]);
+  // The first card didn't wait, so it never said it was queued.
+  assert.equal(osdMessages.filter((text) => text === 'Anki is busy, card queued').length, 1);
+});
+
+test('AnkiIntegration drops a queued card when the video changes before its turn', async () => {
+  const osdMessages: string[] = [];
+  const mpvClient: Record<string, unknown> = { currentVideoPath: '/videos/episode-1.mkv' };
+  const integration = createIntegration(
+    { behavior: { notificationType: 'osd' } },
+    { mpvClient, osd: (text) => osdMessages.push(text) },
+  );
+  const events: string[] = [];
+  const cards = recordSentenceCards(integration, events);
+
+  const first = integration.createSentenceCard('一', 0, 1);
+  const second = integration.createSentenceCard('二', 1, 2);
+  await flushAsyncWork();
+  mpvClient.currentVideoPath = '/videos/episode-2.mkv';
+  // Mined in the new video, so it still gets made after the skipped one.
+  const third = integration.createSentenceCard('三', 0, 1);
+  cards.finishNext();
+  await flushAsyncWork();
+  cards.finishNext();
+
+  assert.deepEqual(await Promise.all([first, second, third]), [true, false, true]);
+  assert.deepEqual(events, ['start 一', 'done 一', 'start 三', 'done 三']);
+  assert.ok(osdMessages.includes('Card not added: the video changed while it was queued'));
+});
+
+test('AnkiIntegration ignores mining the same line again while it is still being added', async () => {
+  const osdMessages: string[] = [];
+  const integration = createIntegration(
+    { behavior: { notificationType: 'osd' } },
+    { osd: (text) => osdMessages.push(text) },
+  );
+  const events: string[] = [];
+  const cards = recordSentenceCards(integration, events);
+
+  const first = integration.createSentenceCard('一', 0, 1);
+  const again = integration.createSentenceCard('一', 0, 1);
+  const other = integration.createSentenceCard('二', 1, 2);
+  assert.equal(await again, false);
+  assert.ok(osdMessages.includes('This line is already being added'));
+  await flushAsyncWork();
+  cards.finishNext();
+  await flushAsyncWork();
+  cards.finishNext();
+  assert.deepEqual(await Promise.all([first, other]), [true, true]);
+
+  // Once the card is made, mining the line again is a new card like before.
+  const later = integration.createSentenceCard('一', 0, 1);
+  await flushAsyncWork();
+  cards.finishNext();
+  assert.equal(await later, true);
+  assert.deepEqual(events, ['start 一', 'done 一', 'start 二', 'done 二', 'start 一', 'done 一']);
+});
+
+test('AnkiIntegration lets a queued card start only after the previous card is grouped', async () => {
+  const integration = createIntegration({
+    behavior: { notificationType: 'osd' },
+    isKiku: { enabled: true, fieldGrouping: 'manual' },
+  });
+  const internals = internalsOf(integration);
+  const events: string[] = [];
+  const cards = recordSentenceCards(integration, events);
+  const created = internals.cardCreationService.createSentenceCard as unknown as (
+    sentence: string,
+  ) => Promise<boolean>;
+  internals.cardCreationService = {
+    createSentenceCard: (async (sentence: string) => {
+      const result = await created(sentence);
+      // A duplicate of an older card, so field grouping runs right after.
+      if (sentence === '一') integration.trackDuplicateNoteIdsForNote(42, [7]);
+      return result;
+    }) as never,
+  };
+  let finishGrouping: () => void = () => undefined;
+  internals.fieldGroupingService = {
+    triggerFieldGroupingForLastAddedCard: async () => {
+      events.push('group 一');
+      await internals.withUpdateProgress('Grouping duplicate cards', async () => {
+        await new Promise<void>((resolve) => {
+          finishGrouping = resolve;
+        });
+      });
+    },
+  };
+
+  const first = integration.createSentenceCard('一', 0, 1);
+  const second = integration.createSentenceCard('二', 1, 2);
+  await flushAsyncWork();
+  cards.finishNext();
+  await flushAsyncWork();
+  assert.deepEqual(events, ['start 一', 'done 一', 'group 一']);
+
+  finishGrouping();
+  await flushAsyncWork();
+  assert.deepEqual(events, ['start 一', 'done 一', 'group 一', 'start 二']);
+  cards.finishNext();
+  assert.deepEqual(await Promise.all([first, second]), [true, true]);
+});
+
+test('AnkiIntegration keeps mining after a queued card fails', async () => {
+  const integration = createIntegration({ behavior: { notificationType: 'osd' } });
+  const internals = internalsOf(integration);
+  const events: string[] = [];
+  internals.cardCreationService = {
+    createSentenceCard: (async (sentence: string) => {
+      events.push(sentence);
+      if (sentence === '一') throw new Error('Anki went away');
+      return true;
+    }) as never,
+  };
+
+  const first = integration.createSentenceCard('一', 0, 1);
+  const second = integration.createSentenceCard('二', 1, 2);
+  await assert.rejects(first, /Anki went away/);
+  assert.equal(await second, true);
+  assert.deepEqual(events, ['一', '二']);
 });
 
 test('AnkiIntegration reports a card with queued YouTube media ready once the media lands', async () => {
