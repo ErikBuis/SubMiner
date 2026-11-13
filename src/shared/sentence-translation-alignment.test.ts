@@ -298,6 +298,51 @@ test('an unclaimed line prefers the dialogue event it overlaps over a sign', () 
   assert.equal(aligned?.translation, 'The end of it.');
 });
 
+test('a new speaker takes the translation that starts with their line', () => {
+  // Bocchi the Rock! ep. 1 at 00:19: the narration's translation stays up until the next
+  // narration line, so it also covers the teacher's どうぞ and lines up with both lines
+  // better than "Here you go!" lines up with its own.
+  const primary = [line('遠足のときに…', 17.789, 18.999), line('（先生）どうぞ', 19.082, 19.583)];
+  const secondary = [
+    line('At the school picnic,', 17.8, 19.64),
+    line('Here you go!', 19.09, 19.97),
+    line('the lonely girl traded parts\nof her lunch with her teacher.', 19.64, 24.06),
+  ];
+  const translationOf = (index: number) =>
+    alignSentenceTranslation({
+      primaryLines: primary,
+      secondaryLines: secondary,
+      startTime: primary[index]!.startTime,
+      endTime: primary[index]!.endTime,
+    })?.translation;
+  assert.equal(translationOf(0), 'At the school picnic,');
+  assert.equal(translationOf(1), 'Here you go!');
+});
+
+test('a line without a speaker label stays with its sentence when a background line starts with it', () => {
+  // Bocchi the Rock! ep. 1 at 00:47: the TV line starts together with the second half of
+  // the narration's sentence, which has no speaker label.
+  const primary = [
+    line('たま～に思う', 47.527, 48.987),
+    line('このままで いいんだろうかって', 49.49, 51.91),
+  ];
+  const secondary = [
+    line("I thought I didn't need to know any more,", 47.0, 49.46),
+    line('Sometimes I wonder if this is really the life I want to lead.', 47.54, 52.38),
+    line("but lately I'm learning once again\nhow interesting cooking can be.", 49.5, 52.38),
+  ];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 49.49,
+    endTime: 51.91,
+  });
+  assert.equal(
+    aligned?.translation,
+    'Sometimes I wonder if this is really the life I want to lead.',
+  );
+});
+
 test('two speakers sharing an interval keep both translations', () => {
   const aligned = alignSentenceTranslation({
     primaryLines: [line('－行くぞ', 1, 3), line('－待って', 1, 3)],
