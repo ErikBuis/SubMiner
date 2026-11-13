@@ -39,6 +39,11 @@ export interface AlignedSentenceTranslation {
 
 /** Fraction of a primary line that must fall inside a secondary event to join its sentence. */
 export const DEFAULT_SENTENCE_GROUP_MIN_OVERLAP = 0.6;
+/**
+ * When no secondary event claimed a primary line: the fraction of the shorter of the two
+ * that must overlap for the event to translate the line.
+ */
+const UNCLAIMED_LINE_MIN_OVERLAP = 0.4;
 /** Lines whose start and end differ by less than this are co-timed. */
 const CO_TIMED_EPSILON_SECONDS = 0.01;
 const SCORE_EPSILON = 1e-9;
@@ -225,8 +230,11 @@ export function buildSentenceTranslationGroups(
 }
 
 /**
- * The secondary event that overlaps the line the longest, if any overlaps at all. A sign
- * is only picked when no dialogue event overlaps the line.
+ * The secondary event that overlaps the line the longest, if it overlaps enough. The
+ * translation of a neighbouring line often lingers a moment into the line (or starts just
+ * before the line ends) and is no translation of it, so the overlap has to be a fair part
+ * of the shorter of the two. Measuring against the shorter one keeps a short translation
+ * that sits inside a long line. A sign is only picked when no dialogue event qualifies.
  */
 export function findBestOverlappingLine(
   lines: readonly TimedSubtitleText[],
@@ -236,7 +244,8 @@ export function findBestOverlappingLine(
   let bestOverlap = 0;
   for (const line of lines) {
     const overlap = overlapSeconds(line, range);
-    if (overlap <= 0) continue;
+    const shorter = Math.min(duration(line), duration(range));
+    if (overlap <= 0 || overlap < UNCLAIMED_LINE_MIN_OVERLAP * shorter) continue;
     const bestIsSign = best?.isSign === true;
     const lineIsSign = line.isSign === true;
     if (
