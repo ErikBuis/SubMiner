@@ -512,7 +512,8 @@ export function createMediaTimingReviewModal(
 
   /**
    * Moves an untouched clip end back to where the line's dialogue ends. The orange
-   * end bar keeps marking the subtitle timing, and Reset restores it.
+   * end bar keeps marking the subtitle timing, and Reset restores it. This happens while
+   * the review opens, so it stays silent: the status line only answers what the user did.
    */
   function trimTrailingSilence(peaks: readonly number[]): void {
     if (!payload || !trailingTrimPending || previewPlaying || previewRequest.isInFlight()) {
@@ -530,7 +531,6 @@ export function createMediaTimingReviewModal(
     });
     if (trimmedEnd === null) return;
     updateSelection(selectionStart, trimmedEnd);
-    setStatus('Clip end moved to where the dialogue ends. Reset restores the subtitle timing.');
   }
 
   function queueWaveformLoad(delayMs = 0): void {
