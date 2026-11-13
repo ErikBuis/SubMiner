@@ -425,3 +425,325 @@ for (const c of DUPLICATE_TRACKING_CASES) {
     assert.deepEqual(trackedDuplicates, c.expected);
   });
 }
+
+function createTimedTranslationService(
+  options: {
+    tracks?: {
+      primary: Array<{ text: string; startTime: number; endTime: number }>;
+      secondary: Array<{ text: string; startTime: number; endTime: number }>;
+    } | null;
+    maxMediaDuration?: number;
+  } = {},
+) {
+  const addedFields: Array<Record<string, string>> = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () =>
+        createAnkiConfig({
+          fields: { translation: 'Translation' },
+          ...(options.maxMediaDuration !== undefined
+            ? { media: { maxMediaDuration: options.maxMediaDuration } }
+            : {}),
+        }),
+      getSubtitleTracksForTranslation: () => options.tracks ?? null,
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+    }),
+  );
+  return { service, addedFields };
+}
+
+test('createSentenceCard picks the translation by timing, not the overlapping on-screen line', async () => {
+  // Bocchi the Rock! ep. 1 at 00:37: a cooking show on TV talks over the narration.
+  const narration = 'The only messages she receives\nare from either her parents or advertisers.';
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [
+        { text: '（ひとり）スマホに届くのは', startTime: 35.474, endTime: 36.808 },
+        {
+          text: '親からのメッセージか\nクーポンのお知らせだけ',
+          startTime: 37.392,
+          endTime: 41.146,
+        },
+      ],
+      secondary: [
+        { text: narration, startTime: 35.36, endTime: 40.95 },
+        { text: "There's a lot of vegetables,", startTime: 36.86, endTime: 38.99 },
+      ],
+    },
+  });
+
+  assert.equal(
+    await service.createSentenceCard(
+      '親からのメッセージか クーポンのお知らせだけ',
+      37.392,
+      41.146,
+      `${narration}\nThere's a lot of vegetables,`,
+    ),
+    true,
+  );
+  assert.equal(addedFields[0]?.Sentence, '親からのメッセージか クーポンのお知らせだけ');
+  assert.equal(
+    addedFields[0]?.Translation,
+    'The only messages she receives are from either her parents or advertisers.',
+  );
+});
+
+test('createSentenceCard translates a mined line whose speaker label the sentence dropped', async () => {
+  // Bocchi the Rock! ep. 1 around 07:00, mined as two lines without the label （ひとり）.
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [
+        { text: '（ひとり）かっ… かっこいい～！', startTime: 419.732, endTime: 422.485 },
+        { text: '一気にバンド女子だ', startTime: 422.569, endTime: 424.279 },
+      ],
+      secondary: [
+        { text: 'I look... super cool!', startTime: 419.78, endTime: 422.62 },
+        { text: "I'm already a total rocker chick!", startTime: 422.62, endTime: 424.54 },
+      ],
+    },
+  });
+
+  assert.equal(
+    await service.createSentenceCard('かっ… かっこいい～！ 一気にバンド女子だ', 419.732, 424.279),
+    true,
+  );
+  assert.equal(
+    addedFields[0]?.Translation,
+    "I look... super cool! I'm already a total rocker chick!",
+  );
+});
+
+test('createSentenceCard keeps the on-screen translation without parsed tracks', async () => {
+  const { service, addedFields } = createTimedTranslationService();
+
+  assert.equal(await service.createSentenceCard('今日は', 1, 2, 'Today'), true);
+  assert.equal(addedFields[0]?.Translation, 'Today');
+});
+
+test('createSentenceCard drops the on-screen line when the parsed track has no match', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [{ text: '♪～', startTime: 1, endTime: 2 }],
+      secondary: [{ text: 'Next line.', startTime: 2.5, endTime: 4 }],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('♪～', 1, 2, 'Next line.'), true);
+  assert.equal(addedFields[0]?.Translation, undefined);
+});
+
+test('createSentenceCard ignores a parsed secondary track in the primary language', async () => {
+  const line = { text: '今日は', startTime: 1, endTime: 2 };
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: { primary: [line], secondary: [line] },
+  });
+
+  assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
+  assert.equal(addedFields[0]?.Translation, undefined);
+});
+
+test('createSentenceCard ignores a same-language track that splits lines differently', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [
+        { text: '今日は', startTime: 1, endTime: 2 },
+        { text: 'いい天気ですね', startTime: 2, endTime: 4 },
+      ],
+      secondary: [{ text: '今日は いい天気ですね', startTime: 1, endTime: 4 }],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('いい天気ですね', 2, 4), true);
+  assert.equal(addedFields[0]?.Translation, undefined);
+});
+
+test('createSentenceCard ignores a same-language cue that only punctuates differently', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [{ text: '今日は、いい天気ですね。', startTime: 1, endTime: 4 }],
+      secondary: [{ text: '今日はいい天気ですね！', startTime: 1, endTime: 4 }],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('今日は、いい天気ですね。', 1, 4), true);
+  assert.equal(addedFields[0]?.Translation, undefined);
+});
+
+test('createSentenceCard ignores a shorter same-language cue inside the mined line', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [{ text: '今日はいい天気ですね', startTime: 1, endTime: 4 }],
+      secondary: [
+        { text: '今日は', startTime: 1, endTime: 2 },
+        { text: 'いい天気ですね', startTime: 2, endTime: 4 },
+      ],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('今日はいい天気ですね', 1, 4), true);
+  assert.equal(addedFields[0]?.Translation, undefined);
+});
+
+test('createSentenceCard keeps a bilingual secondary cue', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [{ text: '今日はいい天気ですね', startTime: 1, endTime: 4 }],
+      secondary: [
+        { text: '今日はいい天気ですね\nNice weather today, huh?', startTime: 1, endTime: 4 },
+      ],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('今日はいい天気ですね', 1, 4), true);
+  assert.equal(addedFields[0]?.Translation, '今日はいい天気ですね Nice weather today, huh?');
+});
+
+test('createSentenceCard keeps a bilingual cue for a sentence with Latin letters', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [{ text: 'DNAって何？', startTime: 1, endTime: 3 }],
+      secondary: [{ text: 'DNAって何？\nWhat is DNA?', startTime: 1, endTime: 3 }],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('DNAって何？', 1, 3), true);
+  assert.equal(addedFields[0]?.Translation, 'DNAって何？ What is DNA?');
+});
+
+test('createSentenceCard keeps a bilingual cue in a script it does not list', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [{ text: '今日は', startTime: 1, endTime: 3 }],
+      secondary: [{ text: '今日は\nהיום', startTime: 1, endTime: 3 }],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('今日は', 1, 3), true);
+  assert.equal(addedFields[0]?.Translation, '今日は היום');
+});
+
+test('createSentenceCard rejects a same-language cue whose mixed-script rest looks foreign', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [
+        { text: 'DNA', startTime: 0, endTime: 1 },
+        { text: 'って何？', startTime: 1, endTime: 3 },
+      ],
+      secondary: [{ text: 'DNAって何？', startTime: 0, endTime: 3 }],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('って何？', 1, 3), true);
+  assert.equal(addedFields[0]?.Translation, undefined);
+});
+
+test('createSentenceCard keeps a bilingual cue when only part of its source line was mined', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    tracks: {
+      primary: [
+        { text: '今日は', startTime: 1, endTime: 2 },
+        { text: 'いい天気ですね', startTime: 2, endTime: 3 },
+      ],
+      secondary: [
+        { text: '今日はいい天気ですね\nNice weather today, huh?', startTime: 1, endTime: 3 },
+      ],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('いい天気ですね', 2, 3), true);
+  assert.equal(addedFields[0]?.Translation, '今日はいい天気ですね Nice weather today, huh?');
+});
+
+test('createSentenceCard translates every combined line even when the media is capped', async () => {
+  const { service, addedFields } = createTimedTranslationService({
+    maxMediaDuration: 30,
+    tracks: {
+      primary: [
+        { text: '一', startTime: 0, endTime: 15 },
+        { text: '二', startTime: 15, endTime: 30 },
+        { text: '三', startTime: 30, endTime: 45 },
+      ],
+      secondary: [
+        { text: 'One.', startTime: 0, endTime: 15 },
+        { text: 'Two.', startTime: 15, endTime: 30 },
+        { text: 'Three.', startTime: 30, endTime: 45 },
+      ],
+    },
+  });
+
+  assert.equal(await service.createSentenceCard('一 二 三', 0, 45), true);
+  assert.equal(addedFields[0]?.Translation, 'One. Two. Three.');
+});
+
+test('createSentenceCard translates the lines the timing review added', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () => createAnkiConfig({ fields: { translation: 'Translation' } }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [
+          { text: '一', startTime: 0, endTime: 2 },
+          { text: '二', startTime: 2, endTime: 4 },
+        ],
+        secondary: [
+          { text: 'One.', startTime: 0, endTime: 2 },
+          { text: 'Two.', startTime: 2, endTime: 4 },
+        ],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      reviewMediaTiming: async () => ({
+        action: 'confirm',
+        startTime: 0,
+        endTime: 3.8,
+        text: '一 二',
+        sentenceStartTime: 0,
+        sentenceEndTime: 4,
+      }),
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('一', 0, 2), true);
+  assert.equal(addedFields[0]?.Sentence, '一 二');
+  assert.equal(addedFields[0]?.Translation, 'One. Two.');
+});
+
+test('createSentenceCard leaves a line inside the clip padding untranslated', async () => {
+  const addedFields: Array<Record<string, string>> = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () => createAnkiConfig({ fields: { translation: 'Translation' } }),
+      getSubtitleTracksForTranslation: () => ({
+        primary: [
+          { text: '一', startTime: 0, endTime: 2 },
+          { text: 'え？', startTime: 2, endTime: 2.4 },
+        ],
+        secondary: [
+          { text: 'One.', startTime: 0, endTime: 2 },
+          { text: 'Huh?', startTime: 2, endTime: 2.4 },
+        ],
+      }),
+      client: createFakeClient({
+        addNote: async (_deck, _model, fields) => {
+          addedFields.push(fields);
+          return 42;
+        },
+      }),
+      // The confirmed clip keeps its padding past the end of the mined line.
+      reviewMediaTiming: async () => ({ action: 'confirm', startTime: 0, endTime: 2.5 }),
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('一', 0, 2), true);
+  assert.equal(addedFields[0]?.Sentence, '一');
+  assert.equal(addedFields[0]?.Translation, 'One.');
+});
