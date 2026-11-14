@@ -127,7 +127,6 @@ test('preview request guard blocks overlap and invalidates stale responses', () 
   assert.equal(guard.isInFlight(), false);
 });
 
-
 test('every controller action presses a real button on the review screen', () => {
   const html = readFileSync('src/renderer/index.html', 'utf8');
   const actions = new Set<string>(CONTROLLER_REVIEW_ACTIONS.map((action) => action.id));
