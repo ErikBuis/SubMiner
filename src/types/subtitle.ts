@@ -281,6 +281,12 @@ export interface SubtitleMiningContext {
   startTime: number;
   endTime: number;
   capturedAtMs?: number;
+  /**
+   * Secondary subtitle on screen together with this line at capture time. A card filled
+   * later takes its translation from here when the secondary track could not be parsed,
+   * instead of from whatever is on screen by then.
+   */
+  secondaryText?: string;
   /** Explicit generator padding. Confirmed timing-review ranges set this to zero. */
   mediaPaddingSeconds?: number;
   /** Independent still screenshot selected during media timing review. */

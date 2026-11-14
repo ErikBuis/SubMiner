@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { ankiFieldHtmlToPlainText } from './sentence-translation';
 import assert from 'node:assert/strict';
 import {
   NoteUpdateWorkflow,
@@ -895,6 +896,206 @@ function createWordCardTranslationHarness(wordCardTranslation = 'SentenceTransla
   });
   return harness;
 }
+
+test('NoteUpdateWorkflow fills the word card translation field picked by timing', async () => {
+  const harness = createWordCardTranslationHarness();
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(harness.updates, [
+    {
+      noteId: 42,
+      fields: {
+        // The captured line, not the live subtitle the player has moved on to.
+        Sentence: '野菜もいっぱい入ってるよ',
+        SentenceTranslation: 'I put lots of vegetables in it.',
+      },
+    },
+  ]);
+});
+
+test('NoteUpdateWorkflow leaves word cards without translation by default', async () => {
+  const harness = createWordCardTranslationHarness('');
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(harness.updates, [{ noteId: 42, fields: { Sentence: 'subtitle-text' } }]);
+});
+
+test('NoteUpdateWorkflow falls back to the on-screen translation of the mined line', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => null;
+  harness.deps.getLiveSecondarySubtitleFor = (primaryText) =>
+    primaryText === '野菜もいっぱい入ってるよ' ? 'Lots of vegetables.' : undefined;
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'Lots of vegetables.');
+});
+
+test('NoteUpdateWorkflow takes the fallback translation from the moment the line was captured', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => null;
+  harness.deps.captureSubtitleMediaContext = () => ({
+    source: 'overlay',
+    text: '野菜もいっぱい入ってるよ',
+    startTime: 36.4,
+    endTime: 39.2,
+    secondaryText: 'Lots of vegetables.',
+  });
+  // Playback has moved on: the next line and its translation are on screen by now.
+  harness.deps.getLiveSecondarySubtitleFor = () => 'Next line.';
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'Lots of vegetables.');
+});
+
+test('NoteUpdateWorkflow ignores a captured secondary line that repeats the mined line', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => null;
+  harness.deps.captureSubtitleMediaContext = () => ({
+    source: 'overlay',
+    text: '野菜もいっぱい入ってるよ',
+    startTime: 36.4,
+    endTime: 39.2,
+    secondaryText: '野菜も いっぱい入ってるよ',
+  });
+  harness.deps.getLiveSecondarySubtitleFor = () => undefined;
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, undefined);
+});
+
+test('NoteUpdateWorkflow reads the screen when the captured translation does not fit the line', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => null;
+  harness.deps.captureSubtitleMediaContext = () => ({
+    source: 'overlay',
+    text: '野菜もいっぱい入ってるよ',
+    startTime: 36.4,
+    endTime: 39.2,
+    secondaryText: '野菜も いっぱい入ってるよ',
+  });
+  harness.deps.getLiveSecondarySubtitleFor = (primaryText) =>
+    primaryText === '野菜もいっぱい入ってるよ' ? 'Lots of vegetables.' : undefined;
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'Lots of vegetables.');
+});
+
+test('NoteUpdateWorkflow saves the on-screen translation the review showed', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => null;
+  // Playback moves on while the review is open: the line is gone from the screen after.
+  let reviewed = false;
+  harness.deps.getLiveSecondarySubtitleFor = () =>
+    reviewed ? undefined : 'Lots of <i>vegetables</i>.';
+  const shown: Array<string | undefined> = [];
+  harness.deps.reviewMediaTiming = async (request) => {
+    shown.push(request.card?.translation?.text);
+    reviewed = true;
+    return { action: 'use-original' };
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.deepEqual(shown, ['Lots of vegetables.']);
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'Lots of <i>vegetables</i>.');
+});
+
+test('NoteUpdateWorkflow review previews the formatted translation the card saves', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => ({
+    primary: [{ text: '野菜もいっぱい入ってるよ', startTime: 36.4, endTime: 39.2 }],
+    secondary: [{ text: '&quot;hello,&quot;', startTime: 36.3, endTime: 39.4 }],
+  });
+  harness.deps.getConfig = () => ({
+    fields: { sentence: 'Sentence', wordCardTranslation: 'SentenceTranslation' },
+    behavior: { formatTranslation: true },
+    media: { generateAudio: false, generateImage: false },
+  });
+  const shown: Array<string | undefined> = [];
+  harness.deps.reviewMediaTiming = async (request) => {
+    shown.push(request.card?.translation?.text);
+    return { action: 'use-original' };
+  };
+
+  await harness.workflow.execute(42);
+
+  assert.equal(
+    shown[0],
+    ankiFieldHtmlToPlainText(harness.updates[0]?.fields.SentenceTranslation ?? ''),
+  );
+});
+
+test('NoteUpdateWorkflow keeps the translation of a line whose clip the review trimmed', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.reviewMediaTiming = async () => ({
+    action: 'confirm',
+    startTime: 36.4,
+    endTime: 37,
+  });
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'I put lots of vegetables in it.');
+});
+
+test('NoteUpdateWorkflow skips the on-screen line when the parsed track has no match', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => ({
+    primary: [{ text: '野菜もいっぱい入ってるよ', startTime: 36.4, endTime: 39.2 }],
+    secondary: [{ text: 'Next line.', startTime: 40, endTime: 42 }],
+  });
+  harness.deps.getLiveSecondarySubtitleFor = () => 'Next line.';
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, undefined);
+});
+
+test('NoteUpdateWorkflow translates the lines of the sentence, not of the clip', async () => {
+  const tracks = {
+    primary: [
+      { text: '一', startTime: 0, endTime: 2 },
+      { text: 'え？', startTime: 2, endTime: 2.4 },
+      { text: '三', startTime: 2.5, endTime: 4 },
+    ],
+    secondary: [
+      { text: 'One.', startTime: 0, endTime: 2 },
+      { text: 'Huh?', startTime: 2, endTime: 2.4 },
+      { text: 'Three.', startTime: 2.5, endTime: 4 },
+    ],
+  };
+  const context = { source: 'overlay' as const, text: '一', startTime: 0, endTime: 2 };
+
+  // The clip runs into the next line, which the sentence does not include.
+  const padded = createWordCardTranslationHarness();
+  padded.deps.captureSubtitleMediaContext = () => context;
+  padded.deps.getSubtitleTracksForTranslation = () => tracks;
+  padded.deps.reviewMediaTiming = async () => ({ action: 'confirm', startTime: 0, endTime: 2.5 });
+  await padded.workflow.execute(42);
+  assert.equal(padded.updates[0]?.fields.SentenceTranslation, 'One.');
+
+  // An added line keeps its translation although the clip was trimmed before it.
+  const added = createWordCardTranslationHarness();
+  added.deps.captureSubtitleMediaContext = () => context;
+  added.deps.getSubtitleTracksForTranslation = () => tracks;
+  added.deps.reviewMediaTiming = async () => ({
+    action: 'confirm',
+    startTime: 0,
+    endTime: 2.2,
+    text: '一 え？',
+    sentenceStartTime: 0,
+    sentenceEndTime: 2.4,
+  });
+  await added.workflow.execute(42);
+  assert.equal(added.updates[0]?.fields.Sentence, '一 え？');
+  assert.equal(added.updates[0]?.fields.SentenceTranslation, 'One. Huh?');
+});
 
 test('NoteUpdateWorkflow widens the word card sentence and formats its translation', async () => {
   const harness = createWordCardTranslationHarness();
