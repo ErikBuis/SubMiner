@@ -1078,3 +1078,41 @@ test('a removed line the user rewrote stays in the typed sentence', () => {
     typed,
   );
 });
+
+test('a translation line button that gets disabled hands the focus to the one next to it', () => {
+  const [remove, add] = ['remove', 'add'];
+
+  // "−" removed the last added line: the "+" next to it takes the focus.
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [remove, true],
+        [add, false],
+      ],
+      remove,
+    ),
+    add,
+  );
+  // "+" added the last line there is: the "−" next to it takes the focus.
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [remove, false],
+        [add, true],
+      ],
+      add,
+    ),
+    remove,
+  );
+});
+
+test('the translation line buttons keep the keyboard focus when they get disabled', () => {
+  const source = readFileSync('src/renderer/modals/media-timing-review.ts', 'utf8');
+  for (const id of ['PrevAdd', 'PrevRemove', 'NextAdd', 'NextRemove']) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(`mediaTimingReviewTranslation${id}\\.disabled\\s*=`),
+      `mediaTimingReviewTranslation${id} is disabled without setButtonsDisabled`,
+    );
+  }
+});

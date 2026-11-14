@@ -1407,10 +1407,14 @@ export function createMediaTimingReviewModal(
       'hidden',
       translation.lines.length === 0,
     );
-    dom.mediaTimingReviewTranslationPrevAdd.disabled = !preview.canAddPrevious;
-    dom.mediaTimingReviewTranslationPrevRemove.disabled = !preview.canRemovePrevious;
-    dom.mediaTimingReviewTranslationNextAdd.disabled = !preview.canAddNext;
-    dom.mediaTimingReviewTranslationNextRemove.disabled = !preview.canRemoveNext;
+    setButtonsDisabled([
+      [dom.mediaTimingReviewTranslationPrevRemove, !preview.canRemovePrevious],
+      [dom.mediaTimingReviewTranslationPrevAdd, !preview.canAddPrevious],
+    ]);
+    setButtonsDisabled([
+      [dom.mediaTimingReviewTranslationNextRemove, !preview.canRemoveNext],
+      [dom.mediaTimingReviewTranslationNextAdd, !preview.canAddNext],
+    ]);
     if (!translationEdited) {
       if (preview.text !== null) setTranslation(preview.text, false);
     } else if (previousLines) {
