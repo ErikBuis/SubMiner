@@ -31,6 +31,9 @@ const NO_MPV_WINDOW: MpvPollResult = { matches: [], focusState: false, windowSta
 
 type WindowsTrackerDeps = {
   pollMpvWindows?: (targetPid: number | null) => MpvPollResult;
+  /** Starts following moves of `pid`'s windows; returns a stop function, or null when unavailable. */
+  watchWindowLocation?: (pid: number, onMove: (hwnd: number) => void) => (() => void) | null;
+  readWindowBounds?: (hwnd: number) => WindowGeometry | null;
   queryMpvProcessId?: (socketPath: string) => Promise<number>;
   maxConsecutiveMisses?: number;
   trackingLossGraceMs?: number;
@@ -43,10 +46,35 @@ function defaultPollMpvWindows(targetPid: number | null): MpvPollResult {
   return win32.findMpvWindows(targetPid);
 }
 
+function defaultWatchWindowLocation(
+  pid: number,
+  onMove: (hwnd: number) => void,
+): (() => void) | null {
+  try {
+    const win32 = require('./win32') as typeof import('./win32');
+    return win32.watchProcessWindowLocation(pid, onMove);
+  } catch (error) {
+    log.warn('Could not watch mpv window moves; the overlay follows mpv by polling only', {
+      pid,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+function defaultReadWindowBounds(hwnd: number): WindowGeometry | null {
+  const win32 = require('./win32') as typeof import('./win32');
+  return win32.getVisibleWindowBounds(hwnd);
+}
+
 export class WindowsWindowTracker extends BaseWindowTracker {
   private pollInterval: ReturnType<typeof setInterval> | null = null;
   private pollInFlight = false;
   private readonly pollMpvWindows: (targetPid: number | null) => MpvPollResult;
+  private readonly watchWindowLocation: NonNullable<WindowsTrackerDeps['watchWindowLocation']>;
+  private readonly readWindowBounds: (hwnd: number) => WindowGeometry | null;
+  private stopWatchingWindowLocation: (() => void) | null = null;
+  private watchedWindowLocationPid: number | null = null;
   private readonly queryMpvProcessId: (socketPath: string) => Promise<number>;
   private readonly maxConsecutiveMisses: number;
   private readonly trackingLossGraceMs: number;
@@ -69,6 +97,8 @@ export class WindowsWindowTracker extends BaseWindowTracker {
     super();
     this.targetMpvSocketPath = _targetMpvSocketPath?.trim() || null;
     this.pollMpvWindows = deps.pollMpvWindows ?? defaultPollMpvWindows;
+    this.watchWindowLocation = deps.watchWindowLocation ?? defaultWatchWindowLocation;
+    this.readWindowBounds = deps.readWindowBounds ?? defaultReadWindowBounds;
     this.queryMpvProcessId = deps.queryMpvProcessId ?? queryMpvProcessId;
     this.maxConsecutiveMisses = Math.max(1, Math.floor(deps.maxConsecutiveMisses ?? 2));
     this.trackingLossGraceMs = Math.max(0, Math.floor(deps.trackingLossGraceMs ?? 1_500));
@@ -89,6 +119,7 @@ export class WindowsWindowTracker extends BaseWindowTracker {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
+    this.unwatchWindowLocation();
   }
 
   override isTargetWindowMinimized(): boolean {
@@ -203,6 +234,47 @@ export class WindowsWindowTracker extends BaseWindowTracker {
       });
   }
 
+  // The 250 ms poll alone makes the overlay trail a dragged mpv window, so while mpv's process
+  // is known, Windows also reports each move and the overlay follows right away. The poll keeps
+  // running for everything else (finding the window, focus, minimizing) and as a fallback.
+  private ensureWindowLocationWatch(pid: number | null): void {
+    if (pid === this.watchedWindowLocationPid) return;
+    this.unwatchWindowLocation();
+    if (pid === null) return;
+    this.watchedWindowLocationPid = pid;
+    this.stopWatchingWindowLocation = this.watchWindowLocation(pid, (hwnd) =>
+      this.handleWindowLocationChange(hwnd),
+    );
+  }
+
+  private unwatchWindowLocation(): void {
+    const stopWatching = this.stopWatchingWindowLocation;
+    this.stopWatchingWindowLocation = null;
+    this.watchedWindowLocationPid = null;
+    if (!stopWatching) return;
+    try {
+      stopWatching();
+    } catch (error) {
+      log.warn('Failed to stop watching mpv window moves', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private handleWindowLocationChange(hwnd: number): void {
+    if (this.pollInterval === null || hwnd !== this.currentTargetWindowHwnd) return;
+    // Minimizing and hiding also fire this event; the poll handles those with its grace periods.
+    let bounds: WindowGeometry | null;
+    try {
+      bounds = this.readWindowBounds(hwnd);
+    } catch (error: unknown) {
+      this.maybeLogPollError(error instanceof Error ? error : new Error(String(error)));
+      return;
+    }
+    if (!bounds) return;
+    this.updateGeometry(bounds, this.isTargetWindowFocused());
+  }
+
   private pollTargetWindows(): MpvPollResult {
     const socketPath = this.targetMpvSocketPath;
     if (!socketPath) return this.pollMpvWindows(null);
@@ -238,6 +310,7 @@ export class WindowsWindowTracker extends BaseWindowTracker {
 
     try {
       const result = this.pollTargetWindows();
+      this.ensureWindowLocationWatch(this.targetMpvPid);
       const best = this.selectBestMatch(result);
 
       if (best) {
