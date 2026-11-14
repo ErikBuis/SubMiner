@@ -942,3 +942,181 @@ test('createSentenceCard previews the translation in the review and saves the ed
   assert.equal(await service.createSentenceCard('今日は', 1, 2), true);
   assert.equal(addedFields[3]?.Translation, 'Type &lt;name&gt; &amp; go.');
 });
+
+const AUDIO_CARD_TRACKS = {
+  primary: [
+    { text: '一', startTime: 0, endTime: 2 },
+    { text: '二', startTime: 2, endTime: 4 },
+  ],
+  secondary: [
+    { text: 'One.', startTime: 0, endTime: 2 },
+    { text: 'Two.', startTime: 2, endTime: 4 },
+  ],
+};
+
+function createAudioCardTranslationService(options: {
+  wordCardTranslation?: string;
+  tracks?: typeof AUDIO_CARD_TRACKS | null;
+  liveSecondary?: string;
+  oldSentence?: string | null;
+  subtitle?: { text: string; start: number; end: number };
+  reviewMediaTiming?: CardCreationDeps['reviewMediaTiming'];
+  updates: Array<Record<string, string>>;
+}): CardCreationService {
+  const subtitle = options.subtitle ?? { text: '二', start: 2, end: 4 };
+  return new CardCreationService(
+    createCardCreationDeps({
+      getConfig: () =>
+        createAnkiConfig({
+          fields: options.wordCardTranslation
+            ? { wordCardTranslation: options.wordCardTranslation }
+            : {},
+        }),
+      getMpvClient: () =>
+        ({
+          currentVideoPath: '/video.mp4',
+          currentSubText: subtitle.text,
+          currentSubStart: subtitle.start,
+          currentSubEnd: subtitle.end,
+          currentTimePos: subtitle.start,
+          currentAudioStreamIndex: 0,
+        }) as never,
+      getSubtitleTracksForTranslation: () => options.tracks ?? null,
+      getLiveSecondarySubtitleFor: () => options.liveSecondary,
+      ...(options.reviewMediaTiming ? { reviewMediaTiming: options.reviewMediaTiming } : {}),
+      client: createFakeClient({
+        findNotes: async () => [42],
+        notesInfo: async () => [
+          {
+            noteId: 42,
+            fields: {
+              ...(options.oldSentence === null
+                ? {}
+                : { Sentence: { value: options.oldSentence ?? '一' } }),
+              SentenceTranslation: { value: 'Old translation.' },
+            },
+          },
+        ],
+        updateNoteFields: async (_noteId, fields) => {
+          options.updates.push(fields);
+        },
+      }),
+    }),
+  );
+}
+
+test('audio card writes the timed translation of its new line', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardTranslationService({
+    wordCardTranslation: 'SentenceTranslation',
+    tracks: AUDIO_CARD_TRACKS,
+    liveSecondary: 'Live line.',
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(updates[0]!.Sentence, '二');
+  assert.equal(updates[0]!.SentenceTranslation, 'Two.');
+});
+
+test('audio card leaves the translation alone without fields.wordCardTranslation', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardTranslationService({ tracks: AUDIO_CARD_TRACKS, updates });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal('SentenceTranslation' in updates[0]!, false);
+});
+
+test('audio card translates the lines the timing review added', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardTranslationService({
+    wordCardTranslation: 'SentenceTranslation',
+    tracks: AUDIO_CARD_TRACKS,
+    subtitle: { text: '一', start: 0, end: 2 },
+    oldSentence: '前',
+    reviewMediaTiming: async () => ({
+      action: 'confirm',
+      startTime: 0,
+      endTime: 3.8,
+      text: '一 二',
+      sentenceStartTime: 0,
+      sentenceEndTime: 4,
+    }),
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(updates[0]!.Sentence, '一 二');
+  assert.equal(updates[0]!.SentenceTranslation, 'One. Two.');
+});
+
+test('audio card falls back to the live secondary line without parsed tracks', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardTranslationService({
+    wordCardTranslation: 'SentenceTranslation',
+    liveSecondary: 'Live line.',
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(updates[0]!.SentenceTranslation, 'Live line.');
+});
+
+test('audio card clears the old translation when its new line has none', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardTranslationService({
+    wordCardTranslation: 'SentenceTranslation',
+    tracks: { primary: AUDIO_CARD_TRACKS.primary, secondary: [AUDIO_CARD_TRACKS.secondary[0]!] },
+    liveSecondary: 'Live line.',
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(updates[0]!.SentenceTranslation, '');
+});
+
+test('audio card keeps the translation when the line is unchanged and has none', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardTranslationService({
+    wordCardTranslation: 'SentenceTranslation',
+    oldSentence: '<b>二</b>',
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal('SentenceTranslation' in updates[0]!, false);
+});
+
+test('audio card keeps the translation when only markup differs from the old line', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardTranslationService({
+    wordCardTranslation: 'SentenceTranslation',
+    subtitle: { text: '一 二', start: 2, end: 4 },
+    oldSentence: '一<br>二',
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal('SentenceTranslation' in updates[0]!, false);
+});
+
+test('audio card keeps the translation when the note has no sentence field', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardTranslationService({
+    wordCardTranslation: 'SentenceTranslation',
+    tracks: AUDIO_CARD_TRACKS,
+    oldSentence: null,
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal('SentenceTranslation' in updates[0]!, false);
+});

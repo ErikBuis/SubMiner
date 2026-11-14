@@ -1,4 +1,4 @@
 type: added
 area: anki
 
-- Added `ankiConnect.fields.wordCardTranslation`: word cards mined from the popup fill this field with the secondary subtitle translating their sentence (picked by timing). Empty by default, so word cards get no translation unless it points at a field such as Kiku's `SentenceTranslation`. Field grouping merges it like the sentence.
+- Added `ankiConnect.fields.wordCardTranslation`: word cards mined from the popup fill this field with the secondary subtitle translating their sentence (picked by timing). Empty by default, so word cards get no translation unless it points at a field such as Kiku's `SentenceTranslation`. Field grouping merges it like the sentence. Audio cards (`Ctrl/Cmd+Shift+A`) also rewrite it for their new line, and clear it when that line has no translation and replaces a different sentence.
