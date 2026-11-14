@@ -190,6 +190,30 @@ export function pickMediaTimingReviewArrowTarget(
   return best;
 }
 
+/**
+ * The button that takes over the focus when the focused one of a group is about to be
+ * disabled, or null when the focus can stay where it is. A disabled button drops the
+ * focus to the page, after which Enter does nothing. The nearest button of the group
+ * that stays enabled takes over; on a tie the earlier one wins.
+ */
+export function pickMediaTimingReviewFocusHandoff<T>(
+  group: ReadonlyArray<readonly [button: T, disabled: boolean]>,
+  active: unknown,
+): T | null {
+  const index = group.findIndex(([button, disabled]) => disabled && button === active);
+  if (index === -1) return null;
+  let best: T | null = null;
+  let bestDistance = Infinity;
+  group.forEach(([button, disabled], other) => {
+    const distance = Math.abs(other - index);
+    if (!disabled && distance < bestDistance) {
+      best = button;
+      bestDistance = distance;
+    }
+  });
+  return best;
+}
+
 /** A controller press only counts when a mouse click could have reached the button. */
 export function isMediaTimingReviewButtonAvailable(button: HTMLButtonElement): boolean {
   return !button.disabled && button.closest('.hidden') === null;
@@ -604,21 +628,33 @@ export function createMediaTimingReviewModal(
     dom.mediaTimingReviewFrameImage.classList.toggle('hidden', !state.dataUrl);
     if (state.dataUrl) dom.mediaTimingReviewFrameImage.src = state.dataUrl;
     else dom.mediaTimingReviewFrameImage.removeAttribute('src');
-    dom.mediaTimingReviewFramePrevious.disabled =
-      resolveInFlight ||
-      state.loading ||
-      state.timestamp === undefined ||
-      state.timestamp <= timelineStart;
-    dom.mediaTimingReviewFrameNext.disabled =
-      resolveInFlight ||
-      state.loading ||
-      state.timestamp === undefined ||
-      state.timestamp >= timelineEnd - 0.001;
+    // The frame buttons stay enabled while a frame loads (a press then does nothing), so
+    // the focus stays on them and Enter can step again once the frame is in.
+    setButtonsDisabled([
+      [
+        dom.mediaTimingReviewFramePrevious,
+        resolveInFlight || state.timestamp === undefined || state.timestamp <= timelineStart,
+      ],
+      [
+        dom.mediaTimingReviewFrameNext,
+        resolveInFlight || state.timestamp === undefined || state.timestamp >= timelineEnd - 0.001,
+      ],
+      [dom.mediaTimingReviewFrameReset, resolveInFlight || !state.manual],
+    ]);
     dom.mediaTimingReviewFrameSlider.disabled = resolveInFlight;
-    dom.mediaTimingReviewFrameReset.disabled = resolveInFlight || !state.manual;
     dom.mediaTimingReviewConfirm.disabled =
       resolveInFlight || (state.blockConfirm && !dom.mediaTimingReviewWithoutMedia.checked);
     dom.mediaTimingReviewWithoutMedia.disabled = resolveInFlight;
+  }
+
+  /** Sets the disabled state of a group of buttons without losing the keyboard focus. */
+  function setButtonsDisabled(
+    group: ReadonlyArray<readonly [button: HTMLButtonElement, disabled: boolean]>,
+  ): void {
+    const handoff = pickMediaTimingReviewFocusHandoff(group, document.activeElement);
+    for (const [button, disabled] of group) if (!disabled) button.disabled = false;
+    handoff?.focus();
+    for (const [button, disabled] of group) if (disabled) button.disabled = true;
   }
 
   function setStatus(message: string, isError = false): void {
@@ -870,10 +906,14 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewLineCount.textContent = total === 1 ? '1 line' : `${total} lines`;
     const hasContext = payload.previousLines.length > 0 || payload.nextLines.length > 0;
     ctx.dom.mediaTimingReviewLineControls.classList.toggle('hidden', !hasContext);
-    ctx.dom.mediaTimingReviewPrevAdd.disabled = previousCount >= payload.previousLines.length;
-    ctx.dom.mediaTimingReviewPrevRemove.disabled = previousCount <= 0;
-    ctx.dom.mediaTimingReviewNextAdd.disabled = nextCount >= payload.nextLines.length;
-    ctx.dom.mediaTimingReviewNextRemove.disabled = nextCount <= 0;
+    setButtonsDisabled([
+      [ctx.dom.mediaTimingReviewPrevRemove, previousCount <= 0],
+      [ctx.dom.mediaTimingReviewPrevAdd, previousCount >= payload.previousLines.length],
+    ]);
+    setButtonsDisabled([
+      [ctx.dom.mediaTimingReviewNextRemove, nextCount <= 0],
+      [ctx.dom.mediaTimingReviewNextAdd, nextCount >= payload.nextLines.length],
+    ]);
   }
 
   function renderCard(): void {
@@ -1234,6 +1274,12 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewResetAll.classList.remove('hidden');
   }
 
+  /** Back from the cancel step, the focus returns to the Cancel button that opened it. */
+  function returnToEditor(): void {
+    showEditor();
+    ctx.dom.mediaTimingReviewCancel.focus();
+  }
+
   /** An audio card is made from a note mined earlier, so cancelling leaves that note alone. */
   function discardChoice(review: MediaTimingReviewOpenPayload): { label: string; message: string } {
     if (review.kind === 'audio') {
@@ -1527,7 +1573,7 @@ export function createMediaTimingReviewModal(
     }
     if (event.key === 'Escape') {
       event.preventDefault();
-      if (!onEditor) showEditor();
+      if (!onEditor) returnToEditor();
       else requestCancel();
       return true;
     }
@@ -1691,7 +1737,7 @@ export function createMediaTimingReviewModal(
     ctx.dom.mediaTimingReviewNextAdd.addEventListener('click', () => adjustLines('next', 1));
     ctx.dom.mediaTimingReviewNextRemove.addEventListener('click', () => adjustLines('next', -1));
     ctx.dom.mediaTimingReviewCancel.addEventListener('click', requestCancel);
-    ctx.dom.mediaTimingReviewCancelBack.addEventListener('click', showEditor);
+    ctx.dom.mediaTimingReviewCancelBack.addEventListener('click', returnToEditor);
     ctx.dom.mediaTimingReviewWithoutMedia.addEventListener('change', () => renderFramePicker());
     ctx.dom.mediaTimingReviewDiscard.addEventListener(
       'click',

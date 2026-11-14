@@ -9,6 +9,7 @@ import {
   isMediaTimingReviewFocusInside,
   mediaTimingReviewArrowDirection,
   pickMediaTimingReviewArrowTarget,
+  pickMediaTimingReviewFocusHandoff,
   buildMediaTimingLineSelection,
   buildMediaTimingWaveformPath,
   constrainMediaTimingSelection,
@@ -456,6 +457,86 @@ test('controller presses skip disabled buttons and buttons on the hidden step', 
   assert.equal(isMediaTimingReviewButtonAvailable(button(false, false)), true);
   assert.equal(isMediaTimingReviewButtonAvailable(button(true, false)), false);
   assert.equal(isMediaTimingReviewButtonAvailable(button(false, true)), false);
+});
+
+test('a button that gets disabled hands the focus to its nearest enabled neighbor', () => {
+  const [previous, next, reset] = ['previous', 'next', 'reset'];
+
+  // "Frame →" reached the end: "Frame ←" and Reset are equally near, the earlier one wins.
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [previous, false],
+        [next, true],
+        [reset, false],
+      ],
+      next,
+    ),
+    previous,
+  );
+  // Reset pressed: both frame buttons stay, the nearer one takes the focus.
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [previous, false],
+        [next, false],
+        [reset, true],
+      ],
+      reset,
+    ),
+    next,
+  );
+  // Focus elsewhere, or on a button that stays enabled, stays put.
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [previous, true],
+        [next, false],
+      ],
+      'translation',
+    ),
+    null,
+  );
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [previous, true],
+        [next, false],
+      ],
+      next,
+    ),
+    null,
+  );
+  // With every button of the group disabled there is nothing to hand the focus to.
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [previous, true],
+        [next, true],
+      ],
+      next,
+    ),
+    null,
+  );
+});
+
+test('the frame and line buttons keep the keyboard focus when they get disabled', () => {
+  const source = readFileSync('src/renderer/modals/media-timing-review.ts', 'utf8');
+  for (const id of [
+    'FramePrevious',
+    'FrameNext',
+    'FrameReset',
+    'PrevAdd',
+    'PrevRemove',
+    'NextAdd',
+    'NextRemove',
+  ]) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(`mediaTimingReview${id}\\.disabled\\s*=`),
+      `mediaTimingReview${id} is disabled without setButtonsDisabled`,
+    );
+  }
 });
 
 test('Tab wraps focus around the review instead of leaving it', () => {
