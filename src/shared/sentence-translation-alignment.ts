@@ -337,7 +337,9 @@ export function assignGroupTranslations(
       const repeats =
         owner !== undefined &&
         (compactText(owner.text).includes(ownText) || ownText.includes(compactText(owner.text)));
-      const partner = owner && !repeats ? coTimedCues.find((cue) => !takenBy.has(cue)) : undefined;
+      // The other speaker's line is dialogue, so a sign in the same slot comes last.
+      const free = owner && !repeats ? coTimedCues.filter((cue) => !takenBy.has(cue)) : [];
+      const partner = free.find((cue) => !cue.isSign) ?? free[0];
       lines = [partner ?? grouped];
     }
     for (const cue of lines) {
