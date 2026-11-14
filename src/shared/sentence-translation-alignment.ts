@@ -331,7 +331,8 @@ function speakerCount(text: string): number {
 /**
  * The secondary lines each primary line of an already grouped track translates to, by
  * primary index. A line no secondary event claimed takes the secondary event it overlaps
- * most. Consecutive lines of a sentence share their translation. The whole track is
+ * most, or none when that overlap is too short (see `findBestOverlappingLine`).
+ * Consecutive lines of a sentence share their translation. The whole track is
  * resolved at once so speakers sharing one interval each get their own translation,
  * whichever of them is mined.
  */
