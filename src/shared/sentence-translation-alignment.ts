@@ -42,6 +42,8 @@ export const DEFAULT_SENTENCE_GROUP_MIN_OVERLAP = 0.6;
 /** Lines whose start and end differ by less than this are co-timed. */
 const CO_TIMED_EPSILON_SECONDS = 0.01;
 const SCORE_EPSILON = 1e-9;
+/** A secondary event and a primary line this close at their starts begin together. */
+const SAME_START_TOLERANCE_SECONDS = 0.25;
 /** Fraction of a primary line that must fall inside the mined range to count as mined. */
 const MINED_LINE_MIN_OVERLAP = 0.5;
 const MIN_DURATION_SECONDS = 0.001;
@@ -84,6 +86,38 @@ function isSoundCue(text: string): boolean {
   return /^[（(][^（）()]*[）)]$/u.test(plain);
 }
 
+/** A secondary event offering to translate one primary line. */
+interface TranslationProposal {
+  secondary: TimedSubtitleText;
+  /** The line opens with a speaker label and the event starts together with it. */
+  startsWithSpeaker: boolean;
+  /** How well the event lines up with all the lines it claimed, 0 to 1. */
+  score: number;
+  /** How well the event lines up with this line alone, 0 to 1. */
+  fit: number;
+}
+
+function isBetterProposal(candidate: TranslationProposal, current: TranslationProposal): boolean {
+  // A sign stays on screen for a whole shot, so it can line up with the dialogue lines of
+  // that shot better than their own translations do. It only wins a line that no dialogue
+  // event claims.
+  const candidateIsSign = candidate.secondary.isSign === true;
+  const currentIsSign = current.secondary.isSign === true;
+  if (candidateIsSign !== currentIsSign) return currentIsSign;
+  // A translation often stays up while the next speaker's line begins, and then covers
+  // that line too. A line that opens with a speaker label is a new speaker, so an event
+  // that starts together with it is its own translation, and one that started earlier
+  // belongs to the speaker before. Without a label the line can continue a sentence, and a
+  // background line may happen to start with it, so the timing score decides there.
+  if (candidate.startsWithSpeaker !== current.startsWithSpeaker) {
+    return candidate.startsWithSpeaker;
+  }
+  if (Math.abs(candidate.score - current.score) > SCORE_EPSILON) {
+    return candidate.score > current.score;
+  }
+  return candidate.fit > current.fit;
+}
+
 /**
  * Partitions the sorted primary lines into sentences. Matching each primary line to its
  * best-overlapping secondary event on its own is unstable when secondary events overlap,
@@ -98,7 +132,7 @@ export function buildSentenceTranslationGroups(
   secondary: readonly TimedSubtitleText[],
   minOverlapRatio = DEFAULT_SENTENCE_GROUP_MIN_OVERLAP,
 ): SentenceTranslationGroup[] {
-  const best: Array<{ score: number; fit: number; secondary: TimedSubtitleText } | undefined> = [];
+  const best: Array<TranslationProposal | undefined> = [];
 
   let first = 0;
   for (const event of secondary) {
@@ -156,21 +190,16 @@ export function buildSentenceTranslationGroups(
       const fit =
         overlapSeconds(line, event) /
         Math.max(duration(event), duration(line), MIN_DURATION_SECONDS);
+      const proposal: TranslationProposal = {
+        secondary: event,
+        startsWithSpeaker:
+          LEADING_LABEL.test(line.text) &&
+          Math.abs(event.startTime - line.startTime) <= SAME_START_TOLERANCE_SECONDS,
+        score,
+        fit,
+      };
       const current = best[member];
-      // A sign stays on screen for a whole shot, so it can line up with the dialogue lines
-      // of that shot better than their own translations do. It only wins a line that no
-      // dialogue event claims.
-      const currentIsSign = current?.secondary.isSign === true;
-      const eventIsSign = event.isSign === true;
-      if (
-        !current ||
-        (currentIsSign && !eventIsSign) ||
-        (currentIsSign === eventIsSign &&
-          (current.score < score - SCORE_EPSILON ||
-            (Math.abs(current.score - score) <= SCORE_EPSILON && current.fit < fit)))
-      ) {
-        best[member] = { score, fit, secondary: event };
-      }
+      if (!current || isBetterProposal(proposal, current)) best[member] = proposal;
     }
   }
 
