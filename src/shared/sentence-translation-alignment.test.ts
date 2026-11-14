@@ -353,6 +353,17 @@ test('two speakers sharing an interval keep both translations', () => {
   assert.equal(aligned?.translationLines.length, 2);
 });
 
+test('the second of two co-timed speakers takes the other dialogue line, not a sign', () => {
+  const sign: TimedSubtitleText = { ...line('SIGN', 1, 3), isSign: true };
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('行くぞ', 1, 3), line('待って', 1, 3)],
+    secondaryLines: [line("Let's go.", 1, 3), sign, line('Wait.', 1, 3)],
+    startTime: 1,
+    endTime: 3,
+  });
+  assert.equal(aligned?.translation, "Let's go. Wait.");
+});
+
 test('consecutive lines sharing a translation do not take a co-timed sign', () => {
   const aligned = alignSentenceTranslation({
     primaryLines: [line('今日は', 0, 1), line('いい天気', 1, 2)],
