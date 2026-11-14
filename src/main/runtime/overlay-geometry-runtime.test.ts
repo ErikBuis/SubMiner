@@ -48,7 +48,10 @@ function setup(t: TestContext, platform: NodeJS.Platform) {
       getMainWindow: () => mainWindow,
       getModalWindow: () => null,
       getVisibleOverlayVisible: () => true,
-      setOverlayWindowBounds: () => NO_PLACEMENT,
+      setOverlayWindowBounds: () => {
+        windowCalls.push('setOverlayWindowBounds');
+        return NO_PLACEMENT;
+      },
       setModalWindowBounds: () => NO_PLACEMENT,
     },
     getTrackedWindowGeometry: () => null,
@@ -90,4 +93,19 @@ test('a macOS bounds update raises the overlay without touching the window shape
 
   assert.ok(windowCalls.includes('setAlwaysOnTop'));
   assert.ok(!windowCalls.includes('setShape'));
+});
+
+test('Windows re-applies unchanged mpv bounds only after the overlay window was replaced', (t) => {
+  const { geometry, windowCalls } = setup(t, 'win32');
+  const bounds = { x: 450, y: 200, width: 1660, height: 973 };
+  const applied = () => windowCalls.filter((name) => name === 'setOverlayWindowBounds').length;
+
+  geometry.updateVisibleOverlayBounds(bounds);
+  geometry.updateVisibleOverlayBounds(bounds);
+  assert.equal(applied(), 1);
+
+  // A recreated overlay window starts at default bounds, so the same mpv bounds must apply again.
+  geometry.resetLastOverlayWindowGeometry();
+  geometry.updateVisibleOverlayBounds(bounds);
+  assert.equal(applied(), 2);
 });
