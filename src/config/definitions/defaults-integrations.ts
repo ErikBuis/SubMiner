@@ -34,6 +34,7 @@ export const INTEGRATIONS_DEFAULT_CONFIG: Pick<
       sentence: 'Sentence',
       miscInfo: 'MiscInfo',
       translation: 'SelectionText',
+      wordCardTranslation: '',
     },
     ai: {
       enabled: false,
