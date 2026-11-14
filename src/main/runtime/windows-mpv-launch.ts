@@ -87,7 +87,9 @@ export function buildWindowsRunningAppAttachArgs(
   socketPath: string,
   runtimeConfig: SubminerPluginRuntimeScriptOptConfig,
 ): string[] {
-  const args = ['--start', '--managed-playback'];
+  // --quit-with-mpv: the running app takes over this mpv and should quit when it closes, like an
+  // app the launcher started itself. The plugin's own --start handoff does not send it.
+  const args = ['--start', '--managed-playback', '--quit-with-mpv'];
   if (runtimeConfig.logLevel && runtimeConfig.logLevel !== 'info') {
     args.push('--log-level', runtimeConfig.logLevel);
   }

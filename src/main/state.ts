@@ -200,6 +200,11 @@ export interface AppState {
   autoStartOverlay: boolean;
   texthookerOnlyMode: boolean;
   backgroundMode: boolean;
+  /**
+   * True once the Windows mpv launcher handed its mpv to this already-running app
+   * (`--start --quit-with-mpv`), so closing that mpv quits the app like a managed launch.
+   */
+  managedPlaybackAttached: boolean;
   jlptLevelLookup: (term: string) => JlptLevel | null;
   frequencyRankLookup: FrequencyDictionaryLookup;
   anilistSetupPageOpened: boolean;
@@ -288,6 +293,7 @@ export function createAppState(values: AppStateInitialValues): AppState {
     autoStartOverlay: values.autoStartOverlay ?? false,
     texthookerOnlyMode: values.texthookerOnlyMode ?? false,
     backgroundMode: values.backgroundMode ?? false,
+    managedPlaybackAttached: false,
     jlptLevelLookup: () => null,
     frequencyRankLookup: () => null,
     anilistSetupPageOpened: false,
