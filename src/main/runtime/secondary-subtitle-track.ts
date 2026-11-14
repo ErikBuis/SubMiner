@@ -264,7 +264,10 @@ export function buildSubtitleTracksForTranslation(input: {
     primary: selectAlignableSubtitleCues(input.primaryCues).map((cue) =>
       shiftCueToVideoClock(cue, primaryDelay),
     ),
-    secondary: selectAlignableSubtitleCues(input.secondaryCues),
+    // ASS typesetting pins a sign to a spot with `\pos` or `\move`; dialogue has neither.
+    secondary: selectAlignableSubtitleCues(input.secondaryCues).map((cue) =>
+      cue.assLayout?.kind === 'positioned' ? { ...cue, isSign: true } : cue,
+    ),
   };
 }
 
