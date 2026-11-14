@@ -19,7 +19,8 @@ In this test a tray SubMiner was started with `--background`, then mpv was launc
 
 ## PR 61: subtitles in the top-left corner
 
-In this test a tray SubMiner was started, mpv was launched and closed, and then mpv was launched again.
+In this test a tray SubMiner was started, then mpv was launched and closed. Next the leftover "SubMiner Overlay" window was closed with WM_CLOSE, while SubMiner itself kept running. Finally mpv was launched again, which made SubMiner create a new overlay window.
 
-- The bug did not reproduce on this PC. In both `61-before.png` and `61-after.png` the subtitle is in its normal place.
-- The window rects in `61-before.txt` and `61-after.txt` are identical in both builds. The running app reused its existing overlay window (same hwnd), so the recreated-window case that PR 61 fixes never came up.
+- Before (`61-before.png`): the new overlay window sits at 0,0 with its default size of 1000x750 px instead of on mpv. The subtitle shows up near the left edge of the screen, around the middle, partly outside mpv.
+- After (`61-after.png`): the new overlay window is placed on mpv (450,200 to 2110,1173), and the subtitle is at the bottom center of the video.
+- The window lists and hwnds for every step are in `61-before.txt` and `61-after.txt`.
