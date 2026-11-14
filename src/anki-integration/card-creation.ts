@@ -37,7 +37,10 @@ import {
   widenSentenceToTranslation,
   type SubtitleTracksForTranslation,
 } from './sentence-translation';
-import { formatCardTranslation } from '../shared/sentence-translation-alignment';
+import {
+  formatCardTranslation,
+  type TimedSubtitleText,
+} from '../shared/sentence-translation-alignment';
 
 const log = createLogger('anki').child('integration.card-creation');
 
@@ -456,15 +459,18 @@ export class CardCreationService {
   /**
    * The word-card translation an audio card writes for its new sentence, picked by timing like
    * on word cards. Without a match the field is cleared when the sentence changed, since the
-   * old translation belongs to the old line. Null when the field is left alone.
+   * old translation belongs to the old line. `value` is null when the field is left alone, and
+   * the whole result is null when the note has no such field (or no sentence field to replace).
    */
-  private async resolveAudioCardTranslation(
+  private resolveAudioCardTranslation(
     noteInfo: CardCreationNoteInfo,
     sentenceText: string,
     sentenceRange: { startTime: number; endTime: number },
     sentenceField: string | null | undefined,
-  ): Promise<{ name: string; value: string } | null> {
-    const configuredField = this.deps.getConfig().fields?.wordCardTranslation;
+    tracks: SubtitleTracksForTranslation | null,
+  ): { name: string; value: string | null; translationLines: TimedSubtitleText[] } | null {
+    const config = this.deps.getConfig();
+    const configuredField = config.fields?.wordCardTranslation;
     const name = configuredField
       ? this.deps.resolveConfiguredFieldName(noteInfo, configuredField)
       : null;
@@ -473,12 +479,12 @@ export class CardCreationService {
     const oldSentence = sentenceField ? noteInfo.fields[sentenceField]?.value : undefined;
     if (oldSentence === undefined) return null;
 
-    const tracks = (await this.deps.getSubtitleTracksForTranslation?.()) ?? null;
     const timedTranslation = resolveTimedSentenceTranslation({
       text: sentenceText,
       ...sentenceRange,
       tracks,
     });
+    const translationLines = timedTranslation?.translationLines ?? [];
     // A parsed secondary track without a match means no translation; the line on screen
     // only stands in when the tracks are unavailable.
     const translation =
@@ -486,7 +492,14 @@ export class CardCreationService {
       (tracks && tracks.secondary.length > 0
         ? undefined
         : this.deps.getLiveSecondarySubtitleFor?.(sentenceText));
-    if (translation) return { name, value: translation };
+    if (translation) {
+      // Formatted like the translation of a word card.
+      const value =
+        config.behavior?.formatTranslation === true
+          ? formatCardTranslation(translation)
+          : translation;
+      return { name, value, translationLines };
+    }
 
     const normalize = (text: string) =>
       text
@@ -495,7 +508,35 @@ export class CardCreationService {
         .replace(/&nbsp;/gi, ' ')
         .replace(/\s+/g, ' ')
         .trim();
-    return normalize(oldSentence) === normalize(sentenceText) ? null : { name, value: '' };
+    const value = normalize(oldSentence) === normalize(sentenceText) ? null : '';
+    return { name, value, translationLines };
+  }
+
+  /**
+   * The translation the audio card would get, so its review can show, follow and edit it
+   * like on word cards. Empty when the note has no word-card translation field to fill.
+   */
+  private getAudioCardTranslationReview(
+    noteInfo: CardCreationNoteInfo,
+    resolved: ReturnType<CardCreationService['resolveAudioCardTranslation']>,
+    sentenceRange: { startTime: number; endTime: number },
+    tracks: SubtitleTracksForTranslation | null,
+  ): Pick<MediaTimingReviewCardPreview, 'translation'> {
+    if (!resolved) return {};
+    const reviewContext = buildReviewTranslationContext({ ...sentenceRange, tracks });
+    return {
+      translation: {
+        // A field left alone shows what it already holds.
+        text: ankiFieldHtmlToPlainText(
+          resolved.value ?? noteInfo.fields[resolved.name]?.value ?? '',
+        ),
+        lines: reviewContext.lines,
+        currentLines: resolved.translationLines.map(toReviewLine),
+        lineTranslations: reviewContext.lineTranslations,
+        format: this.deps.getConfig().behavior?.formatTranslation === true,
+        ...(resolved.value === null ? { fromField: true } : {}),
+      },
+    };
   }
 
   async markLastCardAsAudioCard(): Promise<void> {
@@ -559,6 +600,29 @@ export class CardCreationService {
           this.deps.getConfig(),
         );
 
+        const sentenceCardConfig = this.deps.getEffectiveSentenceCardConfig();
+        const sentenceField = sentenceCardConfig.sentenceField;
+        const tracks = (await this.deps.getSubtitleTracksForTranslation?.()) ?? null;
+        let reviewCard: MediaTimingReviewCardPreview | undefined;
+        if (this.deps.reviewMediaTiming) {
+          const translationReview = this.getAudioCardTranslationReview(
+            noteInfo,
+            this.resolveAudioCardTranslation(
+              noteInfo,
+              mpvClient.currentSubText,
+              sentenceRange,
+              sentenceField,
+              tracks,
+            ),
+            sentenceRange,
+            tracks,
+          );
+          const card = {
+            ...this.getAudioCardReview(noteInfo, expressionText),
+            ...translationReview,
+          };
+          reviewCard = Object.keys(card).length > 0 ? card : undefined;
+        }
         const timingDecision = this.deps.reviewMediaTiming
           ? await this.deps.reviewMediaTiming({
               kind: 'audio',
@@ -566,7 +630,7 @@ export class CardCreationService {
               startTime,
               endTime,
               noteId,
-              card: this.getAudioCardReview(noteInfo, expressionText),
+              card: reviewCard,
             })
           : ({ action: 'use-original' } as const);
         if (timingDecision.action === 'discard') {
@@ -601,20 +665,26 @@ export class CardCreationService {
 
         this.deps.setCardTypeFields(updatedFields, Object.keys(noteInfo.fields), 'audio');
 
-        const sentenceCardConfig = this.deps.getEffectiveSentenceCardConfig();
-        const sentenceField = sentenceCardConfig.sentenceField;
         if (sentenceField) {
           const processedSentence = this.deps.processSentence(sentenceText, fields);
           updatedFields[sentenceField] = processedSentence;
         }
 
-        const translationField = await this.resolveAudioCardTranslation(
+        const translationField = this.resolveAudioCardTranslation(
           noteInfo,
           sentenceText,
           sentenceRange,
           sentenceField,
+          tracks,
         );
-        if (translationField) {
+        // A translation from the review is final, even when cleared.
+        const reviewedTranslation =
+          'translation' in timingDecision ? timingDecision.translation : undefined;
+        if (translationField && reviewedTranslation !== undefined) {
+          updatedFields[translationField.name] = plainTextToAnkiFieldHtml(
+            reviewedTranslation.trim(),
+          );
+        } else if (translationField && translationField.value !== null) {
           updatedFields[translationField.name] = translationField.value;
         }
 
