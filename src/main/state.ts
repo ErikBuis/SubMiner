@@ -201,9 +201,8 @@ export interface AppState {
   texthookerOnlyMode: boolean;
   backgroundMode: boolean;
   /**
-   * True while the mpv session was handed to this already-running app by a managed launch
-   * (`--start --managed-playback` forwarded from a second instance), so that mpv owns the app
-   * just like when the launch started the app itself.
+   * True once the Windows mpv launcher handed its mpv to this already-running app
+   * (`--start --quit-with-mpv`), so closing that mpv quits the app like a managed launch.
    */
   managedPlaybackAttached: boolean;
   jlptLevelLookup: (term: string) => JlptLevel | null;

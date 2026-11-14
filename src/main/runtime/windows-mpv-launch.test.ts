@@ -259,6 +259,7 @@ test('launchWindowsMpv attaches a launched video to a running app and disables p
     [
       '--start',
       '--managed-playback',
+      '--quit-with-mpv',
       '--log-level',
       'debug',
       '--backend',

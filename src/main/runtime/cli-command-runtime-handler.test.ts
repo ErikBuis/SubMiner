@@ -132,7 +132,7 @@ test('cli command runtime handler records managed playback before handling the c
       logInfo: (message) => calls.push(`log:${message}`),
     },
     trackManagedPlaybackForCommand: (args, source) => {
-      calls.push(`track:${source}:${String(args.managedPlayback)}`);
+      calls.push(`track:${source}:${String(args.quitWithMpv)}`);
     },
     createCliCommandContext: () => ({ id: 'ctx' }),
     handleCliCommandRuntimeServiceWithContext: (_args, source, context) => {
@@ -140,7 +140,7 @@ test('cli command runtime handler records managed playback before handling the c
     },
   });
 
-  handler({ start: true, managedPlayback: true } as never, 'second-instance');
+  handler({ start: true, quitWithMpv: true } as never, 'second-instance');
 
   assert.deepEqual(calls, ['track:second-instance:true', 'cli:second-instance:ctx']);
 });

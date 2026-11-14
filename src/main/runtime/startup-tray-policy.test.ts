@@ -78,10 +78,10 @@ test('mpv shutdown keeps unmanaged background tray app alive', () => {
   );
 });
 
-test('a managed launch attached to a running app makes mpv shutdown quit it', () => {
+test('a launcher handoff to a running app makes mpv shutdown quit it', () => {
   const attached = resolveManagedPlaybackAttachment(
     false,
-    { start: true, managedPlayback: true },
+    { start: true, quitWithMpv: true },
     'second-instance',
   );
   assert.equal(attached, true);
@@ -95,33 +95,25 @@ test('a managed launch attached to a running app makes mpv shutdown quit it', ()
   );
 });
 
-test('an unmanaged --start from another instance releases a managed attachment', () => {
+test('the mpv plugin handing its session to a running tray app does not make it quit', () => {
   assert.equal(
-    resolveManagedPlaybackAttachment(
-      true,
-      { start: true, managedPlayback: false },
-      'second-instance',
-    ),
+    resolveManagedPlaybackAttachment(false, { start: true, quitWithMpv: false }, 'second-instance'),
     false,
   );
 });
 
-test('commands without --start keep the current managed attachment', () => {
-  for (const current of [true, false]) {
-    assert.equal(
-      resolveManagedPlaybackAttachment(
-        current,
-        { start: false, managedPlayback: false },
-        'second-instance',
-      ),
-      current,
-    );
+test('later commands keep a launcher handoff', () => {
+  for (const args of [
+    { start: true, quitWithMpv: false },
+    { start: false, quitWithMpv: false },
+  ]) {
+    assert.equal(resolveManagedPlaybackAttachment(true, args, 'second-instance'), true);
   }
 });
 
-test('initial args never count as an attachment', () => {
+test('initial args never count as a launcher handoff', () => {
   assert.equal(
-    resolveManagedPlaybackAttachment(false, { start: true, managedPlayback: true }, 'initial'),
+    resolveManagedPlaybackAttachment(false, { start: true, quitWithMpv: true }, 'initial'),
     false,
   );
 });
