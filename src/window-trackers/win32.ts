@@ -74,6 +74,8 @@ const HWND_BOTTOM = 1;
 const HWND_TOPMOST = -1;
 const HWND_NOTOPMOST = -2;
 const MAX_TOP_LEVEL_WINDOWS = 10_000;
+const MAX_WINDOW_WALK_RESTARTS = 3;
+const ERROR_INVALID_WINDOW_HANDLE = 1400;
 
 function extendOverlayFrameIntoClientArea(overlayHwnd: number): void {
   const hr = DwmExtendFrameIntoClientArea(overlayHwnd, {
@@ -243,12 +245,26 @@ export function findMpvWindows(targetPid?: number | null): MpvPollResult {
     });
   };
 
-  // The cap only guards against a window list that changes so much while it is walked that the
-  // walk never ends; a desktop has far fewer top-level windows than this.
+  // Unlike EnumWindows, this walk is no snapshot. When the window it stands on is destroyed,
+  // the next step fails, so the walk starts over and skips the windows it already saw. The
+  // cap only guards against a window list that changes so much that the walk never ends; a
+  // desktop has far fewer top-level windows than this.
+  const seen = new Set<number>();
   let hwnd = 0;
-  for (let visited = 0; visited < MAX_TOP_LEVEL_WINDOWS; visited++) {
-    hwnd = FindWindowExW(0, hwnd, null, null);
-    if (!hwnd) break;
+  let restarts = 0;
+  for (let step = 0; step < MAX_TOP_LEVEL_WINDOWS; step++) {
+    resetLastError();
+    const next = FindWindowExW(0, hwnd, null, null);
+    if (!next) {
+      const walkBroke = hwnd !== 0 && GetLastError() === ERROR_INVALID_WINDOW_HANDLE;
+      if (!walkBroke || restarts >= MAX_WINDOW_WALK_RESTARTS) break;
+      restarts++;
+      hwnd = 0;
+      continue;
+    }
+    hwnd = next;
+    if (seen.has(hwnd)) continue;
+    seen.add(hwnd);
     inspectWindow(hwnd);
   }
 
