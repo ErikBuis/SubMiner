@@ -1,0 +1,63 @@
+Scenario 3 (61-before), build main, 2026-11-14 22:08:31
+backdrop pid 24368
+started main pid 21032 at 22:08:33.404: --background
+started main pid 17032 at 22:08:43.439: --launch-mpv "C:\Users\ebbui\Videos\qBittorrent\[Judas] Bocchi the Rock! (Season 01) [BD 1080p][HEVC x265 10bit][Multi-Sub]\[Judas] Bocchi the Rock! - 01.mkv"
+overlay visible after 1.0s
+
+--- first mpv, before WM_CLOSE ---
+foreground hwnd: 0x3006E6
+SubMiner pid=1732 hwnd=0x360790 z=28 class='Chrome_WidgetWin_1' title='SubMiner Overlay'
+    GetWindowRect: L=450 T=200 R=2110 B=1173 (W=1660 H=973)
+    DWM frame:     L=450 T=200 R=2110 B=1173 (W=1660 H=973)
+    exStyle=0x00280020 owner=0x3006E6 dpi=120 iconic=False
+mpv pid=13940 hwnd=0x3006E6 z=29 class='mpv' title='[Judas] Bocchi the Rock! - 01.mkv - mpv'
+    GetWindowRect: L=442 T=200 R=2118 B=1180 (W=1676 H=980)
+    DWM frame:     L=450 T=200 R=2110 B=1172 (W=1660 H=972)
+    exStyle=0x00000100 owner=0x0 dpi=120 iconic=False
+CLOSE: WM_CLOSE hwnd=0x3006E6 -> True at 22:08:55.624
+
+--- 5 s after closing the first mpv ---
+foreground hwnd: 0x1C02CA
+SubMiner pid=1732 hwnd=0x360790 z=30 class='Chrome_WidgetWin_1' title='SubMiner Overlay'
+    GetWindowRect: L=450 T=200 R=2110 B=1173 (W=1660 H=973)
+    DWM frame:     L=450 T=200 R=2110 B=1173 (W=1660 H=973)
+    exStyle=0x00280020 owner=0x0 dpi=120 iconic=False
+
+started main pid 2792 at 22:09:00.661: --launch-mpv "C:\Users\ebbui\Videos\qBittorrent\[Judas] Bocchi the Rock! (Season 01) [BD 1080p][HEVC x265 10bit][Multi-Sub]\[Judas] Bocchi the Rock! - 01.mkv"
+overlay visible after 0.0s
+sent {"command":["seek",130,"absolute"]}
+sent {"command":["set_property","pause",true]}
+
+--- second mpv, paused on a subtitle line ---
+foreground hwnd: 0x3306E6
+SubMiner pid=1732 hwnd=0x360790 z=28 class='Chrome_WidgetWin_1' title='SubMiner Overlay'
+    GetWindowRect: L=450 T=200 R=2110 B=1173 (W=1660 H=973)
+    DWM frame:     L=450 T=200 R=2110 B=1173 (W=1660 H=973)
+    exStyle=0x00280020 owner=0x3306E6 dpi=120 iconic=False
+mpv pid=10072 hwnd=0x3306E6 z=29 class='mpv' title='[Judas] Bocchi the Rock! - 01.mkv - mpv'
+    GetWindowRect: L=442 T=200 R=2118 B=1180 (W=1676 H=980)
+    DWM frame:     L=450 T=200 R=2110 B=1172 (W=1660 H=972)
+    exStyle=0x00000100 owner=0x0 dpi=120 iconic=False
+screenshot 2560x1440 -> C:\Users\ebbui\projects\subminer-diag\visuals\61-before.png
+
+--- app log lines written during this run ---
+367: [subminer] - 2026-11-14 22:08:33 - WARN - [main] [session-bindings] Rename shortcuts.toggleVisibleOverlayGlobal to shortcuts.toggleVisibleOverlay.
+368: [subminer] - 2026-11-14 22:08:33 - WARN - [main:mpv] MPV IPC socket error {"socketPath":"\\\\.\\pipe\\subminer-socket","reconnectAttempt":0,"hasConnectedOnce":false,"message":"connect ENOENT \\\\.\\pipe\\subminer-socket","code":"ENOENT"}
+369: [subminer] - 2026-11-14 22:08:34 - WARN - [main:mpv] MPV IPC socket error {"socketPath":"\\\\.\\pipe\\subminer-socket","reconnectAttempt":1,"hasConnectedOnce":false,"message":"connect ENOENT \\\\.\\pipe\\subminer-socket","code":"ENOENT"}
+370: [subminer] - 2026-11-14 22:08:34 - WARN - [main:mpv] MPV IPC socket error {"socketPath":"\\\\.\\pipe\\subminer-socket","reconnectAttempt":2,"hasConnectedOnce":false,"message":"connect ENOENT \\\\.\\pipe\\subminer-socket","code":"ENOENT"}
+371: [subminer] - 2026-11-14 22:08:35 - WARN - [tracker:windows] Windows mpv PID lookup failed; overlay attachment may be unavailable {"socketPath":"\\\\.\\pipe\\subminer-socket","targetPid":null,"targetHwnd":null,"pidLookupPending":true,"pidAgeMs":null,"error":"connect ENOENT \\\\.\\pipe\\subminer-socket"}
+372: [subminer] - 2026-11-14 22:08:42 - WARN - [main:mpv] MPV IPC socket error {"socketPath":"\\\\.\\pipe\\subminer-socket","reconnectAttempt":9,"hasConnectedOnce":false,"message":"connect ENOENT \\\\.\\pipe\\subminer-socket","code":"ENOENT"}
+373: [subminer] - 2026-11-14 21:08:43 - INFO - [main:windows-mpv-launch] Launching mpv: mpvPath=C:\Program Files\MPV Player\mpv.exe; inputIpcServer=\\.\pipe\subminer-socket; bundledPlugin=C:\Users\ebbui\projects\subminer-builds\main\resources\plugin\subminer\main.lua; installedPlugin=none; targets=1; attachRunningApp=yes
+374: [subminer] - 2026-11-14 21:08:43 - INFO - [main:windows-mpv-launch] Attached launched mpv session to running SubMiner app via control socket
+375: [subminer] - 2026-11-14 22:08:43 - WARN - [tracker:windows] Windows mpv PID lookup recovered {"socketPath":"\\\\.\\pipe\\subminer-socket","targetPid":13940,"targetHwnd":null,"pidLookupPending":true,"pidAgeMs":0}
+376: [subminer] - 2026-11-14 22:08:43 - WARN - [main] [mpv-subtitles] mpv reported no subtitle tracks {"trackListReadable":true,"trackCount":0,"subtitleTrackCount":0,"activePrimarySid":null,"selectedSubtitleIds":[],"externalSubtitleCount":0,"internalSubtitleCount":0,"languages":[],"selectedSubtitleLabels":[]}
+377: [subminer] - 2026-11-14 22:08:55 - WARN - [main] [mpv-subtitles] mpv reported no subtitle tracks {"trackListReadable":true,"trackCount":0,"subtitleTrackCount":0,"activePrimarySid":10,"selectedSubtitleIds":[],"externalSubtitleCount":0,"internalSubtitleCount":0,"languages":[],"selectedSubtitleLabels":[]}
+378: [subminer] - 2026-11-14 22:08:55 - WARN - [main:mpv] MPV IPC socket error {"socketPath":"\\\\.\\pipe\\subminer-socket","reconnectAttempt":0,"hasConnectedOnce":true,"message":"write EPIPE","code":"EPIPE"}
+379: [subminer] - 2026-11-14 22:08:55 - WARN - [main:mpv] MPV IPC socket closed {"socketPath":"\\\\.\\pipe\\subminer-socket","shouldQuitOnMpvShutdown":false}
+380: [subminer] - 2026-11-14 22:08:55 - WARN - [tracker:windows] Windows mpv PID lookup failed; overlay attachment may be unavailable {"socketPath":"\\\\.\\pipe\\subminer-socket","targetPid":13940,"targetHwnd":null,"pidLookupPending":true,"pidAgeMs":2029,"error":"connect ENOENT \\\\.\\pipe\\subminer-socket"}
+381: [subminer] - 2026-11-14 22:08:57 - WARN - [overlay:windows] Windows native overlay operation failed {"operation":"clear-owner","overlayHwnd":3540880,"error":"clearOverlayOwner failed (1400)"}
+382: [subminer] - 2026-11-14 22:08:57 - WARN - [main] Failed to clear overlay owner via koffi
+383: [subminer] - 2026-11-14 21:09:00 - INFO - [main:windows-mpv-launch] Launching mpv: mpvPath=C:\Program Files\MPV Player\mpv.exe; inputIpcServer=\\.\pipe\subminer-socket; bundledPlugin=C:\Users\ebbui\projects\subminer-builds\main\resources\plugin\subminer\main.lua; installedPlugin=none; targets=1; attachRunningApp=yes
+384: [subminer] - 2026-11-14 21:09:00 - INFO - [main:windows-mpv-launch] Attached launched mpv session to running SubMiner app via control socket
+385: [subminer] - 2026-11-14 22:09:01 - WARN - [main] [mpv-subtitles] mpv reported no subtitle tracks {"trackListReadable":true,"trackCount":0,"subtitleTrackCount":0,"activePrimarySid":null,"selectedSubtitleIds":[],"externalSubtitleCount":0,"internalSubtitleCount":0,"languages":[],"selectedSubtitleLabels":[]}
+386: [subminer] - 2026-11-14 22:09:01 - WARN - [tracker:windows] Windows mpv PID lookup recovered {"socketPath":"\\\\.\\pipe\\subminer-socket","targetPid":10072,"targetHwnd":null,"pidLookupPending":true,"pidAgeMs":0}

@@ -1,0 +1,39 @@
+Scenario 2 (60-after), build pr60, 2026-11-14 22:07:37
+backdrop pid 11588
+started pr60 pid 15356 at 22:07:40.090: --background
+started pr60 pid 14344 at 22:07:50.110: --launch-mpv "C:\Users\ebbui\Videos\qBittorrent\[Judas] Bocchi the Rock! (Season 01) [BD 1080p][HEVC x265 10bit][Multi-Sub]\[Judas] Bocchi the Rock! - 01.mkv"
+overlay visible after 0.8s
+
+--- windows with mpv open ---
+foreground hwnd: 0x420692
+SubMiner pid=17584 hwnd=0xA08D2 z=28 class='Chrome_WidgetWin_1' title='SubMiner Overlay'
+    GetWindowRect: L=450 T=200 R=2110 B=1173 (W=1660 H=973)
+    DWM frame:     L=450 T=200 R=2110 B=1173 (W=1660 H=973)
+    exStyle=0x00280020 owner=0x420692 dpi=120 iconic=False
+mpv pid=17752 hwnd=0x420692 z=29 class='mpv' title='[Judas] Bocchi the Rock! - 01.mkv - mpv'
+    GetWindowRect: L=442 T=200 R=2118 B=1180 (W=1676 H=980)
+    DWM frame:     L=450 T=200 R=2110 B=1172 (W=1660 H=972)
+    exStyle=0x00000100 owner=0x0 dpi=120 iconic=False
+CLOSE: WM_CLOSE hwnd=0x420692 -> True at 22:08:02.044
+screenshot 2560x120+0+1320 -> C:\Users\ebbui\projects\subminer-diag\visuals\60-after-taskbar.png
+
+--- SubMiner and mpv processes 8 s after WM_CLOSE ---
+mpv.exe pid=23544 ppid=13680 created=20:51:53 cmd=C:\Users\ebbui\AppData\Local\Programs\Anki\app_packages\anki_audio\mpv.exe --idle --no-terminal --force-window=no --ontop --audio-display=no --keep-open=no --autoload-files=no --gapless-audio=no --af-add=lavfi=[apad=pad_dur=0.150] --no-ytdl --input-media-keys=no --config-dir=C:\Users\ebbui\AppData\Roaming\Anki2 --input-ipc-server=ankimpv13680
+
+--- visible SubMiner/mpv windows 8 s after WM_CLOSE ---
+foreground hwnd: 0x97031C
+
+--- app log lines written during this run ---
+354: [subminer] - 2026-11-14 22:07:41 - WARN - [main] [session-bindings] Rename shortcuts.toggleVisibleOverlayGlobal to shortcuts.toggleVisibleOverlay.
+355: [subminer] - 2026-11-14 22:07:41 - WARN - [main:mpv] MPV IPC socket error {"socketPath":"\\\\.\\pipe\\subminer-socket","reconnectAttempt":0,"hasConnectedOnce":false,"message":"connect ENOENT \\\\.\\pipe\\subminer-socket","code":"ENOENT"}
+356: [subminer] - 2026-11-14 22:07:41 - WARN - [main:mpv] MPV IPC socket error {"socketPath":"\\\\.\\pipe\\subminer-socket","reconnectAttempt":1,"hasConnectedOnce":false,"message":"connect ENOENT \\\\.\\pipe\\subminer-socket","code":"ENOENT"}
+357: [subminer] - 2026-11-14 22:07:41 - WARN - [main:mpv] MPV IPC socket error {"socketPath":"\\\\.\\pipe\\subminer-socket","reconnectAttempt":2,"hasConnectedOnce":false,"message":"connect ENOENT \\\\.\\pipe\\subminer-socket","code":"ENOENT"}
+358: [subminer] - 2026-11-14 22:07:43 - WARN - [tracker:windows] Windows mpv PID lookup failed; overlay attachment may be unavailable {"socketPath":"\\\\.\\pipe\\subminer-socket","targetPid":null,"targetHwnd":null,"pidLookupPending":true,"pidAgeMs":null,"error":"connect ENOENT \\\\.\\pipe\\subminer-socket"}
+359: [subminer] - 2026-11-14 21:07:50 - INFO - [main:windows-mpv-launch] Launching mpv: mpvPath=C:\Program Files\MPV Player\mpv.exe; inputIpcServer=\\.\pipe\subminer-socket; bundledPlugin=C:\Users\ebbui\projects\subminer-builds\pr60\resources\plugin\subminer\main.lua; installedPlugin=none; targets=1; attachRunningApp=yes
+360: [subminer] - 2026-11-14 21:07:50 - INFO - [main:windows-mpv-launch] Attached launched mpv session to running SubMiner app via control socket
+361: [subminer] - 2026-11-14 22:07:50 - WARN - [main] [mpv-subtitles] mpv reported no subtitle tracks {"trackListReadable":true,"trackCount":0,"subtitleTrackCount":0,"activePrimarySid":null,"selectedSubtitleIds":[],"externalSubtitleCount":0,"internalSubtitleCount":0,"languages":[],"selectedSubtitleLabels":[]}
+362: [subminer] - 2026-11-14 22:07:50 - WARN - [main] [subtitle-prefetch] failed to refresh from active track: Failed to read MPV property 'path': property unavailable
+363: [subminer] - 2026-11-14 22:07:50 - WARN - [tracker:windows] Windows mpv PID lookup recovered {"socketPath":"\\\\.\\pipe\\subminer-socket","targetPid":17752,"targetHwnd":null,"pidLookupPending":true,"pidAgeMs":0}
+364: [subminer] - 2026-11-14 22:08:02 - WARN - [main] [mpv-subtitles] mpv reported no subtitle tracks {"trackListReadable":true,"trackCount":0,"subtitleTrackCount":0,"activePrimarySid":10,"selectedSubtitleIds":[],"externalSubtitleCount":0,"internalSubtitleCount":0,"languages":[],"selectedSubtitleLabels":[]}
+365: [subminer] - 2026-11-14 22:08:02 - WARN - [main:mpv] MPV IPC socket error {"socketPath":"\\\\.\\pipe\\subminer-socket","reconnectAttempt":0,"hasConnectedOnce":true,"message":"write EPIPE","code":"EPIPE"}
+366: [subminer] - 2026-11-14 22:08:02 - WARN - [main:mpv] MPV IPC socket closed {"socketPath":"\\\\.\\pipe\\subminer-socket","shouldQuitOnMpvShutdown":true}
