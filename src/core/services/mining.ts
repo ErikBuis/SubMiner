@@ -89,18 +89,32 @@ export function captureLiveSubtitleMiningContext(
       startTime,
       endTime,
       capturedAtMs: now(),
-      ...secondaryTextOnScreen(client),
+      ...secondaryTextOnScreen(client, text),
     },
     client.currentSubDelay,
   );
 }
 
-/** The secondary subtitle on screen right now, as a field for a mining context. */
+/**
+ * The secondary subtitle on screen right now, as a field for a mining context. It is only
+ * kept while the primary line on screen is `primaryText` (mpv updates the two separately,
+ * and the line mined can come from the parsed cues instead of the screen), and not when it
+ * just repeats that line.
+ */
 export function secondaryTextOnScreen(
-  client: Pick<MpvClientLike, 'currentSecondarySubText'> | null | undefined,
+  client: Pick<MpvClientLike, 'currentSubText' | 'currentSecondarySubText'> | null | undefined,
+  primaryText: string,
 ): { secondaryText?: string } {
+  const compact = (text: string | undefined) => (text ?? '').replace(/\s+/g, '');
   const secondaryText = client?.currentSecondarySubText?.trim();
-  return secondaryText ? { secondaryText } : {};
+  if (
+    !secondaryText ||
+    compact(client?.currentSubText) !== compact(primaryText) ||
+    compact(secondaryText) === compact(primaryText)
+  ) {
+    return {};
+  }
+  return { secondaryText };
 }
 
 export function copyCurrentSubtitle(deps: {

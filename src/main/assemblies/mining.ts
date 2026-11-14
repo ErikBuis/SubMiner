@@ -153,7 +153,7 @@ export function createMiningAssembly(deps: MiningAssemblyDeps) {
         startTime: resolved.startTime,
         endTime: resolved.endTime,
         capturedAtMs: Date.now(),
-        ...secondaryTextOnScreen(appState.mpvClient),
+        ...secondaryTextOnScreen(appState.mpvClient, resolvedText),
       },
       subDelay,
     );

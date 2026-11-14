@@ -328,18 +328,17 @@ export class NoteUpdateWorkflow {
       const getTracks = () =>
         (tracks ??= Promise.resolve(this.deps.getSubtitleTracksForTranslation?.() ?? null));
       // The secondary subtitle that was on screen with the line when it was captured (at the
-      // lookup, or just above). Playback can have moved on since, so the screen is only read
-      // for a context that carries none, and then once: the card must get the translation
-      // the review showed.
+      // lookup, or just above) is preferred. Playback can have moved on since, so the screen
+      // is only read when that gives nothing, and then once: the card must get the
+      // translation the review showed.
       const capturedLine = mediaTimingContext;
       const liveTranslations = new Map<string, string | undefined>();
       const getLiveTranslation = (primaryText: string) => {
         if (!liveTranslations.has(primaryText)) {
           liveTranslations.set(
             primaryText,
-            capturedLine?.secondaryText !== undefined
-              ? capturedSecondaryTextFor(capturedLine, primaryText)
-              : this.deps.getLiveSecondarySubtitleFor?.(primaryText),
+            (capturedLine ? capturedSecondaryTextFor(capturedLine, primaryText) : undefined) ??
+              this.deps.getLiveSecondarySubtitleFor?.(primaryText),
           );
         }
         return liveTranslations.get(primaryText);

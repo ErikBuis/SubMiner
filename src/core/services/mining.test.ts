@@ -6,6 +6,7 @@ import {
   handleMineSentenceDigit,
   handleMultiCopyDigit,
   mineSentenceCard,
+  secondaryTextOnScreen,
 } from './mining';
 import { SubtitleTimingTracker } from '../../subtitle-timing-tracker';
 
@@ -431,6 +432,19 @@ test('captureLiveSubtitleMiningContext keeps the secondary subtitle shown with t
       (captureLiveSubtitleMiningContext({ ...client, currentSecondarySubText: '  ' }) ?? {}),
     false,
   );
+});
+
+test('secondaryTextOnScreen only keeps a secondary that belongs to the mined line', () => {
+  const client = { currentSubText: '食べる', currentSecondarySubText: 'To eat.' };
+  assert.deepEqual(secondaryTextOnScreen(client, '食べる'), { secondaryText: 'To eat.' });
+  // The line mined is not the one on screen (mpv updates the two tracks separately).
+  assert.deepEqual(secondaryTextOnScreen(client, '飲む'), {});
+  // A secondary track in the same language as the primary one is no translation.
+  assert.deepEqual(
+    secondaryTextOnScreen({ ...client, currentSecondarySubText: '食べ る' }, '食べる'),
+    {},
+  );
+  assert.deepEqual(secondaryTextOnScreen(null, '食べる'), {});
 });
 
 test('captureLiveSubtitleMiningContext moves sub-delay retimed lines onto the video clock', () => {
