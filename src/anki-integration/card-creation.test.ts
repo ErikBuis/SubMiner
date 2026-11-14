@@ -958,6 +958,10 @@ function createAudioCardTranslationService(options: {
   wordCardTranslation?: string;
   tracks?: typeof AUDIO_CARD_TRACKS | null;
   liveSecondary?: string;
+  /** What the screen shows at each read, in order (with `reads`), in place of `liveSecondary`. */
+  liveSecondaries?: string[];
+  /** Counts the subtitle track and on-screen translation reads. */
+  reads?: { tracks: number; live: number };
   oldSentence?: string | null;
   subtitle?: { text: string; start: number; end: number };
   reviewMediaTiming?: CardCreationDeps['reviewMediaTiming'];
@@ -984,8 +988,16 @@ function createAudioCardTranslationService(options: {
           currentTimePos: subtitle.start,
           currentAudioStreamIndex: 0,
         }) as never,
-      getSubtitleTracksForTranslation: () => options.tracks ?? null,
-      getLiveSecondarySubtitleFor: () => options.liveSecondary,
+      getSubtitleTracksForTranslation: () => {
+        if (options.reads) options.reads.tracks += 1;
+        return options.tracks ?? null;
+      },
+      getLiveSecondarySubtitleFor: () => {
+        if (options.reads) options.reads.live += 1;
+        return options.liveSecondaries
+          ? options.liveSecondaries[(options.reads?.live ?? 1) - 1]
+          : options.liveSecondary;
+      },
       ...(options.reviewMediaTiming ? { reviewMediaTiming: options.reviewMediaTiming } : {}),
       client: createFakeClient({
         findNotes: async () => [42],
@@ -1237,4 +1249,65 @@ test('audio card formats its translation like a word card when formatTranslation
   assert.ok(formatted?.startsWith('Two'), formatted);
   assert.equal(requests[0]?.card?.translation?.text, formatted);
   assert.equal(requests[0]?.card?.translation?.format, true);
+});
+
+test('audio card keeps the translation the review showed from the field when lines are added', async () => {
+  const updates: Array<Record<string, string>> = [];
+  const service = createAudioCardTranslationService({
+    wordCardTranslation: 'SentenceTranslation',
+    oldSentence: '二',
+    oldTranslation: 'Kept translation.',
+    // The renderer sends no translation for an untouched field translation, lines or not.
+    reviewMediaTiming: async () => ({
+      action: 'confirm',
+      startTime: 0,
+      endTime: 4,
+      text: '一 二',
+      sentenceStartTime: 0,
+      sentenceEndTime: 4,
+    }),
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(updates[0]!.Sentence, '一 二');
+  assert.equal('SentenceTranslation' in updates[0]!, false);
+});
+
+test('audio card reads no subtitle tracks when it gets no translation', async () => {
+  const reads = { tracks: 0, live: 0 };
+  const service = createAudioCardTranslationService({
+    tracks: AUDIO_CARD_TRACKS,
+    reads,
+    reviewMediaTiming: async () => ({ action: 'confirm', startTime: 2, endTime: 4 }),
+    updates: [],
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.deepEqual(reads, { tracks: 0, live: 0 });
+});
+
+test('audio card writes the on-screen translation its review showed', async () => {
+  const requests: AudioCardReviewRequest[] = [];
+  const updates: Array<Record<string, string>> = [];
+  const reads = { tracks: 0, live: 0 };
+  const service = createAudioCardTranslationService({
+    wordCardTranslation: 'SentenceTranslation',
+    // The screen moves on to the next line while the review is open.
+    liveSecondaries: ['Shown line.', 'Next line.'],
+    reads,
+    reviewMediaTiming: async (request) => {
+      requests.push(request);
+      return { action: 'confirm', startTime: 2, endTime: 4 };
+    },
+    updates,
+  });
+
+  await service.markLastCardAsAudioCard();
+
+  assert.equal(requests[0]?.card?.translation?.text, 'Shown line.');
+  assert.equal(updates[0]!.SentenceTranslation, 'Shown line.');
+  assert.equal(reads.live, 1);
 });

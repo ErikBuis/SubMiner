@@ -457,28 +457,37 @@ export class CardCreationService {
   }
 
   /**
-   * The word-card translation an audio card writes for its new sentence, picked by timing like
-   * on word cards. Without a match the field is cleared when the sentence changed, since the
-   * old translation belongs to the old line. `value` is null when the field is left alone, and
-   * the whole result is null when the note has no such field (or no sentence field to replace).
+   * The word-card translation field an audio card fills, with the sentence it replaces. Null
+   * when the note has no such field, or no sentence field: without one the sentence is not
+   * replaced, so its translation still fits.
    */
-  private resolveAudioCardTranslation(
+  private getAudioCardTranslationTarget(
     noteInfo: CardCreationNoteInfo,
-    sentenceText: string,
-    sentenceRange: { startTime: number; endTime: number },
     sentenceField: string | null | undefined,
-    tracks: SubtitleTracksForTranslation | null,
-  ): { name: string; value: string | null; translationLines: TimedSubtitleText[] } | null {
-    const config = this.deps.getConfig();
-    const configuredField = config.fields?.wordCardTranslation;
+  ): { name: string; oldSentence: string } | null {
+    const configuredField = this.deps.getConfig().fields?.wordCardTranslation;
     const name = configuredField
       ? this.deps.resolveConfiguredFieldName(noteInfo, configuredField)
       : null;
     if (!name) return null;
-    // Without the sentence field the sentence is not replaced, so its translation still fits.
     const oldSentence = sentenceField ? noteInfo.fields[sentenceField]?.value : undefined;
-    if (oldSentence === undefined) return null;
+    return oldSentence === undefined ? null : { name, oldSentence };
+  }
 
+  /**
+   * The word-card translation an audio card writes for its new sentence, picked by timing like
+   * on word cards. Without a match the field is cleared when the sentence changed, since the
+   * old translation belongs to the old line. `value` is null when the field is left alone.
+   */
+  private resolveAudioCardTranslation(
+    target: { name: string; oldSentence: string },
+    sentenceText: string,
+    sentenceRange: { startTime: number; endTime: number },
+    tracks: SubtitleTracksForTranslation | null,
+    liveTranslation: (primaryText: string) => string | undefined,
+  ): { name: string; value: string | null; translationLines: TimedSubtitleText[] } {
+    const config = this.deps.getConfig();
+    const { name, oldSentence } = target;
     const timedTranslation = resolveTimedSentenceTranslation({
       text: sentenceText,
       ...sentenceRange,
@@ -489,9 +498,7 @@ export class CardCreationService {
     // only stands in when the tracks are unavailable.
     const translation =
       timedTranslation?.translation ??
-      (tracks && tracks.secondary.length > 0
-        ? undefined
-        : this.deps.getLiveSecondarySubtitleFor?.(sentenceText));
+      (tracks && tracks.secondary.length > 0 ? undefined : liveTranslation(sentenceText));
     if (translation) {
       // Formatted like the translation of a word card.
       const value =
@@ -522,7 +529,6 @@ export class CardCreationService {
     sentenceRange: { startTime: number; endTime: number },
     tracks: SubtitleTracksForTranslation | null,
   ): Pick<MediaTimingReviewCardPreview, 'translation'> {
-    if (!resolved) return {};
     const reviewContext = buildReviewTranslationContext({ ...sentenceRange, tracks });
     return {
       translation: {
@@ -602,21 +608,38 @@ export class CardCreationService {
 
         const sentenceCardConfig = this.deps.getEffectiveSentenceCardConfig();
         const sentenceField = sentenceCardConfig.sentenceField;
-        const tracks = (await this.deps.getSubtitleTracksForTranslation?.()) ?? null;
+        const translationTarget = this.getAudioCardTranslationTarget(noteInfo, sentenceField);
+        // Only a card that gets a translation needs the subtitle tracks.
+        const tracks = translationTarget
+          ? ((await this.deps.getSubtitleTracksForTranslation?.()) ?? null)
+          : null;
+        // Read once per line: playback can move on during the review, and the card should
+        // get the on-screen translation the review showed.
+        const liveTranslations = new Map<string, string | undefined>();
+        const getLiveTranslation = (primaryText: string): string | undefined => {
+          if (!liveTranslations.has(primaryText)) {
+            liveTranslations.set(primaryText, this.deps.getLiveSecondarySubtitleFor?.(primaryText));
+          }
+          return liveTranslations.get(primaryText);
+        };
         let reviewCard: MediaTimingReviewCardPreview | undefined;
+        let translationFromField = false;
         if (this.deps.reviewMediaTiming) {
-          const translationReview = this.getAudioCardTranslationReview(
-            noteInfo,
-            this.resolveAudioCardTranslation(
-              noteInfo,
-              mpvClient.currentSubText,
-              sentenceRange,
-              sentenceField,
-              tracks,
-            ),
-            sentenceRange,
-            tracks,
-          );
+          const translationReview = translationTarget
+            ? this.getAudioCardTranslationReview(
+                noteInfo,
+                this.resolveAudioCardTranslation(
+                  translationTarget,
+                  mpvClient.currentSubText,
+                  sentenceRange,
+                  tracks,
+                  getLiveTranslation,
+                ),
+                sentenceRange,
+                tracks,
+              )
+            : {};
+          translationFromField = translationReview.translation?.fromField === true;
           const card = {
             ...this.getAudioCardReview(noteInfo, expressionText),
             ...translationReview,
@@ -670,22 +693,26 @@ export class CardCreationService {
           updatedFields[sentenceField] = processedSentence;
         }
 
-        const translationField = this.resolveAudioCardTranslation(
-          noteInfo,
-          sentenceText,
-          sentenceRange,
-          sentenceField,
-          tracks,
-        );
         // A translation from the review is final, even when cleared.
         const reviewedTranslation =
           'translation' in timingDecision ? timingDecision.translation : undefined;
-        if (translationField && reviewedTranslation !== undefined) {
-          updatedFields[translationField.name] = plainTextToAnkiFieldHtml(
+        if (translationTarget && reviewedTranslation !== undefined) {
+          updatedFields[translationTarget.name] = plainTextToAnkiFieldHtml(
             reviewedTranslation.trim(),
           );
-        } else if (translationField && translationField.value !== null) {
-          updatedFields[translationField.name] = translationField.value;
+        } else if (translationTarget && !translationFromField) {
+          // When the review showed the field's own translation and nothing replaced it, the
+          // field keeps it, even with lines added (as on word cards).
+          const translationField = this.resolveAudioCardTranslation(
+            translationTarget,
+            sentenceText,
+            sentenceRange,
+            tracks,
+            getLiveTranslation,
+          );
+          if (translationField.value !== null) {
+            updatedFields[translationField.name] = translationField.value;
+          }
         }
 
         const audioFieldName = sentenceCardConfig.audioField;
