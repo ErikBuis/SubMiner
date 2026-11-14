@@ -808,6 +808,41 @@ test('NoteUpdateWorkflow falls back to the on-screen translation of the mined li
   assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'Lots of vegetables.');
 });
 
+test('NoteUpdateWorkflow takes the fallback translation from the moment the line was captured', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => null;
+  harness.deps.captureSubtitleMediaContext = () => ({
+    source: 'overlay',
+    text: '野菜もいっぱい入ってるよ',
+    startTime: 36.4,
+    endTime: 39.2,
+    secondaryText: 'Lots of vegetables.',
+  });
+  // Playback has moved on: the next line and its translation are on screen by now.
+  harness.deps.getLiveSecondarySubtitleFor = () => 'Next line.';
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, 'Lots of vegetables.');
+});
+
+test('NoteUpdateWorkflow ignores a captured secondary line that repeats the mined line', async () => {
+  const harness = createWordCardTranslationHarness();
+  harness.deps.getSubtitleTracksForTranslation = () => null;
+  harness.deps.captureSubtitleMediaContext = () => ({
+    source: 'overlay',
+    text: '野菜もいっぱい入ってるよ',
+    startTime: 36.4,
+    endTime: 39.2,
+    secondaryText: '野菜も いっぱい入ってるよ',
+  });
+  harness.deps.getLiveSecondarySubtitleFor = () => 'Next line.';
+
+  await harness.workflow.execute(42);
+
+  assert.equal(harness.updates[0]?.fields.SentenceTranslation, undefined);
+});
+
 test('NoteUpdateWorkflow saves the on-screen translation the review showed', async () => {
   const harness = createWordCardTranslationHarness();
   harness.deps.getSubtitleTracksForTranslation = () => null;

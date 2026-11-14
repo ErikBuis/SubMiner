@@ -414,6 +414,25 @@ test('captureLiveSubtitleMiningContext snapshots the current line and timings', 
   });
 });
 
+test('captureLiveSubtitleMiningContext keeps the secondary subtitle shown with the line', () => {
+  const client = {
+    currentSubText: '食べる',
+    currentSubStart: 12.5,
+    currentSubEnd: 15.25,
+    currentSubDelay: 0,
+  };
+  assert.equal(
+    captureLiveSubtitleMiningContext({ ...client, currentSecondarySubText: ' To eat. ' })
+      ?.secondaryText,
+    'To eat.',
+  );
+  assert.equal(
+    'secondaryText' in
+      (captureLiveSubtitleMiningContext({ ...client, currentSecondarySubText: '  ' }) ?? {}),
+    false,
+  );
+});
+
 test('captureLiveSubtitleMiningContext moves sub-delay retimed lines onto the video clock', () => {
   const context = captureLiveSubtitleMiningContext(
     { currentSubText: '食べる', currentSubStart: 5, currentSubEnd: 8, currentSubDelay: -1.5 },

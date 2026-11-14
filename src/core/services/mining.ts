@@ -66,7 +66,11 @@ export function handleMultiCopyDigit(
 export function captureLiveSubtitleMiningContext(
   client: Pick<
     MpvClientLike,
-    'currentSubText' | 'currentSubStart' | 'currentSubEnd' | 'currentSubDelay'
+    | 'currentSubText'
+    | 'currentSubStart'
+    | 'currentSubEnd'
+    | 'currentSubDelay'
+    | 'currentSecondarySubText'
   > | null,
   now: () => number = Date.now,
 ): SubtitleMiningContext | null {
@@ -79,9 +83,24 @@ export function captureLiveSubtitleMiningContext(
     return null;
   }
   return shiftSubtitleRangeToVideoClock<SubtitleMiningContext>(
-    { source: 'overlay', text, startTime, endTime, capturedAtMs: now() },
+    {
+      source: 'overlay',
+      text,
+      startTime,
+      endTime,
+      capturedAtMs: now(),
+      ...secondaryTextOnScreen(client),
+    },
     client.currentSubDelay,
   );
+}
+
+/** The secondary subtitle on screen right now, as a field for a mining context. */
+export function secondaryTextOnScreen(
+  client: Pick<MpvClientLike, 'currentSecondarySubText'> | null | undefined,
+): { secondaryText?: string } {
+  const secondaryText = client?.currentSecondarySubText?.trim();
+  return secondaryText ? { secondaryText } : {};
 }
 
 export function copyCurrentSubtitle(deps: {
