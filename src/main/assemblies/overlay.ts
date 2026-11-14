@@ -73,6 +73,7 @@ export interface OverlayAssemblyDeps {
     OverlayModalRuntime,
     | 'notifyOverlayModalOpened'
     | 'handleOverlayModalClosed'
+    | 'getRestoreVisibleOverlayOnModalClose'
     | 'sendToActiveOverlayWindow'
     | 'openRuntimeOptionsPalette'
   >;
@@ -318,7 +319,20 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
             // A destroyed modal window never reports its modals closed.
             deps.getJimakuAutoOpenRuntime().handleJimakuModalClosed();
             overlayManager.setModalWindow(null);
+            // Close its modals here, or the main overlay stays hidden and suspended. Run this
+            // after clearing the window so the close path does not prime a replacement into it.
+            for (const modal of [
+              ...deps.overlayModalRuntime.getRestoreVisibleOverlayOnModalClose(),
+            ]) {
+              deps.overlayModalRuntime.handleOverlayModalClosed(modal);
+            }
           }
+        },
+        onWindowRendererGone: (windowKind, window) => {
+          // A dead modal renderer can never answer an open card review. Closing its window
+          // runs the teardown above (ending the review), and the next modal gets a fresh one.
+          if (windowKind !== 'modal' || overlayManager.getModalWindow() !== window) return;
+          if (!window.isDestroyed()) window.destroy();
         },
       },
       getMainWindow: () => overlayManager.getMainWindow(),

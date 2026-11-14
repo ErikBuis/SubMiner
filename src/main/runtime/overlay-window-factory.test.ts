@@ -54,6 +54,32 @@ test('create overlay window handler defaults the yomitan session to null', () =>
   assert.equal(session, null);
 });
 
+test('create overlay window handler passes the renderer-gone callback through', () => {
+  const gone: string[] = [];
+  const createOverlayWindow = createCreateOverlayWindowHandler({
+    createOverlayWindowCore: (kind, options) => {
+      const window = { kind };
+      options.onWindowRendererGone?.(kind, window);
+      return window;
+    },
+    isDev: false,
+    ensureOverlayWindowLevel: () => {},
+    onRuntimeOptionsChanged: () => {},
+    setOverlayDebugVisualizationEnabled: () => {},
+    isOverlayVisible: () => false,
+    tryHandleOverlayShortcutLocalFallback: () => false,
+    forwardTabToMpv: () => {},
+    onWindowClosed: () => {},
+    onWindowRendererGone: (kind, window) => {
+      gone.push(`${kind}:${(window as { kind: string }).kind}`);
+    },
+  });
+
+  createOverlayWindow('modal');
+
+  assert.deepEqual(gone, ['modal:modal']);
+});
+
 test('create main window handler stores visible window', () => {
   const calls: string[] = [];
   const visibleWindow = { id: 'visible' };

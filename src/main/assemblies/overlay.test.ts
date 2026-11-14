@@ -38,6 +38,10 @@ type FixtureState = {
   measurementAccepted: boolean;
   /** Whether the plugin panel recognizes a closed panel id as the one showing. */
   pluginPanelCurrent: boolean;
+  /** The overlay manager's current modal window. */
+  modalWindow: BrowserWindow | null;
+  /** The modal runtime's set of modals still waiting to restore the main overlay. */
+  pendingModals: Set<string>;
 };
 
 const ACCEPTED_MEASUREMENT = {} as OverlayContentMeasurement;
@@ -66,8 +70,10 @@ function makeDeps(recorder: Recorder, state: FixtureState) {
     overlayManager: {
       getMainWindow: spy('overlay.getMainWindow', () => state.mainWindow),
       setMainWindow: spy('overlay.setMainWindow', noop),
-      getModalWindow: spy('overlay.getModalWindow', () => null),
-      setModalWindow: spy('overlay.setModalWindow', noop),
+      getModalWindow: spy('overlay.getModalWindow', () => state.modalWindow),
+      setModalWindow: spy('overlay.setModalWindow', (window: BrowserWindow | null) => {
+        state.modalWindow = window;
+      }),
       getVisibleOverlayVisible: spy('overlay.getVisibleOverlayVisible', () => state.visible),
       setVisibleOverlayVisible: spy('overlay.setVisibleOverlayVisible', (visible: boolean) => {
         state.visible = visible;
@@ -80,7 +86,13 @@ function makeDeps(recorder: Recorder, state: FixtureState) {
     overlayModalInputState: { getModalInputExclusive: spy('modal.getInputExclusive', () => false) },
     overlayModalRuntime: {
       notifyOverlayModalOpened: spy('modal.notifyOpened', noop),
-      handleOverlayModalClosed: spy('modal.handleClosed', noop),
+      handleOverlayModalClosed: spy('modal.handleClosed', (modal: string) => {
+        state.pendingModals.delete(modal);
+      }),
+      getRestoreVisibleOverlayOnModalClose: () =>
+        state.pendingModals as ReturnType<
+          OverlayAssemblyDeps['overlayModalRuntime']['getRestoreVisibleOverlayOnModalClose']
+        >,
       sendToActiveOverlayWindow: spy('modal.sendToActive', () => false),
       openRuntimeOptionsPalette: spy('modal.openRuntimeOptionsPalette', noop),
     },
@@ -181,6 +193,8 @@ function setup(t: TestContext, options: { platform?: NodeJS.Platform; visible?: 
     mainWindow: null,
     measurementAccepted: true,
     pluginPanelCurrent: true,
+    modalWindow: null,
+    pendingModals: new Set(),
   };
   const { deps, windowOptions } = makeDeps(recorder, state);
   const overlay = createOverlayAssembly(deps);
@@ -408,6 +422,28 @@ for (const trackedGeometry of [null, { x: 10, y: 20, width: 1280, height: 720 }]
     assert.ok(!names.includes('geometry.getCurrentOverlayGeometry'));
   });
 }
+
+test('a modal window that closes without reporting its modals closed still restores the main overlay', (t) => {
+  const { recorder, state, overlay, windowOptions } = setup(t);
+  assert.throws(() => overlay.createModalWindow(), new RegExp(WINDOW_CREATION_STOPPED));
+  const onWindowClosed = windowOptions[0]?.onWindowClosed;
+  assert.ok(onWindowClosed);
+  const modalWindow = {} as BrowserWindow;
+  state.modalWindow = modalWindow;
+  state.pendingModals = new Set(['media-timing-review', 'jimaku']);
+  const before = recorder.calls.length;
+
+  onWindowClosed('modal', modalWindow);
+
+  const calls = recorder.calls.slice(before);
+  const names = calls.map((call) => call.name);
+  assertCalledInOrder(names, ['overlay.setModalWindow', 'modal.handleClosed']);
+  assert.deepEqual(
+    calls.filter((call) => call.name === 'modal.handleClosed').map((call) => call.args[0]),
+    ['media-timing-review', 'jimaku'],
+  );
+  assert.equal(state.pendingModals.size, 0);
+});
 
 test('an accepted content measurement refreshes pointer input, then releases autoplay, then schedules the first-paint refresh', (t) => {
   const { recorder, overlay } = setup(t);
