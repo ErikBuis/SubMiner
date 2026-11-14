@@ -38,6 +38,8 @@ type FixtureState = {
   measurementAccepted: boolean;
   /** Whether the plugin panel recognizes a closed panel id as the one showing. */
   pluginPanelCurrent: boolean;
+  /** The overlay manager's current modal window. */
+  modalWindow: BrowserWindow | null;
 };
 
 const ACCEPTED_MEASUREMENT = {} as OverlayContentMeasurement;
@@ -67,8 +69,10 @@ function makeDeps(recorder: Recorder, state: FixtureState) {
     overlayManager: {
       getMainWindow: spy('overlay.getMainWindow', () => state.mainWindow),
       setMainWindow: spy('overlay.setMainWindow', noop),
-      getModalWindow: spy('overlay.getModalWindow', () => null),
-      setModalWindow: spy('overlay.setModalWindow', noop),
+      getModalWindow: spy('overlay.getModalWindow', () => state.modalWindow),
+      setModalWindow: spy('overlay.setModalWindow', (window: BrowserWindow | null) => {
+        state.modalWindow = window;
+      }),
       getVisibleOverlayVisible: spy('overlay.getVisibleOverlayVisible', () => state.visible),
       setVisibleOverlayVisible: spy('overlay.setVisibleOverlayVisible', (visible: boolean) => {
         state.visible = visible;
@@ -183,6 +187,7 @@ function setup(t: TestContext, options: { platform?: NodeJS.Platform; visible?: 
     mainWindow: null,
     measurementAccepted: true,
     pluginPanelCurrent: true,
+    modalWindow: null,
   };
   const { deps, windowOptions } = makeDeps(recorder, state);
   const overlay = createOverlayAssembly(deps);
@@ -410,6 +415,21 @@ for (const trackedGeometry of [null, { x: 10, y: 20, width: 1280, height: 720 }]
     assert.ok(!names.includes('geometry.getCurrentOverlayGeometry'));
   });
 }
+
+test('a modal window that closes without reporting its modals closed still restores the main overlay', (t) => {
+  const { recorder, state, overlay, windowOptions } = setup(t);
+  assert.throws(() => overlay.createModalWindow(), new RegExp(WINDOW_CREATION_STOPPED));
+  const onWindowClosed = windowOptions[0]?.onWindowClosed;
+  assert.ok(onWindowClosed);
+  const modalWindow = {} as BrowserWindow;
+  state.modalWindow = modalWindow;
+  const before = recorder.calls.length;
+
+  onWindowClosed('modal', modalWindow);
+
+  const names = recorder.names().slice(before);
+  assertCalledInOrder(names, ['overlay.setModalWindow', 'modal.handleWindowDestroyed']);
+});
 
 test('an accepted content measurement refreshes pointer input, then releases autoplay, then schedules the first-paint refresh', (t) => {
   const { recorder, overlay } = setup(t);
