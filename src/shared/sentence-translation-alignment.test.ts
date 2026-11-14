@@ -115,6 +115,34 @@ test('a line no secondary event claims takes the event it overlaps most', () => 
   assert.equal(aligned?.translation, 'Longer bit.');
 });
 
+test('a neighbouring translation that only lingers into a line is no translation of it', () => {
+  // Bocchi the Rock! ep. 1 at 01:13: "I had no friends." ends 0.05 s into Hitori's あっ.
+  const primary = [line('友達いなくて', 71.763, 72.931), line('（ひとり）あっ', 73.014, 73.59)];
+  const secondary = [
+    line('I had no friends.', 71.73, 73.06),
+    line("And look at you now!\nYou're part of one of the hippest bands out there.", 73.56, 78.24),
+  ];
+  const aligned = alignSentenceTranslation({
+    primaryLines: primary,
+    secondaryLines: secondary,
+    startTime: 73.014,
+    endTime: 73.59,
+  });
+  assert.equal(aligned?.text, '（ひとり）あっ');
+  assert.equal(aligned?.translation, '');
+});
+
+test('a short translation inside a long unclaimed line still translates it', () => {
+  // Bocchi the Rock! ep. 1 at 05:08: the English line covers half of the Japanese line.
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('（ひとり）作詞作曲 私\n“押し入れより愛をこめて”', 308.95, 313.13)],
+    secondaryLines: [line('Lyrics and composition: me.', 308.84, 311.05)],
+    startTime: 308.95,
+    endTime: 313.13,
+  });
+  assert.equal(aligned?.translation, 'Lyrics and composition: me.');
+});
+
 test('alignment returns null when the mined range matches no primary line', () => {
   assert.equal(
     alignSentenceTranslation({
