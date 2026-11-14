@@ -27,6 +27,9 @@ const log = createLogger('tracker').child('windows');
 const MPV_PID_LOOKUP_INTERVAL_MS = 1_000;
 const MPV_PID_REVALIDATE_INTERVAL_MS = 10_000;
 const MPV_PID_MAX_AGE_MS = 30_000;
+// A title-bar drag reports a move per mouse event, often faster than the screen refreshes. Moving
+// the overlay once per frame is enough and keeps the main thread free.
+const WINDOW_MOVE_MIN_INTERVAL_MS = 8;
 const NO_MPV_WINDOW: MpvPollResult = { matches: [], focusState: false, windowState: 'not-found' };
 
 type WindowsTrackerDeps = {
@@ -75,6 +78,8 @@ export class WindowsWindowTracker extends BaseWindowTracker {
   private readonly readWindowBounds: (hwnd: number) => WindowGeometry | null;
   private stopWatchingWindowLocation: (() => void) | null = null;
   private watchedWindowLocationPid: number | null = null;
+  private lastWindowMoveAppliedAtMs: number | null = null;
+  private pendingWindowMoveTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly queryMpvProcessId: (socketPath: string) => Promise<number>;
   private readonly maxConsecutiveMisses: number;
   private readonly trackingLossGraceMs: number;
@@ -248,6 +253,7 @@ export class WindowsWindowTracker extends BaseWindowTracker {
   }
 
   private unwatchWindowLocation(): void {
+    this.clearPendingWindowMove();
     const stopWatching = this.stopWatchingWindowLocation;
     this.stopWatchingWindowLocation = null;
     this.watchedWindowLocationPid = null;
@@ -261,8 +267,33 @@ export class WindowsWindowTracker extends BaseWindowTracker {
     }
   }
 
+  private clearPendingWindowMove(): void {
+    if (this.pendingWindowMoveTimer !== null) {
+      clearTimeout(this.pendingWindowMoveTimer);
+      this.pendingWindowMoveTimer = null;
+    }
+  }
+
   private handleWindowLocationChange(hwnd: number): void {
     if (this.pollInterval === null || hwnd !== this.currentTargetWindowHwnd) return;
+    if (this.pendingWindowMoveTimer !== null) return;
+    const sinceLastMs =
+      this.lastWindowMoveAppliedAtMs === null
+        ? Number.POSITIVE_INFINITY
+        : this.now() - this.lastWindowMoveAppliedAtMs;
+    if (sinceLastMs < WINDOW_MOVE_MIN_INTERVAL_MS) {
+      // Apply the latest position once the interval is over, so the final spot is never missed.
+      this.pendingWindowMoveTimer = setTimeout(() => {
+        this.pendingWindowMoveTimer = null;
+        this.handleWindowLocationChange(hwnd);
+      }, WINDOW_MOVE_MIN_INTERVAL_MS - sinceLastMs);
+      return;
+    }
+    this.lastWindowMoveAppliedAtMs = this.now();
+    this.applyWindowLocation(hwnd);
+  }
+
+  private applyWindowLocation(hwnd: number): void {
     // Minimizing and hiding also fire this event; the poll handles those with its grace periods.
     let bounds: WindowGeometry | null;
     try {

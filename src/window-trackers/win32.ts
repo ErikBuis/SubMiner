@@ -76,6 +76,7 @@ const SWP_FLAGS = SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER;
 const EVENT_OBJECT_LOCATIONCHANGE = 0x800b;
 const WINEVENT_OUTOFCONTEXT = 0x0000;
 const OBJID_WINDOW = 0;
+const CALLBACK_UNREGISTER_DELAY_MS = 1_000;
 const HWND_TOP = 0;
 const HWND_BOTTOM = 1;
 const HWND_TOPMOST = -1;
@@ -282,10 +283,11 @@ export function watchProcessWindowLocation(
   pid: number,
   onMove: (hwnd: number) => void,
 ): () => void {
+  let stopped = false;
   const callback = koffi.register(
     (_hook: number, _event: number, hwnd: number, idObject: number) => {
       // Location events also fire for the caret, cursor and child objects; only whole windows matter.
-      if (idObject !== OBJID_WINDOW || !hwnd) return;
+      if (stopped || idObject !== OBJID_WINDOW || !hwnd) return;
       try {
         onMove(hwnd);
       } catch {
@@ -308,14 +310,15 @@ export function watchProcessWindowLocation(
     throw new Error('SetWinEventHook failed');
   }
 
-  let stopped = false;
   return () => {
     if (stopped) return;
     stopped = true;
     try {
       UnhookWinEvent(hook);
     } finally {
-      koffi.unregister(callback);
+      // Events queued before the unhook can still be dispatched, and the stop may run from inside
+      // the callback itself, so the callback stays registered (and ignores calls) a little longer.
+      setTimeout(() => koffi.unregister(callback), CALLBACK_UNREGISTER_DELAY_MS);
     }
   };
 }
