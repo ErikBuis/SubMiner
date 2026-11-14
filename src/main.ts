@@ -85,7 +85,11 @@ import {
   resolveDefaultLogFilePath,
 } from './shared/log-files';
 import { createFatalErrorReporter } from './main/fatal-error';
-import { activateWindowsWindow } from './window-trackers/windows-helper';
+import {
+  activateWindowsWindow,
+  getWindowsForegroundWindowHandle,
+  watchWindowsForegroundWindow,
+} from './window-trackers/windows-helper';
 import { createWindowsModalFocusHandoff } from './main/runtime/windows-modal-focus-handoff';
 import {
   commandNeedsOverlayStartupPrereqs,
@@ -304,9 +308,15 @@ type BootServices = MainBootServicesResult<
 const windowsModalFocusHandoff = createWindowsModalFocusHandoff({
   platform: process.platform,
   getModalWindow: () => overlayManager.getModalWindow(),
-  isMpvFocused: () => appState.windowTracker?.isTargetWindowFocused() ?? false,
+  getMpvWindowHandle: () =>
+    (
+      appState.windowTracker as { getTargetWindowHandle?: () => number | null } | null
+    )?.getTargetWindowHandle?.() ?? null,
+  getForegroundWindowHandle: getWindowsForegroundWindowHandle,
+  watchForegroundWindow: watchWindowsForegroundWindow,
   activateNativeWindow: (window) =>
     activateWindowsWindow(overlay.interaction.getWindowsNativeWindowHandleNumber(window)),
+  warn: (message) => createLogger('overlay:windows').warn(message),
 });
 
 const bootServices = createMainBootServices({
