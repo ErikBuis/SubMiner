@@ -105,6 +105,33 @@ export function findWindowsMpvTargetWindowHandle(result?: MpvPollResult): number
   return best?.hwnd ?? null;
 }
 
+export function activateWindowsWindow(hwnd: number): boolean {
+  try {
+    return loadWin32().activateWindow(hwnd);
+  } catch {
+    return false;
+  }
+}
+
+export function getWindowsForegroundWindowHandle(): number | null {
+  try {
+    return loadWin32().getForegroundWindowHandle();
+  } catch {
+    return null;
+  }
+}
+
+/** Returns a function that stops watching, or null when the watch could not be set up. */
+export function watchWindowsForegroundWindow(
+  onForeground: (hwnd: number) => void,
+): (() => void) | null {
+  try {
+    return loadWin32().watchForegroundWindow(onForeground);
+  } catch {
+    return null;
+  }
+}
+
 export function getWindowsForegroundProcessName(): string | null {
   try {
     return loadWin32().getForegroundProcessName();
