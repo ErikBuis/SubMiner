@@ -451,3 +451,221 @@ test('WindowsWindowTracker expires an unvalidated PID and recovers after IPC ret
   assert.equal(tracker.isTracking(), true);
   assert.equal(polledPids.at(-1), 4242);
 });
+
+function createWatchStub() {
+  const watches: Array<{ pid: number; onMove: (hwnd: number) => void; stopped: boolean }> = [];
+  return {
+    watches,
+    watchWindowLocation: (pid: number, onMove: (hwnd: number) => void) => {
+      const watch = { pid, onMove, stopped: false };
+      watches.push(watch);
+      return () => {
+        watch.stopped = true;
+      };
+    },
+  };
+}
+
+test('WindowsWindowTracker follows mpv window moves between polls', async () => {
+  const stub = createWatchStub();
+  let now = 1_000;
+  let liveBounds = { x: 0, y: 0, width: 1280, height: 720 };
+  const geometries: Array<{ x: number; y: number }> = [];
+  const tracker = new WindowsWindowTracker(SOCKET_PATH, {
+    now: () => now,
+    queryMpvProcessId: async () => 4242,
+    pollMpvWindows: () => mpvVisible(liveBounds),
+    watchWindowLocation: stub.watchWindowLocation,
+    readWindowBounds: (hwnd) => (hwnd === 12345 ? liveBounds : null),
+  });
+  tracker.onGeometryChange = (geometry) => geometries.push({ x: geometry.x, y: geometry.y });
+
+  tracker.start();
+  try {
+    await flushPromises();
+    pollOnce(tracker);
+    pollOnce(tracker);
+    assert.equal(tracker.isTracking(), true);
+    // Repeated polls for the same process keep the one subscription.
+    assert.equal(stub.watches.length, 1);
+    assert.equal(stub.watches[0]!.pid, 4242);
+
+    // A drag reports many moves before the next poll; each one moves the overlay.
+    for (const x of [10, 20, 30]) {
+      now += 16;
+      liveBounds = { ...liveBounds, x };
+      stub.watches[0]!.onMove(12345);
+    }
+    assert.deepEqual(
+      geometries.map((geometry) => geometry.x),
+      [0, 10, 20, 30],
+    );
+
+    // Moves of other windows are ignored, even when the tracked window has moved meanwhile.
+    now += 16;
+    liveBounds = { ...liveBounds, x: 40 };
+    stub.watches[0]!.onMove(999);
+    assert.equal(geometries.length, 4);
+
+    // A minimized or hidden mpv window has no bounds; the poll deals with that.
+    now += 16;
+    const visibleBounds = liveBounds;
+    liveBounds = null as never;
+    stub.watches[0]!.onMove(12345);
+    assert.equal(geometries.length, 4);
+    liveBounds = visibleBounds;
+  } finally {
+    tracker.stop();
+  }
+  assert.equal(stub.watches[0]!.stopped, true);
+});
+
+test('WindowsWindowTracker moves the overlay at most once per frame during a fast drag', async () => {
+  const stub = createWatchStub();
+  let now = 1_000;
+  let liveBounds = { x: 0, y: 0, width: 1280, height: 720 };
+  const geometries: number[] = [];
+  const tracker = new WindowsWindowTracker(SOCKET_PATH, {
+    now: () => now,
+    queryMpvProcessId: async () => 4242,
+    pollMpvWindows: () => mpvVisible(liveBounds),
+    watchWindowLocation: stub.watchWindowLocation,
+    readWindowBounds: () => liveBounds,
+  });
+  tracker.onGeometryChange = (geometry) => geometries.push(geometry.x);
+
+  tracker.start();
+  try {
+    await flushPromises();
+    pollOnce(tracker);
+    for (const x of [1, 2, 3, 4]) {
+      now += 1;
+      liveBounds = { ...liveBounds, x };
+      stub.watches[0]!.onMove(12345);
+    }
+    // The first move applies right away; the rest wait for the frame to end.
+    assert.deepEqual(geometries, [0, 1]);
+    now += 8;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The final position is applied once, so the overlay ends where mpv ends.
+    assert.deepEqual(geometries, [0, 1, 4]);
+  } finally {
+    tracker.stop();
+  }
+});
+
+test('WindowsWindowTracker logs and ignores a failing bounds read', async () => {
+  const stub = createWatchStub();
+  const tracker = new WindowsWindowTracker(SOCKET_PATH, {
+    queryMpvProcessId: async () => 4242,
+    pollMpvWindows: () => mpvVisible(),
+    watchWindowLocation: stub.watchWindowLocation,
+    readWindowBounds: () => {
+      throw new Error('window gone');
+    },
+  });
+
+  tracker.start();
+  try {
+    await flushPromises();
+    pollOnce(tracker);
+    assert.doesNotThrow(() => stub.watches[0]!.onMove(12345));
+    assert.equal(tracker.getGeometry()?.x, 0);
+  } finally {
+    tracker.stop();
+  }
+});
+
+test('WindowsWindowTracker subscribes again after a restart', async () => {
+  const stub = createWatchStub();
+  const tracker = new WindowsWindowTracker(SOCKET_PATH, {
+    queryMpvProcessId: async () => 4242,
+    pollMpvWindows: () => mpvVisible(),
+    watchWindowLocation: stub.watchWindowLocation,
+    readWindowBounds: () => null,
+  });
+
+  tracker.start();
+  await flushPromises();
+  pollOnce(tracker);
+  tracker.stop();
+  tracker.start();
+  pollOnce(tracker);
+  tracker.stop();
+  assert.deepEqual(
+    stub.watches.map((watch) => [watch.pid, watch.stopped]),
+    [
+      [4242, true],
+      [4242, true],
+    ],
+  );
+});
+
+test('WindowsWindowTracker ignores window moves after it stops', async () => {
+  const stub = createWatchStub();
+  const geometries: number[] = [];
+  const tracker = new WindowsWindowTracker(SOCKET_PATH, {
+    queryMpvProcessId: async () => 4242,
+    pollMpvWindows: () => mpvVisible(),
+    watchWindowLocation: stub.watchWindowLocation,
+    readWindowBounds: () => ({ x: 50, y: 0, width: 1280, height: 720 }),
+  });
+  tracker.onGeometryChange = (geometry) => geometries.push(geometry.x);
+
+  tracker.start();
+  await flushPromises();
+  pollOnce(tracker);
+  tracker.stop();
+  stub.watches[0]!.onMove(12345);
+  assert.deepEqual(geometries, [0]);
+});
+
+test('WindowsWindowTracker moves the window watch to a restarted mpv process', async () => {
+  const stub = createWatchStub();
+  let pid = 4242;
+  let now = 1_000;
+  const tracker = new WindowsWindowTracker(SOCKET_PATH, {
+    now: () => now,
+    queryMpvProcessId: async () => pid,
+    pollMpvWindows: (targetPid) => (targetPid === pid ? mpvVisible() : mpvNotFound),
+    watchWindowLocation: stub.watchWindowLocation,
+    readWindowBounds: () => null,
+  });
+
+  await flushPromises();
+  pollOnce(tracker);
+  await flushPromises();
+  pollOnce(tracker);
+  assert.deepEqual(
+    stub.watches.map((watch) => watch.pid),
+    [4242],
+  );
+
+  pid = 5151;
+  now += 1_100;
+  pollOnce(tracker);
+  await flushPromises();
+  pollOnce(tracker);
+  assert.deepEqual(
+    stub.watches.map((watch) => [watch.pid, watch.stopped]),
+    [
+      [4242, true],
+      [5151, false],
+    ],
+  );
+  tracker.stop();
+});
+
+test('WindowsWindowTracker keeps polling when window moves cannot be watched', async () => {
+  const tracker = new WindowsWindowTracker(SOCKET_PATH, {
+    queryMpvProcessId: async () => 4242,
+    pollMpvWindows: () => mpvVisible({ x: 7 }),
+    watchWindowLocation: () => null,
+  });
+
+  pollOnce(tracker);
+  await flushPromises();
+  pollOnce(tracker);
+  assert.equal(tracker.getGeometry()?.x, 7);
+  tracker.stop();
+});

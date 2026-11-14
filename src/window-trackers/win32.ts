@@ -20,6 +20,9 @@ koffi.struct('MARGINS', {
 });
 
 const WNDENUMPROC = koffi.proto('bool __stdcall WNDENUMPROC(intptr hwnd, intptr lParam)');
+const WINEVENTPROC = koffi.proto(
+  'void __stdcall WINEVENTPROC(intptr hWinEventHook, uint event, intptr hwnd, long idObject, long idChild, uint idEventThread, uint dwmsEventTime)',
+);
 
 const EnumWindows = user32.func('bool __stdcall EnumWindows(WNDENUMPROC *cb, intptr lParam)');
 const IsWindowVisible = user32.func('bool __stdcall IsWindowVisible(intptr hwnd)');
@@ -36,6 +39,10 @@ const SetWindowLongPtrW = user32.func(
   'intptr __stdcall SetWindowLongPtrW(intptr hwnd, int nIndex, intptr dwNewLong)',
 );
 const GetWindowFn = user32.func('intptr __stdcall GetWindow(intptr hwnd, uint uCmd)');
+const SetWinEventHook = user32.func(
+  'intptr __stdcall SetWinEventHook(uint eventMin, uint eventMax, intptr hmodWinEventProc, WINEVENTPROC *pfnWinEventProc, uint idProcess, uint idThread, uint dwFlags)',
+);
+const UnhookWinEvent = user32.func('bool __stdcall UnhookWinEvent(intptr hWinEventHook)');
 const GetWindowRect = user32.func('bool __stdcall GetWindowRect(intptr hwnd, _Out_ RECT *lpRect)');
 
 const DwmGetWindowAttribute = dwmapi.func(
@@ -66,6 +73,10 @@ const SWP_NOMOVE = 0x0002;
 const SWP_NOACTIVATE = 0x0010;
 const SWP_NOOWNERZORDER = 0x0200;
 const SWP_FLAGS = SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER;
+const EVENT_OBJECT_LOCATIONCHANGE = 0x800b;
+const WINEVENT_OUTOFCONTEXT = 0x0000;
+const OBJID_WINDOW = 0;
+const CALLBACK_UNREGISTER_DELAY_MS = 1_000;
 const HWND_TOP = 0;
 const HWND_BOTTOM = 1;
 const HWND_TOPMOST = -1;
@@ -251,6 +262,64 @@ export function findMpvWindows(targetPid?: number | null): MpvPollResult {
     matches,
     focusState: hasFocused,
     windowState: matches.length > 0 ? 'visible' : hasMinimized ? 'minimized' : 'not-found',
+  };
+}
+
+/**
+ * Returns the bounds of a still-visible, non-minimized window, the same way the poll measures them.
+ */
+export function getVisibleWindowBounds(hwnd: number): WindowBounds | null {
+  if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return null;
+  return getWindowBounds(hwnd);
+}
+
+/**
+ * Calls `onMove` with the window handle whenever a top-level window of process `pid` moves or
+ * resizes. Windows delivers these events through the calling thread's message loop, which
+ * Electron's main thread runs, so a dragged mpv window can be followed without polling.
+ * Returns a function that stops watching.
+ */
+export function watchProcessWindowLocation(
+  pid: number,
+  onMove: (hwnd: number) => void,
+): () => void {
+  let stopped = false;
+  const callback = koffi.register(
+    (_hook: number, _event: number, hwnd: number, idObject: number) => {
+      // Location events also fire for the caret, cursor and child objects; only whole windows matter.
+      if (stopped || idObject !== OBJID_WINDOW || !hwnd) return;
+      try {
+        onMove(hwnd);
+      } catch {
+        // An exception must not reach the native caller.
+      }
+    },
+    koffi.pointer(WINEVENTPROC),
+  );
+  const hook = SetWinEventHook(
+    EVENT_OBJECT_LOCATIONCHANGE,
+    EVENT_OBJECT_LOCATIONCHANGE,
+    0,
+    callback,
+    pid,
+    0,
+    WINEVENT_OUTOFCONTEXT,
+  );
+  if (!hook) {
+    koffi.unregister(callback);
+    throw new Error('SetWinEventHook failed');
+  }
+
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    try {
+      UnhookWinEvent(hook);
+    } finally {
+      // Events queued before the unhook can still be dispatched, and the stop may run from inside
+      // the callback itself, so the callback stays registered (and ignores calls) a little longer.
+      setTimeout(() => koffi.unregister(callback), CALLBACK_UNREGISTER_DELAY_MS);
+    }
   };
 }
 
