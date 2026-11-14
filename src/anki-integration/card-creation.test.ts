@@ -458,28 +458,39 @@ function createTimedTranslationService(
 }
 
 test('createSentenceCard picks the translation by timing, not the overlapping on-screen line', async () => {
-  // Bocchi the Rock! ep. 1 around 00:37: a TV line overlaps the dialogue translation.
+  // Bocchi the Rock! ep. 1 at 00:37: a cooking show on TV talks over the narration.
+  const narration = 'The only messages she receives\nare from either her parents or advertisers.';
   const { service, addedFields } = createTimedTranslationService({
     tracks: {
-      primary: [{ text: '野菜もいっぱい入ってるよ', startTime: 36.4, endTime: 39.2 }],
+      primary: [
+        { text: '（ひとり）スマホに届くのは', startTime: 35.474, endTime: 36.808 },
+        {
+          text: '親からのメッセージか\nクーポンのお知らせだけ',
+          startTime: 37.392,
+          endTime: 41.146,
+        },
+      ],
       secondary: [
-        { text: "There's a lot of vegetables,", startTime: 34.1, endTime: 37 },
-        { text: 'I put lots of vegetables in it.', startTime: 36.3, endTime: 39.4 },
+        { text: narration, startTime: 35.36, endTime: 40.95 },
+        { text: "There's a lot of vegetables,", startTime: 36.86, endTime: 38.99 },
       ],
     },
   });
 
   assert.equal(
     await service.createSentenceCard(
-      '野菜もいっぱい入ってるよ',
-      36.4,
-      39.2,
-      "There's a lot of vegetables,\nI put lots of vegetables in it.",
+      '親からのメッセージか クーポンのお知らせだけ',
+      37.392,
+      41.146,
+      `${narration}\nThere's a lot of vegetables,`,
     ),
     true,
   );
-  assert.equal(addedFields[0]?.Sentence, '野菜もいっぱい入ってるよ');
-  assert.equal(addedFields[0]?.Translation, 'I put lots of vegetables in it.');
+  assert.equal(addedFields[0]?.Sentence, '親からのメッセージか クーポンのお知らせだけ');
+  assert.equal(
+    addedFields[0]?.Translation,
+    'The only messages she receives are from either her parents or advertisers.',
+  );
 });
 
 test('createSentenceCard translates a mined line whose speaker label the sentence dropped', async () => {
