@@ -43,19 +43,32 @@ test('mining one line of a split sentence keeps that line and resolves its trans
 });
 
 test('an overlapping unrelated secondary line (background TV) is left out', () => {
-  // Bocchi the Rock! ep. 1 around 00:37: the TV line overlaps the dialogue translation.
-  const primary = [line('野菜もいっぱい入ってるよ', 36.4, 39.2)];
+  // Bocchi the Rock! ep. 1 at 00:37: two lines of a cooking show on TV are on screen
+  // during the narration's line.
+  const primary = [
+    line('（ひとり）スマホに届くのは', 35.474, 36.808),
+    line('親からのメッセージか\nクーポンのお知らせだけ', 37.392, 41.146),
+  ];
   const secondary = [
-    line("There's a lot of vegetables,", 34.1, 37.0),
-    line('I put lots of vegetables in it.', 36.3, 39.4),
+    line(
+      'The only messages she receives\nare from either her parents or advertisers.',
+      35.36,
+      40.95,
+    ),
+    line("There's a lot of vegetables,", 36.86, 38.99),
+    line('so you can probably make it quickly\nif you cut them in advance.', 39.03, 42.74),
   ];
   const aligned = alignSentenceTranslation({
     primaryLines: primary,
     secondaryLines: secondary,
-    startTime: 36.4,
-    endTime: 39.2,
+    startTime: 37.392,
+    endTime: 41.146,
   });
-  assert.equal(aligned?.translation, 'I put lots of vegetables in it.');
+  assert.equal(aligned?.text, '親からのメッセージか クーポンのお知らせだけ');
+  assert.equal(
+    aligned?.translation,
+    'The only messages she receives are from either her parents or advertisers.',
+  );
 });
 
 test('sound cues do not pull a dialogue line into a background line', () => {
