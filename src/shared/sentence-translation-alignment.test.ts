@@ -319,6 +319,23 @@ test('a new speaker takes the translation that starts with their line', () => {
   assert.equal(translationOf(1), 'Here you go!');
 });
 
+test('a translation counts as starting with a new speaker up to 0.25 s apart', () => {
+  const primary = [line('前の台詞', 0, 2), line('（先生）どうぞ', 2.1, 3.1)];
+  const translationWith = (ownStart: number) =>
+    alignSentenceTranslation({
+      primaryLines: primary,
+      secondaryLines: [
+        line('The line before.', 0, 3.2),
+        line('Here you go!', ownStart, ownStart + 1),
+      ],
+      startTime: 2.1,
+      endTime: 3.1,
+    })?.translation;
+  assert.equal(translationWith(2.3), 'Here you go!');
+  // Further apart, the timing score decides as before.
+  assert.equal(translationWith(2.4), 'The line before.');
+});
+
 test('a line without a speaker label stays with its sentence when a background line starts with it', () => {
   // Bocchi the Rock! ep. 1 at 00:47: the TV line starts together with the second half of
   // the narration's sentence, which has no speaker label.
