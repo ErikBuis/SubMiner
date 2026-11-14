@@ -367,6 +367,28 @@ test('buildSubtitleTracksForTranslation moves parsed primary cues onto the video
   );
 });
 
+test('buildSubtitleTracksForTranslation marks positioned secondary cues as signs', () => {
+  const sign = { text: 'God', startTime: 886.33, endTime: 891.76 };
+  Object.defineProperty(sign, 'assLayout', {
+    value: { kind: 'positioned', sourceOrder: 1, y: 250 },
+    enumerable: false,
+  });
+  const topDialogue = { text: 'Here you go!', startTime: 19.09, endTime: 19.97 };
+  Object.defineProperty(topDialogue, 'assLayout', {
+    value: { kind: 'source-order', sourceOrder: 2, verticalBand: 'top' },
+    enumerable: false,
+  });
+  const tracks = buildSubtitleTracksForTranslation({
+    primaryCues: [],
+    primarySubDelay: 0,
+    secondaryCues: [topDialogue, sign],
+  });
+  assert.deepEqual(tracks?.secondary, [
+    { text: 'Here you go!', startTime: 19.09, endTime: 19.97 },
+    { text: 'God', startTime: 886.33, endTime: 891.76, isSign: true },
+  ]);
+});
+
 test('secondary track controller parses the selected ASS file before publishing', async () => {
   const broadcasts: string[] = [];
   let currentText = '';

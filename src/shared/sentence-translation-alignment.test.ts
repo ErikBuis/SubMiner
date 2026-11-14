@@ -235,6 +235,69 @@ test('a slightly offset dialogue translation beats a sign covering the line', ()
   assert.equal(aligned?.translation, 'One.');
 });
 
+test('a sign that lines up with a whole shot does not win its dialogue lines', () => {
+  // Bocchi the Rock! ep. 1 at 14:46: the sign "God" stays up for three dialogue lines and
+  // fits their combined span better than either translation fits its own lines.
+  const sign = (text: string, startTime: number, endTime: number): TimedSubtitleText => ({
+    ...line(text, startTime, endTime),
+    isSign: true,
+  });
+  const primary = [
+    line('ソロ弾きは最強でも', 886.45, 887.83),
+    line('バンドになるとミジンコ以下', 887.91, 889.95),
+    line('最弱になるのだ！', 890.04, 891.7),
+  ];
+  const secondary = [
+    line('She might be an awesome solo player,', 886.33, 888.04),
+    sign('God', 886.33, 891.76),
+    line("but in a band she's rock bottom,\nbelow even water fleas!", 888.04, 891.76),
+  ];
+  const translationOf = (index: number) =>
+    alignSentenceTranslation({
+      primaryLines: primary,
+      secondaryLines: secondary,
+      startTime: primary[index]!.startTime,
+      endTime: primary[index]!.endTime,
+    })?.translation;
+  assert.equal(translationOf(0), 'She might be an awesome solo player,');
+  assert.equal(translationOf(1), "but in a band she's rock bottom, below even water fleas!");
+  assert.equal(translationOf(2), "but in a band she's rock bottom, below even water fleas!");
+  // Without the sign marker (an SRT track), timing alone decides, as before.
+  const unmarked = secondary.map(({ text, startTime, endTime }) => line(text, startTime, endTime));
+  assert.equal(
+    alignSentenceTranslation({
+      primaryLines: primary,
+      secondaryLines: unmarked,
+      startTime: 890.04,
+      endTime: 891.7,
+    })?.translation,
+    'God',
+  );
+});
+
+test('a sign still translates a line that no dialogue event covers', () => {
+  const sign: TimedSubtitleText = { ...line('BOCCHI THE ROCK!', 260.12, 264), isSign: true };
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('ぼっち・ざ・ろっく！', 260.2, 263.9)],
+    secondaryLines: [sign, line('Earlier line.', 255, 260.3)],
+    startTime: 260.2,
+    endTime: 263.9,
+  });
+  assert.equal(aligned?.translation, 'BOCCHI THE ROCK!');
+});
+
+test('an unclaimed line prefers the dialogue event it overlaps over a sign', () => {
+  // Neither covers 60% of the line, and the sign covers more of it than the dialogue.
+  const sign: TimedSubtitleText = { ...line('SIGN', 0, 5.4), isSign: true };
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('長い台詞', 2, 8)],
+    secondaryLines: [sign, line('The end of it.', 5.5, 8)],
+    startTime: 2,
+    endTime: 8,
+  });
+  assert.equal(aligned?.translation, 'The end of it.');
+});
+
 test('two speakers sharing an interval keep both translations', () => {
   const aligned = alignSentenceTranslation({
     primaryLines: [line('－行くぞ', 1, 3), line('－待って', 1, 3)],
@@ -243,6 +306,17 @@ test('two speakers sharing an interval keep both translations', () => {
     endTime: 3,
   });
   assert.equal(aligned?.translationLines.length, 2);
+});
+
+test('the second of two co-timed speakers takes the other dialogue line, not a sign', () => {
+  const sign: TimedSubtitleText = { ...line('SIGN', 1, 3), isSign: true };
+  const aligned = alignSentenceTranslation({
+    primaryLines: [line('行くぞ', 1, 3), line('待って', 1, 3)],
+    secondaryLines: [line("Let's go.", 1, 3), sign, line('Wait.', 1, 3)],
+    startTime: 1,
+    endTime: 3,
+  });
+  assert.equal(aligned?.translation, "Let's go. Wait.");
 });
 
 test('consecutive lines sharing a translation do not take a co-timed sign', () => {

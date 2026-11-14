@@ -12,6 +12,11 @@ export interface TimedSubtitleText {
   text: string;
   startTime: number;
   endTime: number;
+  /**
+   * The subtitle file places this line at a fixed spot in the picture, which is how it
+   * shows text that is part of the scene (a shop sign, a phone screen) instead of dialogue.
+   */
+  isSign?: boolean;
 }
 
 export interface SentenceTranslationGroup {
@@ -152,10 +157,17 @@ export function buildSentenceTranslationGroups(
         overlapSeconds(line, event) /
         Math.max(duration(event), duration(line), MIN_DURATION_SECONDS);
       const current = best[member];
+      // A sign stays on screen for a whole shot, so it can line up with the dialogue lines
+      // of that shot better than their own translations do. It only wins a line that no
+      // dialogue event claims.
+      const currentIsSign = current?.secondary.isSign === true;
+      const eventIsSign = event.isSign === true;
       if (
         !current ||
-        current.score < score - SCORE_EPSILON ||
-        (Math.abs(current.score - score) <= SCORE_EPSILON && current.fit < fit)
+        (currentIsSign && !eventIsSign) ||
+        (currentIsSign === eventIsSign &&
+          (current.score < score - SCORE_EPSILON ||
+            (Math.abs(current.score - score) <= SCORE_EPSILON && current.fit < fit)))
       ) {
         best[member] = { score, fit, secondary: event };
       }
@@ -183,7 +195,10 @@ export function buildSentenceTranslationGroups(
   return groups;
 }
 
-/** The secondary event that overlaps the line the longest, if any overlaps at all. */
+/**
+ * The secondary event that overlaps the line the longest, if any overlaps at all. A sign
+ * is only picked when no dialogue event overlaps the line.
+ */
 export function findBestOverlappingLine(
   lines: readonly TimedSubtitleText[],
   range: Pick<TimedSubtitleText, 'startTime' | 'endTime'>,
@@ -192,7 +207,14 @@ export function findBestOverlappingLine(
   let bestOverlap = 0;
   for (const line of lines) {
     const overlap = overlapSeconds(line, range);
-    if (overlap > bestOverlap) {
+    if (overlap <= 0) continue;
+    const bestIsSign = best?.isSign === true;
+    const lineIsSign = line.isSign === true;
+    if (
+      !best ||
+      (bestIsSign && !lineIsSign) ||
+      (bestIsSign === lineIsSign && overlap > bestOverlap)
+    ) {
       best = line;
       bestOverlap = overlap;
     }
@@ -315,7 +337,9 @@ export function assignGroupTranslations(
       const repeats =
         owner !== undefined &&
         (compactText(owner.text).includes(ownText) || ownText.includes(compactText(owner.text)));
-      const partner = owner && !repeats ? coTimedCues.find((cue) => !takenBy.has(cue)) : undefined;
+      // The other speaker's line is dialogue, so a sign in the same slot comes last.
+      const free = owner && !repeats ? coTimedCues.filter((cue) => !takenBy.has(cue)) : [];
+      const partner = free.find((cue) => !cue.isSign) ?? free[0];
       lines = [partner ?? grouped];
     }
     for (const cue of lines) {
