@@ -8,6 +8,7 @@ import {
   applyTranslationLineChanges,
   MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS,
   isMediaTimingReviewButtonAvailable,
+  pickMediaTimingReviewFocusHandoff,
   buildMediaTimingLineSelection,
   buildMediaTimingWaveformPath,
   constrainMediaTimingSelection,
@@ -831,4 +832,74 @@ test('controller presses skip disabled buttons and buttons on the hidden step', 
   assert.equal(isMediaTimingReviewButtonAvailable(button(false, false)), true);
   assert.equal(isMediaTimingReviewButtonAvailable(button(true, false)), false);
   assert.equal(isMediaTimingReviewButtonAvailable(button(false, true)), false);
+});
+
+test('a translation line button that gets disabled hands the focus to the one next to it', () => {
+  const [remove, add] = ['remove', 'add'];
+
+  // "−" removed the last added line: the "+" next to it takes the focus.
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [remove, true],
+        [add, false],
+      ],
+      remove,
+    ),
+    add,
+  );
+  // "+" added the last line there is: the "−" next to it takes the focus.
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [remove, false],
+        [add, true],
+      ],
+      add,
+    ),
+    remove,
+  );
+  // Focus elsewhere, or on a button that stays enabled, stays put.
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [remove, true],
+        [add, false],
+      ],
+      'translation',
+    ),
+    null,
+  );
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [remove, true],
+        [add, false],
+      ],
+      add,
+    ),
+    null,
+  );
+  // With both buttons disabled there is nothing to hand the focus to.
+  assert.equal(
+    pickMediaTimingReviewFocusHandoff(
+      [
+        [remove, true],
+        [add, true],
+      ],
+      add,
+    ),
+    null,
+  );
+});
+
+test('the translation line buttons keep the keyboard focus when they get disabled', () => {
+  const source = readFileSync('src/renderer/modals/media-timing-review.ts', 'utf8');
+  for (const id of ['PrevAdd', 'PrevRemove', 'NextAdd', 'NextRemove']) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(`mediaTimingReviewTranslation${id}\\.disabled\\s*=`),
+      `mediaTimingReviewTranslation${id} is disabled without setButtonsDisabled`,
+    );
+  }
 });

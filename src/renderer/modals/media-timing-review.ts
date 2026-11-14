@@ -69,6 +69,30 @@ export const MEDIA_TIMING_REVIEW_CONTROLLER_BUTTONS: Record<
   discard: 'mediaTimingReviewDiscard',
 };
 
+/**
+ * The button that takes over the focus when the focused one of a group is about to be
+ * disabled, or null when the focus can stay where it is. A disabled button drops the
+ * focus to the page, after which Enter does nothing. The nearest button of the group
+ * that stays enabled takes over; on a tie the earlier one wins.
+ */
+export function pickMediaTimingReviewFocusHandoff<T>(
+  group: ReadonlyArray<readonly [button: T, disabled: boolean]>,
+  active: unknown,
+): T | null {
+  const index = group.findIndex(([button, disabled]) => disabled && button === active);
+  if (index === -1) return null;
+  let best: T | null = null;
+  let bestDistance = Infinity;
+  group.forEach(([button, disabled], other) => {
+    const distance = Math.abs(other - index);
+    if (!disabled && distance < bestDistance) {
+      best = button;
+      bestDistance = distance;
+    }
+  });
+  return best;
+}
+
 /** A controller press only counts when a mouse click could have reached the button. */
 export function isMediaTimingReviewButtonAvailable(button: HTMLButtonElement): boolean {
   return !button.disabled && button.closest('.hidden') === null;
@@ -704,6 +728,16 @@ export function createMediaTimingReviewModal(
     dom.mediaTimingReviewConfirm.disabled = resolveInFlight || state.blockConfirm;
   }
 
+  /** Sets the disabled state of a group of buttons without losing the keyboard focus. */
+  function setButtonsDisabled(
+    group: ReadonlyArray<readonly [button: HTMLButtonElement, disabled: boolean]>,
+  ): void {
+    const handoff = pickMediaTimingReviewFocusHandoff(group, document.activeElement);
+    for (const [button, disabled] of group) if (!disabled) button.disabled = false;
+    handoff?.focus();
+    for (const [button, disabled] of group) if (disabled) button.disabled = true;
+  }
+
   function setStatus(message: string, isError = false): void {
     ctx.dom.mediaTimingReviewStatus.textContent = message;
     ctx.dom.mediaTimingReviewStatus.classList.toggle('is-error', isError);
@@ -1003,10 +1037,14 @@ export function createMediaTimingReviewModal(
       'hidden',
       translation.lines.length === 0,
     );
-    dom.mediaTimingReviewTranslationPrevAdd.disabled = !preview.canAddPrevious;
-    dom.mediaTimingReviewTranslationPrevRemove.disabled = !preview.canRemovePrevious;
-    dom.mediaTimingReviewTranslationNextAdd.disabled = !preview.canAddNext;
-    dom.mediaTimingReviewTranslationNextRemove.disabled = !preview.canRemoveNext;
+    setButtonsDisabled([
+      [dom.mediaTimingReviewTranslationPrevRemove, !preview.canRemovePrevious],
+      [dom.mediaTimingReviewTranslationPrevAdd, !preview.canAddPrevious],
+    ]);
+    setButtonsDisabled([
+      [dom.mediaTimingReviewTranslationNextRemove, !preview.canRemoveNext],
+      [dom.mediaTimingReviewTranslationNextAdd, !preview.canAddNext],
+    ]);
     if (!translationEdited) {
       if (preview.text !== null) setTranslation(preview.text, false);
     } else if (previousLines) {
