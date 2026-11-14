@@ -1931,7 +1931,7 @@ export class AnkiIntegration {
     ) {
       return undefined;
     }
-    return liveSecondary === primaryText.trim() ? undefined : liveSecondary;
+    return normalize(liveSecondary) === normalize(primaryText) ? undefined : liveSecondary;
   }
 
   setMediaTimingReviewCallback(

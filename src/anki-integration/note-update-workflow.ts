@@ -152,6 +152,21 @@ function normalizeSubtitleContextText(text: string): string {
     .trim();
 }
 
+/**
+ * The secondary subtitle captured together with a line, as the translation of
+ * `primaryText`. Only for that one line: a sentence that grew (lines added in the review)
+ * has no captured translation, and neither has a secondary track in the primary language.
+ */
+function capturedSecondaryTextFor(
+  context: SubtitleMiningContext,
+  primaryText: string,
+): string | undefined {
+  const compact = (text: string) => text.replace(/\s+/g, '');
+  const secondaryText = context.secondaryText?.trim();
+  if (!secondaryText || compact(context.text) !== compact(primaryText)) return undefined;
+  return compact(secondaryText) === compact(primaryText) ? undefined : secondaryText;
+}
+
 function hasUsableSubtitleContextTiming(context: SubtitleMiningContext): boolean {
   return (
     Number.isFinite(context.startTime) &&
@@ -312,12 +327,19 @@ export class NoteUpdateWorkflow {
       let tracks: Promise<SubtitleTracksForTranslation | null> | undefined;
       const getTracks = () =>
         (tracks ??= Promise.resolve(this.deps.getSubtitleTracksForTranslation?.() ?? null));
-      // Read once: playback moves on while the review is open, and the card must get the
+      // The secondary subtitle that was on screen with the line when it was captured (at the
+      // lookup, or just above) is preferred. Playback can have moved on since, so the screen
+      // is only read when that gives nothing, and then once: the card must get the
       // translation the review showed.
+      const capturedLine = mediaTimingContext;
       const liveTranslations = new Map<string, string | undefined>();
       const getLiveTranslation = (primaryText: string) => {
         if (!liveTranslations.has(primaryText)) {
-          liveTranslations.set(primaryText, this.deps.getLiveSecondarySubtitleFor?.(primaryText));
+          liveTranslations.set(
+            primaryText,
+            (capturedLine ? capturedSecondaryTextFor(capturedLine, primaryText) : undefined) ??
+              this.deps.getLiveSecondarySubtitleFor?.(primaryText),
+          );
         }
         return liveTranslations.get(primaryText);
       };

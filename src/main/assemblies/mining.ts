@@ -7,6 +7,7 @@ import {
   handleMultiCopyDigit as handleMultiCopyDigitCore,
   markLastCardAsAudioCard as markLastCardAsAudioCardCore,
   mineSentenceCard as mineSentenceCardCore,
+  secondaryTextOnScreen,
   shiftSubtitleRangeToVideoClock,
   toSubtitleClock,
   triggerFieldGrouping as triggerFieldGroupingCore,
@@ -152,6 +153,7 @@ export function createMiningAssembly(deps: MiningAssemblyDeps) {
         startTime: resolved.startTime,
         endTime: resolved.endTime,
         capturedAtMs: Date.now(),
+        ...secondaryTextOnScreen(appState.mpvClient, resolvedText),
       },
       subDelay,
     );

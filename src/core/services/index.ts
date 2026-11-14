@@ -22,6 +22,7 @@ export {
   handleMultiCopyDigit,
   markLastCardAsAudioCard,
   mineSentenceCard,
+  secondaryTextOnScreen,
   triggerFieldGrouping,
   updateLastCardFromClipboard,
 } from './mining';
