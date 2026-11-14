@@ -237,6 +237,7 @@ function stubRuntimeMethods(recorder: Recorder, state: FixtureState, overlay: Ov
       () => state.trackedGeometry,
     ),
     syncPrimaryOverlayWindowLayer: spy('geometry.syncPrimaryLayer', noop),
+    resetLastOverlayWindowGeometry: spy('geometry.resetLastWindowGeometry', noop),
     updateVisibleOverlayBounds: spy('geometry.updateVisibleBounds', noop),
   } satisfies Partial<Overlay['geometry']>);
 }
@@ -458,4 +459,17 @@ test('a late close for a replaced plugin panel leaves the showing panel open', (
   overlay.ipc.onOverlayModalClosed('plugin-panel', null, 7);
 
   assert.equal(recorder.names().includes('modal.handleClosed'), false);
+});
+
+test('a new main overlay window forgets the bounds applied to the previous one', (t) => {
+  const { recorder, state, overlay } = setup(t);
+  // An opaque token: the assembly only hands the created window to the overlay manager.
+  state.window = {} as BrowserWindow;
+
+  overlay.createMainWindow();
+
+  assertCalledInOrder(recorder.names(), [
+    'createOverlayWindowCore',
+    'geometry.resetLastWindowGeometry',
+  ]);
 });

@@ -247,6 +247,11 @@ export function createOverlayAssembly(deps: OverlayAssemblyDeps) {
 
   function createMainWindow(): BrowserWindow {
     const window = createMainWindowHandler();
+    // A new overlay window starts at default bounds. Forget the bounds given to the previous one,
+    // or mpv's unchanged geometry would be skipped as "already applied" and the new window would
+    // stay at the default spot until mpv moves. This happens when mpv's window closes (taking the
+    // overlay it owns with it) and a later mpv opens at the same place.
+    geometry.resetLastOverlayWindowGeometry();
     if (process.platform === 'win32') {
       const overlayHwnd = interaction.getWindowsNativeWindowHandleNumber(window);
       if (!ensureWindowsOverlayTransparency(overlayHwnd)) {
