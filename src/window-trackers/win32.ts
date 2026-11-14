@@ -19,9 +19,12 @@ koffi.struct('MARGINS', {
   cyBottomHeight: 'int',
 });
 
-const WNDENUMPROC = koffi.proto('bool __stdcall WNDENUMPROC(intptr hwnd, intptr lParam)');
-
-const EnumWindows = user32.func('bool __stdcall EnumWindows(WNDENUMPROC *cb, intptr lParam)');
+// Top-level windows are walked with FindWindowExW instead of EnumWindows, because EnumWindows
+// needs a koffi callback. On recent Windows 11 builds, a GetProcAddress made by koffi inside such
+// a callback can take a stack trace that hits koffi's stack bounds, and the whole app crashes.
+const FindWindowExW = user32.func(
+  'intptr __stdcall FindWindowExW(intptr hWndParent, intptr hWndChildAfter, const char16_t *lpszClass, const char16_t *lpszWindow)',
+);
 const IsWindowVisible = user32.func('bool __stdcall IsWindowVisible(intptr hwnd)');
 const IsIconic = user32.func('bool __stdcall IsIconic(intptr hwnd)');
 const GetForegroundWindow = user32.func('intptr __stdcall GetForegroundWindow()');
@@ -70,6 +73,9 @@ const HWND_TOP = 0;
 const HWND_BOTTOM = 1;
 const HWND_TOPMOST = -1;
 const HWND_NOTOPMOST = -2;
+const MAX_TOP_LEVEL_WINDOWS = 10_000;
+const MAX_WINDOW_WALK_RESTARTS = 3;
+const ERROR_INVALID_WINDOW_HANDLE = 1400;
 
 function extendOverlayFrameIntoClientArea(overlayHwnd: number): void {
   const hr = DwmExtendFrameIntoClientArea(overlayHwnd, {
@@ -206,27 +212,27 @@ export function findMpvWindows(targetPid?: number | null): MpvPollResult {
   let hasFocused = false;
   pruneExpiredProcessNames(Date.now());
 
-  const cb = koffi.register((hwnd: number, _lParam: number) => {
-    if (!IsWindowVisible(hwnd)) return true;
+  const inspectWindow = (hwnd: number): void => {
+    if (!IsWindowVisible(hwnd)) return;
 
     const pid = new Uint32Array(1);
     GetWindowThreadProcessId(hwnd, pid);
     const pidValue = pid[0]!;
-    if (pidValue === 0) return true;
+    if (pidValue === 0) return;
 
     if (targetPid != null) {
-      if (pidValue !== targetPid) return true;
+      if (pidValue !== targetPid) return;
     } else if (getCachedProcessNameByPid(pidValue)?.toLowerCase() !== 'mpv') {
-      return true;
+      return;
     }
 
     if (IsIconic(hwnd)) {
       hasMinimized = true;
-      return true;
+      return;
     }
 
     const bounds = getWindowBounds(hwnd);
-    if (!bounds) return true;
+    if (!bounds) return;
 
     const isForeground = foregroundHwnd !== 0 && hwnd === foregroundHwnd;
     if (isForeground) hasFocused = true;
@@ -237,14 +243,29 @@ export function findMpvWindows(targetPid?: number | null): MpvPollResult {
       area: bounds.width * bounds.height,
       isForeground,
     });
+  };
 
-    return true;
-  }, koffi.pointer(WNDENUMPROC));
-
-  try {
-    EnumWindows(cb, 0);
-  } finally {
-    koffi.unregister(cb);
+  // Unlike EnumWindows, this walk is no snapshot. When the window it stands on is destroyed,
+  // the next step fails, so the walk starts over and skips the windows it already saw. The
+  // cap only guards against a window list that changes so much that the walk never ends; a
+  // desktop has far fewer top-level windows than this.
+  const seen = new Set<number>();
+  let hwnd = 0;
+  let restarts = 0;
+  for (let step = 0; step < MAX_TOP_LEVEL_WINDOWS; step++) {
+    resetLastError();
+    const next = FindWindowExW(0, hwnd, null, null);
+    if (!next) {
+      const walkBroke = hwnd !== 0 && GetLastError() === ERROR_INVALID_WINDOW_HANDLE;
+      if (!walkBroke || restarts >= MAX_WINDOW_WALK_RESTARTS) break;
+      restarts++;
+      hwnd = 0;
+      continue;
+    }
+    hwnd = next;
+    if (seen.has(hwnd)) continue;
+    seen.add(hwnd);
+    inspectWindow(hwnd);
   }
 
   return {
