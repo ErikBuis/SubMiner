@@ -323,8 +323,11 @@ export function watchForegroundWindow(onForeground: (hwnd: number) => void): () 
   return () => {
     if (stopped) return;
     stopped = true;
-    UnhookWinEvent(hook);
-    koffi.unregister(callback);
+    try {
+      UnhookWinEvent(hook);
+    } finally {
+      koffi.unregister(callback);
+    }
   };
 }
 

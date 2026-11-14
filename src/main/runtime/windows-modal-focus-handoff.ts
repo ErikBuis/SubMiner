@@ -27,8 +27,10 @@ export type WindowsModalFocusHandoffDeps<TWindow extends ModalWindowLike> = {
 };
 
 // The modal window is shown and focused right after it becomes active. If mpv still holds the
-// foreground once that has settled, the modal's own focus request was refused.
+// foreground once that has settled, the modal's own focus request was refused. Checked every
+// 100 ms for up to a second while the modal window or the mpv window isn't known yet.
 const OPEN_CHECK_DELAY_MS = 100;
+const OPEN_CHECK_ATTEMPTS = 10;
 
 /**
  * Windows: while an overlay modal is open, switching back to mpv (alt+tab, taskbar, or a click
@@ -47,18 +49,29 @@ export function createWindowsModalFocusHandoff<TWindow extends ModalWindowLike>(
   let pendingHandoff: TimerHandle | null = null;
   let watchFailureWarned = false;
 
-  function handOffIfMpvInFront(): void {
-    if (!active) return;
-    const mpvHwnd = deps.getMpvWindowHandle();
-    if (mpvHwnd === null || deps.getForegroundWindowHandle() !== mpvHwnd) return;
+  /** Returns false when the modal isn't ready yet, so the open check can try again. */
+  function handOffIfMpvInFront(): boolean {
+    if (!active) return true;
+    try {
+      const mpvHwnd = deps.getMpvWindowHandle();
+      if (mpvHwnd === null) return false;
+      if (deps.getForegroundWindowHandle() !== mpvHwnd) return true;
 
-    const modalWindow = deps.getModalWindow();
-    if (!modalWindow || modalWindow.isDestroyed() || !modalWindow.isVisible()) return;
-    if (modalWindow.isFocused()) return;
+      const modalWindow = deps.getModalWindow();
+      if (!modalWindow || modalWindow.isDestroyed() || !modalWindow.isVisible()) return false;
+      if (modalWindow.isFocused()) return true;
 
-    deps.activateNativeWindow(modalWindow);
-    modalWindow.focus();
-    modalWindow.webContents.focus();
+      if (!deps.activateNativeWindow(modalWindow)) {
+        deps.warn?.('Windows refused to give the open dialog the foreground back from mpv');
+      }
+      modalWindow.focus();
+      modalWindow.webContents.focus();
+    } catch (error) {
+      deps.warn?.(
+        `Dialog focus handoff failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    return true;
   }
 
   function onForeground(hwnd: number): void {
@@ -69,6 +82,15 @@ export function createWindowsModalFocusHandoff<TWindow extends ModalWindowLike>(
       pendingHandoff = null;
       handOffIfMpvInFront();
     }, 0);
+  }
+
+  // A modal window that is still being created, or an mpv window the tracker hasn't found yet,
+  // gets a few more tries. Once both exist, mpv coming to the front raises an event instead.
+  function scheduleOpenCheck(attemptsLeft: number): void {
+    openCheck = schedule(() => {
+      openCheck = null;
+      if (!handOffIfMpvInFront() && attemptsLeft > 1) scheduleOpenCheck(attemptsLeft - 1);
+    }, OPEN_CHECK_DELAY_MS);
   }
 
   function clearTimers(): void {
@@ -95,10 +117,7 @@ export function createWindowsModalFocusHandoff<TWindow extends ModalWindowLike>(
       watchFailureWarned = true;
       deps.warn?.('Could not watch the Windows foreground window; dialog focus handoff is off');
     }
-    openCheck = schedule(() => {
-      openCheck = null;
-      handOffIfMpvInFront();
-    }, OPEN_CHECK_DELAY_MS);
+    scheduleOpenCheck(OPEN_CHECK_ATTEMPTS);
   }
 
   return { setModalActive };

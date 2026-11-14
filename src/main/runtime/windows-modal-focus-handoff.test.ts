@@ -6,9 +6,16 @@ const MPV_HWND = 100;
 const OTHER_HWND = 200;
 
 function createHarness(
-  options: { platform?: NodeJS.Platform; modalFocused?: boolean; watchFails?: boolean } = {},
+  options: {
+    platform?: NodeJS.Platform;
+    modalFocused?: boolean;
+    watchFails?: boolean;
+    activateFails?: boolean;
+  } = {},
 ) {
   const calls: string[] = [];
+  let modalVisible = true;
+  let focusThrows = false;
   let foregroundHwnd: number | null = OTHER_HWND;
   let mpvHwnd: number | null = MPV_HWND;
   let foregroundListener: ((hwnd: number) => void) | null = null;
@@ -22,9 +29,12 @@ function createHarness(
     webContents: { focus: () => void };
   } | null = {
     isDestroyed: () => false,
-    isVisible: () => true,
+    isVisible: () => modalVisible,
     isFocused: () => options.modalFocused === true,
-    focus: () => calls.push('focus'),
+    focus: () => {
+      if (focusThrows) throw new Error('window destroyed');
+      calls.push('focus');
+    },
     webContents: { focus: () => calls.push('webContents-focus') },
   };
   const handoff = createWindowsModalFocusHandoff({
@@ -43,7 +53,7 @@ function createHarness(
     },
     activateNativeWindow: () => {
       calls.push('activate');
-      return true;
+      return options.activateFails !== true;
     },
     warn: (message) => calls.push(`warn: ${message}`),
     setTimeout: (callback: () => void, delayMs: number) => {
@@ -77,6 +87,12 @@ function createHarness(
     },
     clearModal: () => {
       modalWindow = null;
+    },
+    setModalVisible: (visible: boolean) => {
+      modalVisible = visible;
+    },
+    makeFocusThrow: () => {
+      focusThrows = true;
     },
   };
 }
@@ -147,6 +163,66 @@ test('hands off once shortly after opening when mpv is already in front', () => 
   );
   h.runTimers();
   assert.deepEqual(h.calls, ['watch-start', ...handoffCalls]);
+});
+
+test('keeps checking after opening while the modal window is not shown yet', () => {
+  const h = createHarness();
+  h.switchForegroundTo(MPV_HWND);
+  h.setModalVisible(false);
+  h.handoff.setModalActive(true);
+  h.runTimers();
+  h.runTimers();
+  assert.deepEqual(h.calls, ['watch-start']);
+  h.setModalVisible(true);
+  h.runTimers();
+  assert.deepEqual(h.calls, ['watch-start', ...handoffCalls]);
+  assert.equal(h.timers.size, 0);
+});
+
+test('keeps checking after opening while the tracker has not found mpv yet', () => {
+  const h = createHarness();
+  h.switchForegroundTo(MPV_HWND);
+  h.setMpvHwnd(null);
+  h.handoff.setModalActive(true);
+  h.runTimers();
+  assert.deepEqual(h.calls, ['watch-start']);
+  h.setMpvHwnd(MPV_HWND);
+  h.runTimers();
+  assert.deepEqual(h.calls, ['watch-start', ...handoffCalls]);
+});
+
+test('gives up the open check after a second', () => {
+  const h = createHarness();
+  h.switchForegroundTo(MPV_HWND);
+  h.setModalVisible(false);
+  h.handoff.setModalActive(true);
+  for (let i = 0; i < 20; i += 1) h.runTimers();
+  assert.equal(h.timers.size, 0);
+  assert.deepEqual(h.calls, ['watch-start']);
+});
+
+test('stops the open check once mpv is known not to be in front', () => {
+  const h = createHarness();
+  h.handoff.setModalActive(true);
+  h.runTimers();
+  assert.equal(h.timers.size, 0);
+});
+
+test('warns when Windows refuses the foreground change or a focus call throws', () => {
+  const refused = createHarness({ activateFails: true });
+  refused.handoff.setModalActive(true);
+  refused.switchForegroundTo(MPV_HWND);
+  refused.runTimers();
+  assert.ok(refused.calls.some((call) => call.startsWith('warn: Windows refused')));
+  // Electron's own focus still runs.
+  assert.ok(refused.calls.includes('focus'));
+
+  const throwing = createHarness();
+  throwing.handoff.setModalActive(true);
+  throwing.makeFocusThrow();
+  throwing.switchForegroundTo(MPV_HWND);
+  assert.doesNotThrow(() => throwing.runTimers());
+  assert.ok(throwing.calls.some((call) => call.startsWith('warn: Dialog focus handoff failed')));
 });
 
 test('leaves focus alone when the modal is already focused or gone', () => {
