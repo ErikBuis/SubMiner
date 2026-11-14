@@ -581,6 +581,13 @@ runScenarios([
     },
   },
   {
+    name: 'Windows hides the visible overlay once the tracker drops a closed mpv window',
+    platform: 'windows',
+    tracker: lost({ targetFocused: false, targetMinimized: false }),
+    visible: true,
+    expect: { visible: false, hid: true, zOrderSyncs: 0 },
+  },
+  {
     name: 'Windows hides the visible overlay when the tracked window is minimized',
     platform: 'windows',
     tracker: lost({ targetMinimized: true }),

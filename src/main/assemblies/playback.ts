@@ -925,7 +925,8 @@ export function createPlaybackAssembly(deps: PlaybackAssemblyDeps) {
         shouldAutoLoadSecondarySubTrackForJellyfinPlayback(jellyfin.getActivePlayback(), path),
       shouldQuitOnMpvShutdown: () =>
         shouldQuitOnMpvShutdownForTrayState({
-          managedPlayback: appState.initialArgs?.managedPlayback === true,
+          managedPlayback:
+            appState.initialArgs?.managedPlayback === true || appState.managedPlaybackAttached,
           backgroundMode: appState.backgroundMode,
           hasTray: deps.hasTray(),
         }),

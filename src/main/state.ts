@@ -200,6 +200,12 @@ export interface AppState {
   autoStartOverlay: boolean;
   texthookerOnlyMode: boolean;
   backgroundMode: boolean;
+  /**
+   * True while the mpv session was handed to this already-running app by a managed launch
+   * (`--start --managed-playback` forwarded from a second instance), so that mpv owns the app
+   * just like when the launch started the app itself.
+   */
+  managedPlaybackAttached: boolean;
   jlptLevelLookup: (term: string) => JlptLevel | null;
   frequencyRankLookup: FrequencyDictionaryLookup;
   anilistSetupPageOpened: boolean;
@@ -288,6 +294,7 @@ export function createAppState(values: AppStateInitialValues): AppState {
     autoStartOverlay: values.autoStartOverlay ?? false,
     texthookerOnlyMode: values.texthookerOnlyMode ?? false,
     backgroundMode: values.backgroundMode ?? false,
+    managedPlaybackAttached: false,
     jlptLevelLookup: () => null,
     frequencyRankLookup: () => null,
     anilistSetupPageOpened: false,

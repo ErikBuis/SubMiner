@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  resolveManagedPlaybackAttachment,
   shouldEnsureTrayOnStartupForInitialArgs,
   shouldQuitOnMpvShutdownForTrayState,
   shouldQuitOnWindowAllClosedForTrayState,
@@ -73,6 +74,54 @@ test('mpv shutdown keeps unmanaged background tray app alive', () => {
       backgroundMode: true,
       hasTray: true,
     }),
+    false,
+  );
+});
+
+test('a managed launch attached to a running app makes mpv shutdown quit it', () => {
+  const attached = resolveManagedPlaybackAttachment(
+    false,
+    { start: true, managedPlayback: true },
+    'second-instance',
+  );
+  assert.equal(attached, true);
+  assert.equal(
+    shouldQuitOnMpvShutdownForTrayState({
+      managedPlayback: attached,
+      backgroundMode: true,
+      hasTray: true,
+    }),
+    true,
+  );
+});
+
+test('an unmanaged --start from another instance releases a managed attachment', () => {
+  assert.equal(
+    resolveManagedPlaybackAttachment(
+      true,
+      { start: true, managedPlayback: false },
+      'second-instance',
+    ),
+    false,
+  );
+});
+
+test('commands without --start keep the current managed attachment', () => {
+  for (const current of [true, false]) {
+    assert.equal(
+      resolveManagedPlaybackAttachment(
+        current,
+        { start: false, managedPlayback: false },
+        'second-instance',
+      ),
+      current,
+    );
+  }
+});
+
+test('initial args never count as an attachment', () => {
+  assert.equal(
+    resolveManagedPlaybackAttachment(false, { start: true, managedPlayback: true }, 'initial'),
     false,
   );
 });
