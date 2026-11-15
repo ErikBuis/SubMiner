@@ -1,7 +1,10 @@
 import type { ModalStateReader, RendererContext } from '../context';
 import { resolveControllerConfigForGamepad } from '../controller-profile-config.js';
 import { createControllerBindingCapture } from '../handlers/controller-binding-capture.js';
-import { createControllerComboCapture } from '../handlers/controller-combo-capture.js';
+import {
+  createControllerComboCapture,
+  type ControllerCapturedCombo,
+} from '../handlers/controller-combo-capture.js';
 import {
   CONTROLLER_FACE_BUTTON_STYLES,
   formatControllerReviewInput,
@@ -18,10 +21,13 @@ import {
 } from '../../shared/controller-screens';
 import {
   createControllerConfigForm,
+  formatFriendlyInputLabel,
   getControllerBindingDefinition,
   getDefaultControllerBinding,
   getDefaultDpadFallback,
 } from './controller-config-form.js';
+
+import type { ControllerDpadFallback, ControllerRawInput } from '../../types';
 
 const PRESS_TO_EDIT_STATUS = 'Press any button on your controller to edit its bindings.';
 
@@ -75,12 +81,15 @@ export function createControllerSelectModal(
   let learningActionId: ControllerBindingKey | null = null;
   let dpadLearningActionId: ControllerBindingKey | null = null;
   let bindingCapture: ReturnType<typeof createControllerBindingCapture> | null = null;
-  let screenLearning: {
-    screen: ControllerScreenDefinition;
-    actionId: string;
+  type ComboLearning = {
     capture: ReturnType<typeof createControllerComboCapture>;
     holdLabel: string | null;
-  } | null = null;
+  };
+  /** Set with `learningActionId` while learning a discrete row. */
+  let discreteLearning: ComboLearning | null = null;
+  let screenLearning:
+    | (ComboLearning & { screen: ControllerScreenDefinition; actionId: string })
+    | null = null;
 
   /** The controller the overlay reports in use, fetched when the window opens. */
   let overlayActiveControllerId: string | null = null;
@@ -161,6 +170,36 @@ export function createControllerSelectModal(
     screenLearning = null;
   }
 
+  function startComboLearning(): ComboLearning {
+    const config = ctx.state.controllerConfig;
+    const capture = createControllerComboCapture({
+      triggerDeadzone: config?.triggerDeadzone ?? 0.5,
+      stickDeadzone: config?.stickDeadzone ?? 0.2,
+    });
+    capture.arm({ axes: ctx.state.controllerRawAxes, buttons: ctx.state.controllerRawButtons });
+    return { capture, holdLabel: null };
+  }
+
+  /** Advances a combo capture, showing the hold button so far; returns the finished combo. */
+  function pollComboLearning(
+    learning: ComboLearning,
+    formatHold: (input: ControllerRawInput) => string,
+  ): ControllerCapturedCombo | null {
+    const state = learning.capture.poll({
+      axes: ctx.state.controllerRawAxes,
+      buttons: ctx.state.controllerRawButtons,
+    });
+    if (state.status === 'done') return state.binding;
+    if (state.status === 'holding') {
+      const holdLabel = formatHold(state.hold);
+      if (holdLabel !== learning.holdLabel) {
+        learning.holdLabel = holdLabel;
+        controllerConfigForm.render();
+      }
+    }
+    return null;
+  }
+
   function actionLabel(screen: ControllerScreenDefinition, actionId: string): string {
     return getControllerScreenAction(screen, actionId).label;
   }
@@ -184,13 +223,13 @@ export function createControllerSelectModal(
         holdSecondarySub: { kind: 'none' },
         previousEntry: { kind: 'none' },
         nextEntry: { kind: 'none' },
+        toggleCharacterNavigation: { kind: 'none' },
         previousSubtitle: { kind: 'none' },
         nextSubtitle: { kind: 'none' },
         replaySubtitle: { kind: 'none' },
         playNextSubtitle: { kind: 'none' },
         leftStickHorizontal: { kind: 'axis', axisIndex: 0, dpadFallback: 'horizontal' },
         leftStickVertical: { kind: 'axis', axisIndex: 1, dpadFallback: 'vertical' },
-        rightStickHorizontal: { kind: 'axis', axisIndex: 3, dpadFallback: 'none' },
         rightStickVertical: { kind: 'axis', axisIndex: 4, dpadFallback: 'none' },
       },
     getScreenGroups: () => {
@@ -202,6 +241,7 @@ export function createControllerSelectModal(
       }));
     },
     getScreenInputContext,
+    getLearningHoldLabel: () => discreteLearning?.holdLabel ?? null,
     getScreenLearning: () =>
       screenLearning
         ? {
@@ -215,14 +255,9 @@ export function createControllerSelectModal(
       learningActionId = null;
       dpadLearningActionId = null;
       bindingCapture = null;
-      const config = ctx.state.controllerConfig;
-      const capture = createControllerComboCapture({
-        triggerDeadzone: config?.triggerDeadzone ?? 0.5,
-        stickDeadzone: config?.stickDeadzone ?? 0.2,
-      });
-      capture.arm({ axes: ctx.state.controllerRawAxes, buttons: ctx.state.controllerRawButtons });
+      discreteLearning = null;
       const screen = getControllerScreen(screenId);
-      screenLearning = { screen, actionId, capture, holdLabel: null };
+      screenLearning = { ...startComboLearning(), screen, actionId };
       controllerConfigForm.render();
       setStatus(
         `Press a button for ${actionLabel(screen, actionId)}, or hold one and press another for a combo.`,
@@ -263,6 +298,17 @@ export function createControllerSelectModal(
       if (!definition) return;
       dpadLearningActionId = null;
       cancelScreenLearning();
+      learningActionId = actionId;
+      if (bindingType === 'discrete') {
+        bindingCapture = null;
+        discreteLearning = startComboLearning();
+        controllerConfigForm.render();
+        setStatus(
+          `Press a button for ${definition.label}, or hold one and press another for a combo.`,
+        );
+        return;
+      }
+      discreteLearning = null;
       const config = ctx.state.controllerConfig;
       bindingCapture = createControllerBindingCapture({
         triggerDeadzone: config?.triggerDeadzone ?? 0.5,
@@ -274,22 +320,12 @@ export function createControllerSelectModal(
           ? currentBinding.dpadFallback
           : 'none';
       bindingCapture.arm(
-        bindingType === 'axis'
-          ? {
-              actionId,
-              bindingType: 'axis',
-              dpadFallback: currentDpadFallback,
-            }
-          : {
-              actionId,
-              bindingType: 'discrete',
-            },
+        { actionId, bindingType: 'axis', dpadFallback: currentDpadFallback },
         {
           axes: ctx.state.controllerRawAxes,
           buttons: ctx.state.controllerRawButtons,
         },
       );
-      learningActionId = actionId;
       controllerConfigForm.render();
       setStatus(`Waiting for input for ${definition.label}.`);
     },
@@ -306,6 +342,7 @@ export function createControllerSelectModal(
       const definition = getControllerBindingDefinition(actionId);
       if (!definition) return;
       learningActionId = null;
+      discreteLearning = null;
       cancelScreenLearning();
       const config = ctx.state.controllerConfig;
       bindingCapture = createControllerBindingCapture({
@@ -563,6 +600,7 @@ export function createControllerSelectModal(
       learningActionId = null;
       dpadLearningActionId = null;
       bindingCapture = null;
+      discreteLearning = null;
       controllerConfigForm.render();
       setStatus(`${definition?.label ?? actionId} updated.`);
     } catch (error) {
@@ -591,7 +629,7 @@ export function createControllerSelectModal(
 
   async function saveDpadFallback(
     actionId: ControllerBindingKey,
-    dpadFallback: import('../../types').ControllerDpadFallback,
+    dpadFallback: ControllerDpadFallback,
   ): Promise<void> {
     const definition = getControllerBindingDefinition(actionId);
     const currentBinding = getSelectedControllerConfig()?.bindings[actionId];
@@ -664,25 +702,31 @@ export function createControllerSelectModal(
       }
     }
 
+    if (discreteLearning && learningActionId) {
+      const actionId = learningActionId;
+      const combo = pollComboLearning(discreteLearning, (input) =>
+        formatFriendlyInputLabel(
+          input,
+          getSelectedController()?.mapping,
+          getSelectedControllerConfig()?.faceButtonLabels,
+        ),
+      );
+      if (combo) {
+        discreteLearning = null;
+        void saveBinding(actionId, combo.hold ? { ...combo.press, hold: combo.hold } : combo.press);
+      }
+    }
+
     if (screenLearning) {
       const learning = screenLearning;
-      const state = learning.capture.poll({
-        axes: ctx.state.controllerRawAxes,
-        buttons: ctx.state.controllerRawButtons,
-      });
-      if (state.status === 'holding') {
-        const holdLabel = formatControllerReviewInput(state.hold, getScreenInputContext(), {
-          dpadPrefix: true,
-        });
-        if (holdLabel !== learning.holdLabel) {
-          learning.holdLabel = holdLabel;
-          controllerConfigForm.render();
-        }
-      } else if (state.status === 'done') {
+      const combo = pollComboLearning(learning, (input) =>
+        formatControllerReviewInput(input, getScreenInputContext(), { dpadPrefix: true }),
+      );
+      if (combo) {
         screenLearning = null;
         void saveScreenBindings(
           learning.screen,
-          { [learning.actionId]: state.binding },
+          { [learning.actionId]: combo },
           `${actionLabel(learning.screen, learning.actionId)} updated.`,
         );
       }
@@ -740,6 +784,7 @@ export function createControllerSelectModal(
     learningActionId = null;
     dpadLearningActionId = null;
     bindingCapture = null;
+    discreteLearning = null;
     cancelScreenLearning();
     ctx.state.controllerSelectModalOpen = false;
     ctx.state.controllerSelectGamepadId = null;
@@ -759,6 +804,7 @@ export function createControllerSelectModal(
         learningActionId = null;
         dpadLearningActionId = null;
         bindingCapture = null;
+        discreteLearning = null;
         cancelScreenLearning();
         controllerConfigForm.render();
         setStatus('Controller learn mode cancelled.');
