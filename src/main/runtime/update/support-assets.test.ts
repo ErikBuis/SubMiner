@@ -522,61 +522,66 @@ test('updateSupportAssetsFromRelease updates changed theme and outdated plugin w
   }
 });
 
-test('updateSupportAssetsFromRelease returns protected commands for managed roots that are not writable', async () => {
-  const xdgDataHome = fs.mkdtempSync(path.join(os.tmpdir(), 'subminer-xdg-data-'));
-  const dataDir = path.posix.join(xdgDataHome, 'SubMiner');
-  fs.mkdirSync(path.join(dataDir, 'themes'), { recursive: true });
-  fs.writeFileSync(path.join(dataDir, 'themes/subminer.rasi'), 'managed theme\n');
-  const originalMode = fs.statSync(dataDir).mode & 0o777;
-  fs.chmodSync(dataDir, 0o555);
-  const { archive, tempDir } = makeSupportAssetsArchive();
+// Root writes through `chmod 555`, so the managed root cannot be made unwritable there.
+test(
+  'updateSupportAssetsFromRelease returns protected commands for managed roots that are not writable',
+  { skip: process.getuid?.() === 0 },
+  async () => {
+    const xdgDataHome = fs.mkdtempSync(path.join(os.tmpdir(), 'subminer-xdg-data-'));
+    const dataDir = path.posix.join(xdgDataHome, 'SubMiner');
+    fs.mkdirSync(path.join(dataDir, 'themes'), { recursive: true });
+    fs.writeFileSync(path.join(dataDir, 'themes/subminer.rasi'), 'managed theme\n');
+    const originalMode = fs.statSync(dataDir).mode & 0o777;
+    fs.chmodSync(dataDir, 0o555);
+    const { archive, tempDir } = makeSupportAssetsArchive();
 
-  try {
-    const results = await runLinuxSupportAssetUpdate({
-      archive,
-      xdgDataHome,
-    });
+    try {
+      const results = await runLinuxSupportAssetUpdate({
+        archive,
+        xdgDataHome,
+      });
 
-    assert.deepEqual(
-      results.map((result) => ({
-        status: result.status,
-        component: result.component,
-        path: result.path,
-        command: typeof result.command === 'string',
-      })),
-      [
-        {
-          status: 'protected',
-          component: 'theme',
-          path: dataDir,
-          command: true,
-        },
-        {
-          status: 'protected',
-          component: 'thumbnailer',
-          path: dataDir,
-          command: true,
-        },
-        {
-          status: 'protected',
-          component: 'plugin',
-          path: dataDir,
-          command: true,
-        },
-      ],
-    );
-    assert.match(results[0]?.command ?? '', /themes\/subminer\.rasi/);
-    assert.match(
-      results[0]?.command ?? '',
-      /thumbnailers\/subminer-ffmpegthumbnailer\.thumbnailer/,
-    );
-    assert.match(results[0]?.command ?? '', /plugin\/subminer/);
-  } finally {
-    fs.chmodSync(dataDir, originalMode);
-    fs.rmSync(xdgDataHome, { recursive: true, force: true });
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  }
-});
+      assert.deepEqual(
+        results.map((result) => ({
+          status: result.status,
+          component: result.component,
+          path: result.path,
+          command: typeof result.command === 'string',
+        })),
+        [
+          {
+            status: 'protected',
+            component: 'theme',
+            path: dataDir,
+            command: true,
+          },
+          {
+            status: 'protected',
+            component: 'thumbnailer',
+            path: dataDir,
+            command: true,
+          },
+          {
+            status: 'protected',
+            component: 'plugin',
+            path: dataDir,
+            command: true,
+          },
+        ],
+      );
+      assert.match(results[0]?.command ?? '', /themes\/subminer\.rasi/);
+      assert.match(
+        results[0]?.command ?? '',
+        /thumbnailers\/subminer-ffmpegthumbnailer\.thumbnailer/,
+      );
+      assert.match(results[0]?.command ?? '', /plugin\/subminer/);
+    } finally {
+      fs.chmodSync(dataDir, originalMode);
+      fs.rmSync(xdgDataHome, { recursive: true, force: true });
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  },
+);
 
 test('updateSupportAssetsFromRelease returns missing-asset when release plugin version metadata is absent', async () => {
   const xdgDataHome = fs.mkdtempSync(path.join(os.tmpdir(), 'subminer-xdg-data-'));
