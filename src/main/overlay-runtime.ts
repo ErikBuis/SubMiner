@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron';
-import type { OverlayHostedModal } from '../shared/ipc/contracts';
+import { IPC_CHANNELS, type OverlayHostedModal } from '../shared/ipc/contracts';
 import type { WindowGeometry } from '../types';
 import type { HyprlandPlacementStatus } from '../core/services/hyprland-window-placement';
 import { applyOverlayClickThrough } from '../core/services/overlay-click-through';
@@ -50,6 +50,7 @@ export interface OverlayModalRuntime {
     runtimeOptions?: {
       restoreOnModalClose?: OverlayHostedModal;
       preferModalWindow?: boolean;
+      signal?: AbortSignal;
     },
   ) => boolean;
   openRuntimeOptionsPalette: () => void;
@@ -82,6 +83,7 @@ export function createOverlayModalRuntimeService(
   let modalActive = false;
   let mainWindowMousePassthroughForcedByModal = false;
   let mainWindowHiddenByModal = false;
+  let mainWindowControllerSuspended = false;
   let modalWindowPrimedForImmediateShow = false;
   let pendingModalWindowReveal: BrowserWindow | null = null;
   let pendingModalWindowRevealTimeout: RevealFallbackHandle | null = null;
@@ -265,7 +267,9 @@ export function createOverlayModalRuntimeService(
   const sendOrQueueForWindow = (
     window: BrowserWindow,
     sendNow: (window: BrowserWindow) => void,
+    signal?: AbortSignal,
   ): void => {
+    if (signal?.aborted) return;
     if (isWindowReadyForIpc(window)) {
       sendNow(window);
       return;
@@ -273,7 +277,7 @@ export function createOverlayModalRuntimeService(
 
     let delivered = false;
     const deliver = (isReady: () => boolean): void => {
-      if (delivered || window.isDestroyed() || !isReady()) {
+      if (delivered || signal?.aborted || window.isDestroyed() || !isReady()) {
         return;
       }
       delivered = true;
@@ -408,6 +412,16 @@ export function createOverlayModalRuntimeService(
     mainWindowHiddenByModal = false;
   };
 
+  // The hidden main overlay keeps polling the gamepad (background throttling is off), so
+  // tell it to stand down while the modal window owns the controller.
+  const setMainWindowControllerSuspended = (suspended: boolean): void => {
+    if (mainWindowControllerSuspended === suspended) return;
+    mainWindowControllerSuspended = suspended;
+    const mainWindow = deps.getMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send(IPC_CHANNELS.event.controllerSuspendedChanged, suspended);
+  };
+
   const scheduleModalWindowReveal = (window: BrowserWindow): void => {
     pendingModalWindowReveal = window;
     if (pendingModalWindowRevealTimeout !== null) {
@@ -433,8 +447,10 @@ export function createOverlayModalRuntimeService(
     runtimeOptions?: {
       restoreOnModalClose?: OverlayHostedModal;
       preferModalWindow?: boolean;
+      signal?: AbortSignal;
     },
   ): boolean => {
+    if (runtimeOptions?.signal?.aborted) return false;
     const restoreOnModalClose = runtimeOptions?.restoreOnModalClose;
     const preferModalWindow = runtimeOptions?.preferModalWindow === true;
 
@@ -451,13 +467,17 @@ export function createOverlayModalRuntimeService(
       const mainWindow = getTargetOverlayWindow();
       if (!preferModalWindow && mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
         restoreVisibleOverlayOnModalClose.add(restoreOnModalClose);
-        sendOrQueueForWindow(mainWindow, (window) => {
-          if (payload === undefined) {
-            window.webContents.send(channel);
-          } else {
-            window.webContents.send(channel, payload);
-          }
-        });
+        sendOrQueueForWindow(
+          mainWindow,
+          (window) => {
+            if (payload === undefined) {
+              window.webContents.send(channel);
+            } else {
+              window.webContents.send(channel, payload);
+            }
+          },
+          runtimeOptions?.signal,
+        );
         return true;
       }
 
@@ -479,16 +499,20 @@ export function createOverlayModalRuntimeService(
         showModalWindow(modalWindow);
       }
 
-      sendOrQueueForWindow(modalWindow, (window) => {
-        if (window.isVisible()) {
-          ensureModalWindowInteractive(window);
-        }
-        if (payload === undefined) {
-          window.webContents.send(channel);
-        } else {
-          window.webContents.send(channel, payload);
-        }
-      });
+      sendOrQueueForWindow(
+        modalWindow,
+        (window) => {
+          if (window.isVisible()) {
+            ensureModalWindowInteractive(window);
+          }
+          if (payload === undefined) {
+            window.webContents.send(channel);
+          } else {
+            window.webContents.send(channel, payload);
+          }
+        },
+        runtimeOptions?.signal,
+      );
       return true;
     }
 
@@ -500,7 +524,7 @@ export function createOverlayModalRuntimeService(
       showOverlayWindowForModal(target);
     }
 
-    sendOrQueueForWindow(target, sendNow);
+    sendOrQueueForWindow(target, sendNow, runtimeOptions?.signal);
     return true;
   };
 
@@ -547,6 +571,7 @@ export function createOverlayModalRuntimeService(
       }
       mainWindowMousePassthroughForcedByModal = false;
       setMainWindowVisibilityForModal(false);
+      setMainWindowControllerSuspended(false);
       try {
         options.onFinalModalClosed?.();
       } catch {
@@ -578,6 +603,7 @@ export function createOverlayModalRuntimeService(
     const handOffMainWindowToModal = (): void => {
       setMainWindowMousePassthroughForModal(true);
       setMainWindowVisibilityForModal(true);
+      setMainWindowControllerSuspended(true);
     };
 
     if (targetIsModalWindow && deferModalRevealUntilOpened) {

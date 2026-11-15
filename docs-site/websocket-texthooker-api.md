@@ -206,7 +206,7 @@ The same pattern works for n8n or Zapier workflows, Discord notifiers, or append
 
 ## mpv script messages
 
-SubMiner has no in-app plugin SDK. Besides the streams above, you can drive it from other mpv scripts and from the [launcher CLI](/launcher-script).
+SubMiner also supports [JavaScript app plugins](/plugins) for playback events, mining events, actions, and custom UI. Besides the streams above, you can drive it from other mpv scripts and from the [launcher CLI](/launcher-script).
 
 The mpv plugin accepts these script messages:
 
@@ -227,7 +227,7 @@ The mpv plugin accepts these script messages:
 script-message subminer-start backend=hyprland socket=/custom/path texthooker=no log-level=debug
 ```
 
-The plugin also registers `subminer-autoplay-ready`, `subminer-autoplay-hold`, `subminer-visible-overlay-shown`, `subminer-visible-overlay-hidden`, `subminer-managed-subtitles-loading`, `subminer-overlay-loading-ready`, and `subminer-reload-session-bindings`. The SubMiner app sends these to keep the plugin in sync, so do not send them from your own scripts.
+The plugin also registers `subminer-autoplay-ready`, `subminer-autoplay-hold`, `subminer-visible-overlay-shown`, `subminer-visible-overlay-hidden`, `subminer-managed-subtitles-loading`, `subminer-overlay-loading-ready`, `subminer-overlay-loading-dismissed`, and `subminer-reload-session-bindings`. The SubMiner app sends these to keep the plugin in sync, so do not send them from your own scripts.
 
 While the app is connected to mpv, it also handles two AniSkip messages over the mpv IPC socket: `subminer-skip-intro` skips the intro, and `subminer-aniskip-refresh` reloads intro data, for example after your script changes title or episode metadata.
 

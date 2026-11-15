@@ -28,7 +28,7 @@ export const INTEGRATIONS_DEFAULT_CONFIG: Pick<
     deck: '',
     fields: {
       word: 'Expression',
-      audio: 'ExpressionAudio',
+      audio: 'SentenceAudio',
       wordAudio: 'ExpressionAudio',
       image: 'Picture',
       sentence: 'Sentence',
@@ -109,6 +109,7 @@ export const INTEGRATIONS_DEFAULT_CONFIG: Pick<
     apiKeyCommand: '',
     languagePreference: 'ja',
     maxEntryResults: 10,
+    autoOpenWhenPrimarySubtitleMissing: false,
   },
   tsukihime: {
     apiBaseUrl: 'https://api.tsukihime.org/v1',

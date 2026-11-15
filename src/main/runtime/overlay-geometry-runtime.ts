@@ -1,4 +1,4 @@
-import { type BrowserWindow, screen } from 'electron';
+import type { BrowserWindow, Screen } from 'electron';
 import type { WindowGeometry } from '../../types';
 import { hasHyprlandWindowPlacementBoundsMismatch } from '../../core/services/hyprland-window-placement';
 import { normalizeOverlayWindowBoundsForPlatform } from '../../core/services/overlay-window-bounds';
@@ -7,7 +7,6 @@ import {
   ensureOverlayWindowLevel as ensureOverlayWindowLevelCore,
   syncOverlayWindowLayer,
 } from '../../core/services/overlay-window';
-import { promoteStatsOverlayAbovePlayback } from '../../core/services/stats-window.js';
 import { restoreLinuxOverlayWindowShape } from './linux-overlay-window-shape';
 import { shouldRunLinuxOverlayZOrderKeepAlive } from './linux-overlay-zorder-keepalive';
 import {
@@ -20,16 +19,14 @@ import {
   createUpdateVisibleOverlayBoundsHandler,
   hasLiveOverlayWindowBoundsMismatch,
 } from './overlay-window-layout';
-import {
-  createBuildEnforceOverlayLayerOrderMainDepsHandler,
-  createBuildEnsureOverlayWindowLevelMainDepsHandler,
-  createBuildUpdateVisibleOverlayBoundsMainDepsHandler,
-} from './overlay-window-layout-main-deps';
 import { shouldSuppressVisibleOverlayRaiseForSeparateWindow } from './settings-window-z-order';
 
 const LINUX_VISIBLE_OVERLAY_FULLSCREEN_GEOMETRY_GRACE_MS = 1_200;
 
 export interface OverlayGeometryRuntimeDeps {
+  /** Injected so this module loads without Electron (and under `bun test`). */
+  screen: Pick<Screen, 'getCursorScreenPoint' | 'getDisplayNearestPoint' | 'getDisplayMatching'>;
+  promoteStatsOverlayAbovePlayback: () => void;
   overlayManager: {
     getMainWindow: () => BrowserWindow | null;
     getModalWindow: () => BrowserWindow | null;
@@ -65,8 +62,8 @@ export function createOverlayGeometryRuntime(deps: OverlayGeometryRuntimeDeps) {
   let lastOverlayWindowGeometry: WindowGeometry | null = null;
 
   function getOverlayGeometryFallback(): WindowGeometry {
-    const cursorPoint = screen.getCursorScreenPoint();
-    const display = screen.getDisplayNearestPoint(cursorPoint);
+    const cursorPoint = deps.screen.getCursorScreenPoint();
+    const display = deps.screen.getDisplayNearestPoint(cursorPoint);
     const bounds = display.workArea;
     return {
       x: bounds.x,
@@ -111,7 +108,7 @@ export function createOverlayGeometryRuntime(deps: OverlayGeometryRuntimeDeps) {
       return false;
     }
 
-    const displayBounds = screen.getDisplayMatching(geometry).bounds;
+    const displayBounds = deps.screen.getDisplayMatching(geometry).bounds;
     return shouldExitFullscreenOverrideForTrackedGeometry({
       currentMode: deps.getLinuxVisibleOverlayWindowMode(),
       trackedFullscreen: deps.getLinuxTrackedMpvFullscreen(),
@@ -142,73 +139,63 @@ export function createOverlayGeometryRuntime(deps: OverlayGeometryRuntimeDeps) {
       }
       return hasHyprlandWindowPlacementBoundsMismatch({
         title: window.getTitle(),
-        bounds: normalizeOverlayWindowBoundsForPlatform(geometry, process.platform, screen, window),
+        // Linux bounds come from the window's content insets; the DIP converter is Windows-only.
+        bounds: normalizeOverlayWindowBoundsForPlatform(geometry, process.platform, null, window),
       });
     });
   }
 
-  const buildUpdateVisibleOverlayBoundsMainDepsHandler =
-    createBuildUpdateVisibleOverlayBoundsMainDepsHandler({
-      getCurrentOverlayWindowBounds: () => lastOverlayWindowGeometry,
-      shouldRefreshUnchangedGeometry: (geometry) =>
-        shouldExitLinuxFullscreenOverrideForGeometry(geometry) ||
-        (process.platform === 'linux' &&
-          (hasLiveOverlayWindowBoundsMismatch(
-            [overlayManager.getMainWindow(), overlayManager.getModalWindow()],
-            geometry,
-          ) ||
-            hasHyprlandOverlayWindowPlacementMismatch(geometry))),
-      setOverlayWindowBounds: (geometry) => applyOverlayRegions(geometry),
-      afterSetOverlayWindowBounds: () => {
-        if (!overlayManager.getVisibleOverlayVisible()) {
-          return;
-        }
-        if (process.platform === 'win32') {
-          deps.scheduleWindowsVisibleOverlayZOrderSyncBurst();
-          return;
-        }
-        const mainWindow = overlayManager.getMainWindow();
-        if (!mainWindow || mainWindow.isDestroyed()) {
-          return;
-        }
-        if (process.platform === 'linux') {
-          restoreLinuxOverlayWindowShape(mainWindow);
-        }
-        ensureOverlayWindowLevel(mainWindow);
-      },
-    });
-  const updateVisibleOverlayBoundsMainDeps = buildUpdateVisibleOverlayBoundsMainDepsHandler();
-  const updateVisibleOverlayBounds = createUpdateVisibleOverlayBoundsHandler(
-    updateVisibleOverlayBoundsMainDeps,
-  );
+  const updateVisibleOverlayBounds = createUpdateVisibleOverlayBoundsHandler({
+    getCurrentOverlayWindowBounds: () => lastOverlayWindowGeometry,
+    shouldRefreshUnchangedGeometry: (geometry) =>
+      shouldExitLinuxFullscreenOverrideForGeometry(geometry) ||
+      (process.platform === 'linux' &&
+        (hasLiveOverlayWindowBoundsMismatch(
+          [overlayManager.getMainWindow(), overlayManager.getModalWindow()],
+          geometry,
+        ) ||
+          hasHyprlandOverlayWindowPlacementMismatch(geometry))),
+    setOverlayWindowBounds: (geometry) => applyOverlayRegions(geometry),
+    afterSetOverlayWindowBounds: () => {
+      if (!overlayManager.getVisibleOverlayVisible()) {
+        return;
+      }
+      if (process.platform === 'win32') {
+        deps.scheduleWindowsVisibleOverlayZOrderSyncBurst();
+        return;
+      }
+      const mainWindow = overlayManager.getMainWindow();
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+      }
+      if (process.platform === 'linux') {
+        restoreLinuxOverlayWindowShape(mainWindow);
+      }
+      ensureOverlayWindowLevel(mainWindow);
+    },
+  });
 
-  const buildEnsureOverlayWindowLevelMainDepsHandler =
-    createBuildEnsureOverlayWindowLevelMainDepsHandler({
-      shouldSuppressOverlayWindowLevel: (window) => {
-        const mainWindow = overlayManager.getMainWindow();
-        return (
-          (deps.getStatsOverlayVisible() && window === mainWindow) ||
-          shouldSuppressVisibleOverlayRaiseForSeparateWindow({
-            window,
-            mainWindow,
-            separateWindows: deps.getOverlayForegroundSeparateWindows(),
-          })
-        );
-      },
-      ensureOverlayWindowLevelCore: (window) =>
-        ensureOverlayWindowLevelCore(window as BrowserWindow),
-      afterEnsureOverlayWindowLevel: () => {
-        const mainWindow = overlayManager.getMainWindow();
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          moveVisibleOverlayAboveTrackedPlaybackWindow(mainWindow);
-        }
-        promoteStatsOverlayAbovePlayback();
-      },
-    });
-  const ensureOverlayWindowLevelMainDeps = buildEnsureOverlayWindowLevelMainDepsHandler();
-  const ensureOverlayWindowLevel = createEnsureOverlayWindowLevelHandler(
-    ensureOverlayWindowLevelMainDeps,
-  );
+  const ensureOverlayWindowLevel = createEnsureOverlayWindowLevelHandler({
+    shouldSuppressOverlayWindowLevel: (window) => {
+      const mainWindow = overlayManager.getMainWindow();
+      return (
+        (deps.getStatsOverlayVisible() && window === mainWindow) ||
+        shouldSuppressVisibleOverlayRaiseForSeparateWindow({
+          window,
+          mainWindow,
+          separateWindows: deps.getOverlayForegroundSeparateWindows(),
+        })
+      );
+    },
+    ensureOverlayWindowLevelCore: (window) => ensureOverlayWindowLevelCore(window as BrowserWindow),
+    afterEnsureOverlayWindowLevel: () => {
+      const mainWindow = overlayManager.getMainWindow();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        moveVisibleOverlayAboveTrackedPlaybackWindow(mainWindow);
+      }
+      deps.promoteStatsOverlayAbovePlayback();
+    },
+  });
 
   function syncPrimaryOverlayWindowLayer(layer: 'visible'): void {
     const mainWindow = overlayManager.getMainWindow();
@@ -276,23 +263,18 @@ export function createOverlayGeometryRuntime(deps: OverlayGeometryRuntimeDeps) {
     );
   }
 
-  const buildEnforceOverlayLayerOrderMainDepsHandler =
-    createBuildEnforceOverlayLayerOrderMainDepsHandler({
-      enforceOverlayLayerOrderCore: (params) =>
-        enforceOverlayLayerOrderCore({
-          visibleOverlayVisible: params.visibleOverlayVisible,
-          mainWindow: params.mainWindow as BrowserWindow | null,
-          ensureOverlayWindowLevel: (window) =>
-            params.ensureOverlayWindowLevel(window as BrowserWindow),
-        }),
-      getVisibleOverlayVisible: () => overlayManager.getVisibleOverlayVisible(),
-      getMainWindow: () => overlayManager.getMainWindow(),
-      ensureOverlayWindowLevel: (window) => ensureOverlayWindowLevel(window as BrowserWindow),
-    });
-  const enforceOverlayLayerOrderMainDeps = buildEnforceOverlayLayerOrderMainDepsHandler();
-  const enforceOverlayLayerOrder = createEnforceOverlayLayerOrderHandler(
-    enforceOverlayLayerOrderMainDeps,
-  );
+  const enforceOverlayLayerOrder = createEnforceOverlayLayerOrderHandler({
+    enforceOverlayLayerOrderCore: (params) =>
+      enforceOverlayLayerOrderCore({
+        visibleOverlayVisible: params.visibleOverlayVisible,
+        mainWindow: params.mainWindow as BrowserWindow | null,
+        ensureOverlayWindowLevel: (window) =>
+          params.ensureOverlayWindowLevel(window as BrowserWindow),
+      }),
+    getVisibleOverlayVisible: () => overlayManager.getVisibleOverlayVisible(),
+    getMainWindow: () => overlayManager.getMainWindow(),
+    ensureOverlayWindowLevel: (window) => ensureOverlayWindowLevel(window as BrowserWindow),
+  });
 
   return {
     getLastOverlayWindowGeometry: () => lastOverlayWindowGeometry,
