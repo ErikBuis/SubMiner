@@ -1406,3 +1406,38 @@ test('sentence card goes ahead when Anki cannot list its note types', async () =
   assert.equal(await service.createSentenceCard('テスト', 0, 1), true);
   assert.equal(added, true);
 });
+
+test('a second sentence card waits out the note type check of the first one', async () => {
+  let inProgress = false;
+  let releaseLookup: (names: string[]) => void = () => undefined;
+  const osd: string[] = [];
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      isUpdateInProgress: () => inProgress,
+      withUpdateProgress: async (_message, action) => {
+        inProgress = true;
+        try {
+          return await action();
+        } finally {
+          inProgress = false;
+        }
+      },
+      showOsdNotification: (text) => osd.push(text),
+      client: createFakeClient({
+        modelNames: () =>
+          new Promise<string[]>((resolve) => {
+            releaseLookup = resolve;
+          }),
+      }),
+    }),
+  );
+
+  const first = service.createSentenceCard('テスト', 0, 1);
+  await Promise.resolve();
+  assert.equal(await service.createSentenceCard('テスト', 0, 1), false);
+  assert.deepEqual(osd, ['Anki update already in progress']);
+
+  releaseLookup(['Sentence']);
+  assert.equal(await first, true);
+  assert.equal(inProgress, false);
+});

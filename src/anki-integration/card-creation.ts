@@ -932,14 +932,6 @@ export class CardCreationService {
       return false;
     }
 
-    if (await this.isSentenceCardModelMissing(sentenceCardModel)) {
-      this.deps.showUpdateResult(
-        `Sentence card failed: note type "${sentenceCardModel}" isn't in Anki. Set ankiConnect.isLapis.sentenceCardModel to one of your note types.`,
-        false,
-      );
-      return false;
-    }
-
     const maxMediaDuration = this.deps.getConfig().media?.maxMediaDuration ?? 30;
     // The cap limits the media only; the translation still covers every line of the sentence.
     let subtitleStartTime = startTime;
@@ -964,6 +956,13 @@ export class CardCreationService {
     let createdNoteId: number | null = null;
     try {
       return await this.deps.withUpdateProgress('Creating sentence card', async () => {
+        if (await this.isSentenceCardModelMissing(sentenceCardModel)) {
+          this.deps.showUpdateResult(
+            `Sentence card failed: note type "${sentenceCardModel}" isn't in Anki. Set ankiConnect.isLapis.sentenceCardModel to one of your note types.`,
+            false,
+          );
+          return false;
+        }
         const behavior = this.deps.getConfig().behavior;
         const tracks = (await this.deps.getSubtitleTracksForTranslation?.()) ?? null;
         const widened = behavior?.widenSentenceToTranslation
