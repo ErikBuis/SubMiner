@@ -24,13 +24,13 @@ const BINDINGS: ResolvedControllerConfig['bindings'] = {
   holdSecondarySub: { kind: 'none' },
   previousEntry: { kind: 'none' },
   nextEntry: { kind: 'none' },
+  toggleCharacterNavigation: { kind: 'none' },
   previousSubtitle: { kind: 'none' },
   nextSubtitle: { kind: 'none' },
   replaySubtitle: { kind: 'none' },
   playNextSubtitle: { kind: 'none' },
   leftStickHorizontal: { kind: 'axis', axisIndex: 0, dpadFallback: 'horizontal' },
   leftStickVertical: { kind: 'axis', axisIndex: 1, dpadFallback: 'vertical' },
-  rightStickHorizontal: { kind: 'axis', axisIndex: 3, dpadFallback: 'none' },
   rightStickVertical: { kind: 'axis', axisIndex: 4, dpadFallback: 'none' },
 };
 
@@ -166,12 +166,12 @@ test('controller config form renders grouped rows with friendly binding labels',
       findOne(row, 'controller-config-badge').textContent,
     ]),
     [
-      ['Toggle Lookup', 'A / Cross'],
-      ['Close Lookup', 'B / Circle'],
+      ['Toggle Lookup', 'A'],
+      ['Close Lookup', 'B'],
       ['Previous Entry', 'None'],
       ['Next Entry', 'None'],
-      ['Mine Card', 'X / Square'],
-      ['Toggle Keyboard-Only Mode', 'Y / Triangle'],
+      ['Mine Card', 'X'],
+      ['Toggle Keyboard-Only Mode', 'Y'],
       ['Toggle MPV Pause', 'R3 / RS'],
       ['Show Secondary Subtitle (Hold)', 'None'],
       ['Quit MPV', 'Back / Select'],
@@ -182,12 +182,11 @@ test('controller config form renders grouped rows with friendly binding labels',
       ['Previous Audio', 'None'],
       ['Next Audio', 'RB / R1'],
       ['Play Current Audio', 'LB / L1'],
+      ['Toggle Character Navigation', 'None'],
       ['Token Move (Stick)', 'Left Stick X'],
       ['Token Move (D-pad)', 'D-pad ↔'],
       ['Popup Scroll (Stick)', 'Left Stick Y'],
       ['Popup Scroll (D-pad)', 'D-pad ↕'],
-      ['Alt Horizontal (Stick)', 'Right Stick X'],
-      ['Alt Horizontal (D-pad)', 'None'],
       ['Popup Jump (Stick)', 'Right Stick Y'],
       ['Popup Jump (D-pad)', 'None'],
     ],
@@ -214,7 +213,7 @@ test('controller config form expands the learning row with a listening edit pane
   assert.equal(panel.classList.contains('controller-config-edit-panel'), true);
 
   const hint = findOne(panel, 'controller-config-edit-hint');
-  assert.equal(hint.textContent, 'Press a button, trigger, or move a stick…');
+  assert.equal(hint.textContent, 'Press a button, or hold one and press another for a combo…');
   assert.equal(hint.classList.contains('learning'), true);
   assert.equal(findOne(panel, 'btn-learn').textContent, 'Listening…');
 });

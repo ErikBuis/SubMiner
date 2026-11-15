@@ -1297,7 +1297,6 @@ test('parses controller settings with logical bindings and tuning knobs', () => 
           "toggleMpvPause": "leftStickPress",
           "leftStickHorizontal": "rightStickX",
           "leftStickVertical": "rightStickY",
-          "rightStickHorizontal": "leftStickX",
           "rightStickVertical": "leftStickY"
         }
       }
@@ -1381,6 +1380,59 @@ test('parses descriptor-based controller bindings', () => {
     axisIndex: 2,
     dpadFallback: 'vertical',
   });
+});
+
+test('parses a hold input on discrete controller bindings and rejects an invalid one', () => {
+  const dir = makeTempDir();
+  fs.writeFileSync(
+    path.join(dir, 'config.jsonc'),
+    `{
+      "controller": {
+        "bindings": {
+          "nextAudio": {
+            "kind": "button",
+            "buttonIndex": 15,
+            "hold": { "kind": "button", "buttonIndex": 4 }
+          },
+          "nextEntry": {
+            "kind": "axis",
+            "axisIndex": 0,
+            "direction": "positive",
+            "hold": { "kind": "axis", "axisIndex": 2, "direction": "positive" }
+          },
+          "mineCard": {
+            "kind": "button",
+            "buttonIndex": 12,
+            "hold": { "kind": "button" }
+          }
+        }
+      }
+    }`,
+    'utf-8',
+  );
+
+  const service = new ConfigService(dir);
+  const config = service.getConfig();
+
+  assert.deepEqual(config.controller.bindings.nextAudio, {
+    kind: 'button',
+    buttonIndex: 15,
+    hold: { kind: 'button', buttonIndex: 4 },
+  });
+  assert.deepEqual(config.controller.bindings.nextEntry, {
+    kind: 'axis',
+    axisIndex: 0,
+    direction: 'positive',
+    hold: { kind: 'axis', axisIndex: 2, direction: 'positive' },
+  });
+  // A broken hold must not silently become a plain press of button 12.
+  assert.deepEqual(
+    config.controller.bindings.mineCard,
+    DEFAULT_CONFIG.controller.bindings.mineCard,
+  );
+  assert.ok(
+    service.getWarnings().some((warning) => warning.path === 'controller.bindings.mineCard'),
+  );
 });
 
 test('parses controller profiles as per-gamepad binding overrides', () => {
