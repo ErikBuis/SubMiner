@@ -186,8 +186,8 @@ export class AnkiConnectClient {
       : [];
   }
 
-  async modelFieldNames(modelName: string): Promise<string[]> {
-    const result = await this.invoke('modelFieldNames', { modelName });
+  async modelFieldNames(modelName: string, options?: { maxRetries?: number }): Promise<string[]> {
+    const result = await this.invoke('modelFieldNames', { modelName }, options);
     return Array.isArray(result)
       ? result.filter((value): value is string => typeof value === 'string').sort()
       : [];
