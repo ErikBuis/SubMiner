@@ -28,6 +28,7 @@ export type ControllerScreenLearning = {
 };
 import type {
   ControllerDpadFallback,
+  ControllerRawInput,
   ResolvedControllerAxisBinding,
   ResolvedControllerConfig,
   ResolvedControllerDiscreteBinding,
@@ -157,6 +158,13 @@ export const CONTROLLER_BINDING_DEFINITIONS: ControllerBindingDefinition[] = [
     defaultBinding: { kind: 'button', buttonIndex: 4 },
   },
   {
+    id: 'toggleCharacterNavigation',
+    label: 'Toggle Character Navigation',
+    group: 'Navigation',
+    bindingType: 'discrete',
+    defaultBinding: { kind: 'none' },
+  },
+  {
     id: 'leftStickHorizontal',
     label: 'Token Move',
     group: 'Navigation',
@@ -169,13 +177,6 @@ export const CONTROLLER_BINDING_DEFINITIONS: ControllerBindingDefinition[] = [
     group: 'Navigation',
     bindingType: 'axis',
     defaultBinding: { kind: 'axis', axisIndex: 1, dpadFallback: 'vertical' },
-  },
-  {
-    id: 'rightStickHorizontal',
-    label: 'Alt Horizontal',
-    group: 'Navigation',
-    bindingType: 'axis',
-    defaultBinding: { kind: 'axis', axisIndex: 3, dpadFallback: 'none' },
   },
   {
     id: 'rightStickVertical',
@@ -212,10 +213,6 @@ export function getDefaultDpadFallback(
 // Names for pads that do not report the W3C "standard" mapping. Raw layouts
 // vary by driver, so these are a best guess.
 const RAW_LAYOUT_BUTTON_NAMES: Record<number, string> = {
-  0: 'A / Cross',
-  1: 'B / Circle',
-  2: 'X / Square',
-  3: 'Y / Triangle',
   4: 'LB / L1',
   5: 'RB / R1',
   6: 'Back / Select',
@@ -244,10 +241,6 @@ const RAW_LAYOUT_AXIS_NAMES: Record<number, string> = {
 // Switch and 8BitDo pads). Index meanings are fixed by the W3C Gamepad spec:
 // https://w3c.github.io/gamepad/#remapping
 const W3C_STANDARD_BUTTON_NAMES: Record<number, string> = {
-  0: 'A / Cross',
-  1: 'B / Circle',
-  2: 'X / Square',
-  3: 'Y / Triangle',
   4: 'LB / L1',
   5: 'RB / R1',
   6: 'LT / L2',
@@ -284,13 +277,10 @@ export function getFriendlyButtonName(
   mapping?: ControllerMapping,
   faceButtonLabels?: FaceButtonLabels,
 ): string {
-  // The default Xbox style keeps the shared "A / Cross" names; the others print their own.
-  // Face positions 0-3 are the same on raw and standard layouts.
-  const styledName =
-    faceButtonLabels && faceButtonLabels !== 'xbox'
-      ? getControllerFaceButtonName(buttonIndex, faceButtonLabels)
-      : null;
-  if (styledName) return styledName;
+  // Face buttons print as on the pad's Button Style (Xbox when none is set): A, not
+  // "A / Cross". Face positions 0-3 are the same on raw and standard layouts.
+  const faceName = getControllerFaceButtonName(buttonIndex, faceButtonLabels ?? 'xbox');
+  if (faceName) return faceName;
   const names = mapping === 'standard' ? W3C_STANDARD_BUTTON_NAMES : RAW_LAYOUT_BUTTON_NAMES;
   return names[buttonIndex] ?? `Button ${buttonIndex}`;
 }
@@ -300,22 +290,25 @@ export function getFriendlyAxisName(axisIndex: number, mapping?: ControllerMappi
   return names[axisIndex] ?? `Axis ${axisIndex}`;
 }
 
+function formatInputSummary(input: ControllerRawInput): string {
+  return input.kind === 'button'
+    ? `Button ${input.buttonIndex}`
+    : `Axis ${input.axisIndex} ${input.direction === 'positive' ? '+' : '-'}`;
+}
+
 export function formatControllerBindingSummary(
   binding: ResolvedControllerDiscreteBinding | ResolvedControllerAxisBinding,
 ): string {
   if (binding.kind === 'none') {
     return 'Disabled';
   }
-  if ('direction' in binding) {
-    return `Axis ${binding.axisIndex} ${binding.direction === 'positive' ? '+' : '-'}`;
+  if ('dpadFallback' in binding) {
+    return binding.dpadFallback === 'none'
+      ? `Axis ${binding.axisIndex}`
+      : `Axis ${binding.axisIndex} + D-pad ${binding.dpadFallback}`;
   }
-  if ('buttonIndex' in binding) {
-    return `Button ${binding.buttonIndex}`;
-  }
-  if (binding.dpadFallback === 'none') {
-    return `Axis ${binding.axisIndex}`;
-  }
-  return `Axis ${binding.axisIndex} + D-pad ${binding.dpadFallback}`;
+  const press = formatInputSummary(binding);
+  return binding.hold ? `${formatInputSummary(binding.hold)} + ${press}` : press;
 }
 
 function formatFriendlyStickLabel(
@@ -326,20 +319,36 @@ function formatFriendlyStickLabel(
   return getFriendlyAxisName(binding.axisIndex, mapping);
 }
 
+export function formatFriendlyInputLabel(
+  input: ControllerRawInput,
+  mapping: ControllerMapping,
+  faceButtonLabels: FaceButtonLabels,
+): string {
+  if (input.kind === 'button') {
+    return getFriendlyButtonName(input.buttonIndex, mapping, faceButtonLabels);
+  }
+  const name = getFriendlyAxisName(input.axisIndex, mapping);
+  return `${name} ${input.direction === 'positive' ? '+' : '\u2212'}`;
+}
+
 function formatFriendlyBindingLabel(
   binding: ResolvedControllerDiscreteBinding | ResolvedControllerAxisBinding,
   mapping: ControllerMapping,
   faceButtonLabels: FaceButtonLabels,
 ): string {
   if (binding.kind === 'none') return 'None';
-  if ('direction' in binding) {
-    const name = getFriendlyAxisName(binding.axisIndex, mapping);
-    return `${name} ${binding.direction === 'positive' ? '+' : '\u2212'}`;
-  }
-  if ('buttonIndex' in binding) {
-    return getFriendlyButtonName(binding.buttonIndex, mapping, faceButtonLabels);
-  }
-  return getFriendlyAxisName(binding.axisIndex, mapping);
+  if ('dpadFallback' in binding) return getFriendlyAxisName(binding.axisIndex, mapping);
+  const press = formatFriendlyInputLabel(binding, mapping, faceButtonLabels);
+  return binding.hold
+    ? `${formatFriendlyInputLabel(binding.hold, mapping, faceButtonLabels)} + ${press}`
+    : press;
+}
+
+/** What Alt+C asks for while learning a binding that can be a combo. */
+function formatComboLearnHint(holdLabel: string | null): string {
+  return holdLabel
+    ? `Holding ${holdLabel}: press another button for a combo, or let go to use ${holdLabel} alone\u2026`
+    : 'Press a button, or hold one and press another for a combo\u2026';
 }
 
 /** Unique key for expanded rows. Stick rows use the action id, dpad rows append ':dpad'. */
@@ -349,6 +358,8 @@ export function createControllerConfigForm(options: {
   container: HTMLElement;
   getBindings: () => ResolvedControllerConfig['bindings'];
   getLearningActionId: () => ControllerBindingActionId | null;
+  /** The hold button pressed so far while learning a discrete action, if any. */
+  getLearningHoldLabel?: () => string | null;
   getDpadLearningActionId: () => ControllerBindingActionId | null;
   onLearn: (actionId: ControllerBindingActionId, bindingType: 'discrete' | 'axis') => void;
   onClear: (actionId: ControllerBindingActionId) => void;
@@ -543,11 +554,7 @@ export function createControllerConfigForm(options: {
     options.container.appendChild(row);
 
     if (isExpanded) {
-      const hint = !isLearning
-        ? `Currently: ${current}`
-        : holdLabel
-          ? `Holding ${holdLabel}: press another button for a combo, or let go to use ${holdLabel} alone\u2026`
-          : 'Press a button, or hold one and press another for a combo\u2026';
+      const hint = isLearning ? formatComboLearnHint(holdLabel) : `Currently: ${current}`;
       const panel = createEditPanel(rowKey, hint, isLearning, {
         onLearn: learn,
         onClear: (e) => {
@@ -569,14 +576,17 @@ export function createControllerConfigForm(options: {
     const rowKey = definition.id as string;
     const isExpanded = expandedRowKey === rowKey;
     const isLearning = learningActionId === definition.id;
+    const holdLabel = isLearning ? (options.getLearningHoldLabel?.() ?? null) : null;
 
     const row = createRow(
       definition.label,
-      formatFriendlyBindingLabel(
-        binding,
-        options.getControllerMapping?.(),
-        options.getFaceButtonLabels?.(),
-      ),
+      holdLabel
+        ? `${holdLabel} + \u2026`
+        : formatFriendlyBindingLabel(
+            binding,
+            options.getControllerMapping?.(),
+            options.getFaceButtonLabels?.(),
+          ),
       binding.kind === 'none',
       isExpanded,
       `Learn ${definition.label}`,
@@ -600,7 +610,7 @@ export function createControllerConfigForm(options: {
 
     if (isExpanded) {
       const hint = isLearning
-        ? 'Press a button, trigger, or move a stick\u2026'
+        ? formatComboLearnHint(holdLabel)
         : `Currently: ${formatControllerBindingSummary(binding)}`;
       const panel = createEditPanel(rowKey, hint, isLearning, {
         onLearn: (e) => {

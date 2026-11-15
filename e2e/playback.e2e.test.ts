@@ -114,6 +114,45 @@ test(
   },
 );
 
+// The other tests read the renderer over CDP, which works even if the window never appears.
+// Windows keeps the overlay hidden until the tracker identifies mpv's window.
+// Bun's node:test ignores the `skip` option, so this picks `test.skip` instead.
+const testOnWindows = process.platform === 'win32' ? test : test.skip;
+testOnWindows('visible overlay window appears over mpv', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const { session } = await useSession();
+  await session.runAppCommand('--show-visible-overlay');
+  const mpvPid = await session.mpv.command('get_property', 'pid');
+  assert.equal(typeof mpvPid, 'number');
+  const main = await session.mainProcess();
+  await waitUntil(
+    () =>
+      main.evaluate<boolean>(
+        `(() => {
+          const electron = process.mainModule.require('electron');
+          const overlay = electron.BrowserWindow.getAllWindows().find(
+            (w) => w.webContents.getURL().includes(${JSON.stringify(OVERLAY_PAGE)}));
+          if (!overlay?.isVisible() || overlay.getOpacity() !== 1 ||
+              overlay.__subminerOverlayContentReady !== true) return false;
+          // The inspector's mainModule can be Electron's bootstrap module. Resolve app
+          // dependencies from the repository instead of that module's search paths.
+          const appRequire = process.mainModule.require('node:module').createRequire(
+            process.mainModule.require('node:path').resolve('package.json'));
+          const koffi = appRequire('koffi');
+          const getWindow = koffi.load('user32.dll').func(
+            'intptr __stdcall GetWindow(intptr hwnd, uint uCmd)');
+          const handle = overlay.getNativeWindowHandle();
+          const hwnd = handle.length >= 8 ? Number(handle.readBigUInt64LE(0)) : handle.readUInt32LE(0);
+          const owner = getWindow(hwnd, 4); // GW_OWNER
+          const win32 = appRequire(
+            process.mainModule.require('node:path').resolve('dist/window-trackers/win32.js'));
+          return win32.findMpvWindows(${JSON.stringify(mpvPid)}).matches.some(
+            (match) => match.hwnd === owner);
+        })()`,
+      ),
+    { description: 'the visible overlay to be fully revealed and owned by the target mpv window' },
+  );
+});
+
 test(
   'seeking to another cue replaces the line and deinflects verbs to their headword',
   { timeout: TEST_TIMEOUT_MS },
@@ -328,6 +367,35 @@ testOutsideLinux(
       renderers.forEach((renderer) => renderer.close());
       await session.mpv.command('set_property', 'pause', true);
     }
+  },
+);
+
+test(
+  'controller combos survive the real save path and can be rebound to one button',
+  { timeout: TEST_TIMEOUT_MS },
+  async () => {
+    const { overlay } = await useSession();
+    const L1 = { kind: 'button', buttonIndex: 4 };
+    const DPAD_LEFT = { kind: 'button', buttonIndex: 14 };
+    const DPAD_RIGHT = { kind: 'button', buttonIndex: 15 };
+    const save = (bindings: Record<string, unknown>) =>
+      overlay.evaluate<Record<string, unknown>>(
+        `(async () => {
+          await window.electronAPI.saveControllerConfig(${JSON.stringify({ bindings })});
+          return (await window.electronAPI.getControllerConfig()).bindings;
+        })()`,
+      );
+
+    await save({ previousEntry: { ...DPAD_LEFT, hold: L1 } });
+    const bothCombos = await save({ nextEntry: { ...DPAD_RIGHT, hold: L1 } });
+    assert.deepEqual(bothCombos.previousEntry, { ...DPAD_LEFT, hold: L1 });
+    assert.deepEqual(bothCombos.nextEntry, { ...DPAD_RIGHT, hold: L1 });
+
+    const rebound = await save({ previousEntry: DPAD_LEFT, nextEntry: { kind: 'none' } });
+    assert.deepEqual(rebound.previousEntry, DPAD_LEFT);
+    assert.deepEqual(rebound.nextEntry, { kind: 'none' });
+
+    await save({ previousEntry: { kind: 'none' } });
   },
 );
 
