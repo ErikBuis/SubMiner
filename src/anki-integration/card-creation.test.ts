@@ -425,3 +425,87 @@ for (const c of DUPLICATE_TRACKING_CASES) {
     assert.deepEqual(trackedDuplicates, c.expected);
   });
 }
+
+test('sentence card stops before the review when Anki has no note type with the configured name', async () => {
+  const results: Array<{ message: string; success: boolean }> = [];
+  let reviewed = false;
+  let added = false;
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      getEffectiveSentenceCardConfig: () => ({
+        model: 'Lapis',
+        sentenceField: 'Sentence',
+        audioField: 'SentenceAudio',
+        lapisEnabled: false,
+        kikuEnabled: false,
+        fieldGroupingMode: 'disabled',
+      }),
+      client: createFakeClient({
+        modelNames: async () => ['Basic', 'Mining Note'],
+        addNote: async () => {
+          added = true;
+          return 42;
+        },
+      }),
+      reviewMediaTiming: async () => {
+        reviewed = true;
+        return { action: 'use-original' };
+      },
+      showUpdateResult: (message, success) => results.push({ message, success }),
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('テスト', 0, 1), false);
+  assert.equal(reviewed, false);
+  assert.equal(added, false);
+  assert.deepEqual(results, [
+    {
+      message:
+        'Sentence card failed: note type "Lapis" isn\'t in Anki. Set ankiConnect.isLapis.sentenceCardModel to one of your note types.',
+      success: false,
+    },
+  ]);
+});
+
+test('sentence card note type check asks Anki once without retries and ignores letter case', async () => {
+  const calls: Array<{ maxRetries?: number } | undefined> = [];
+  let addedModel = '';
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      client: createFakeClient({
+        modelNames: async (options) => {
+          calls.push(options);
+          return ['sentence'];
+        },
+        addNote: async (_deck, model) => {
+          addedModel = model;
+          return 42;
+        },
+      }),
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('テスト', 0, 1), true);
+  assert.deepEqual(calls, [{ maxRetries: 0 }]);
+  assert.equal(addedModel, 'Sentence');
+});
+
+test('sentence card goes ahead when Anki cannot list its note types', async () => {
+  let added = false;
+  const service = new CardCreationService(
+    createCardCreationDeps({
+      client: createFakeClient({
+        modelNames: async () => {
+          throw new Error('connect ECONNREFUSED 127.0.0.1:8765');
+        },
+        addNote: async () => {
+          added = true;
+          return 42;
+        },
+      }),
+    }),
+  );
+
+  assert.equal(await service.createSentenceCard('テスト', 0, 1), true);
+  assert.equal(added, true);
+});
