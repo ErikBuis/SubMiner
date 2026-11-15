@@ -13,6 +13,7 @@ function makeDeps(overrides: Partial<AppReadyRuntimeDeps> = {}) {
     loadSubtitlePosition: () => calls.push('loadSubtitlePosition'),
     resolveKeybindings: () => calls.push('resolveKeybindings'),
     createMpvClient: () => calls.push('createMpvClient'),
+    startPlugins: () => calls.push('startPlugins'),
     reloadConfig: () => calls.push('reloadConfig'),
     getResolvedConfig: () => ({
       websocket: { enabled: 'auto' },
@@ -53,7 +54,7 @@ function makeDeps(overrides: Partial<AppReadyRuntimeDeps> = {}) {
     startBackgroundWarmups: () => {
       calls.push('startBackgroundWarmups');
     },
-    texthookerOnlyMode: false,
+    isTexthookerOnlyMode: () => false,
     shouldAutoInitializeOverlayRuntimeFromConfig: () => true,
     setVisibleOverlayVisible: (visible) => calls.push(`setVisibleOverlayVisible:${visible}`),
     initializeOverlayRuntime: () => calls.push('initializeOverlayRuntime'),
@@ -162,6 +163,7 @@ test('runAppReadyRuntime skips heavy startup when shouldSkipHeavyStartup returns
   assert.equal(calls.includes('loadSubtitlePosition'), false);
   assert.equal(calls.includes('resolveKeybindings'), false);
   assert.equal(calls.includes('createMpvClient'), false);
+  assert.equal(calls.includes('startPlugins'), false);
   assert.equal(calls.includes('initRuntimeOptionsManager'), false);
   assert.equal(calls.includes('createImmersionTracker'), false);
   assert.equal(calls.includes('startJellyfinRemoteSession'), false);
@@ -178,7 +180,7 @@ test('runAppReadyRuntime skips heavy startup when shouldSkipHeavyStartup returns
 
 test('runAppReadyRuntime keeps websocket startup in texthooker-only mode but skips overlay window', async () => {
   const { deps, calls } = makeDeps({
-    texthookerOnlyMode: true,
+    isTexthookerOnlyMode: () => true,
     reloadConfig: () => calls.push('reloadConfig'),
     handleInitialArgs: () => calls.push('handleInitialArgs'),
   });
@@ -326,6 +328,9 @@ test('runAppReadyRuntime starts background warmups after overlay startup', async
 
   assert.ok(calls.indexOf('loadSubtitlePosition') < calls.indexOf('startBackgroundWarmups'));
   assert.ok(calls.indexOf('createMpvClient') < calls.indexOf('startBackgroundWarmups'));
+  assert.ok(calls.includes('setLogLevel:info:config'));
+  assert.ok(calls.indexOf('setLogLevel:info:config') < calls.indexOf('startPlugins'));
+  assert.ok(calls.indexOf('startPlugins') < calls.indexOf('startBackgroundWarmups'));
   assert.ok(calls.indexOf('initializeOverlayRuntime') < calls.indexOf('startBackgroundWarmups'));
   assert.ok(calls.indexOf('startBackgroundWarmups') < calls.indexOf('handleInitialArgs'));
 });

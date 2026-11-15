@@ -10,6 +10,21 @@ export function formatNumber(n: number): string {
   return n.toLocaleString();
 }
 
+const COMPACT_NUMBER = new Intl.NumberFormat(undefined, {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+
+/** Short form for tight spaces like chart axes: 24000 becomes 24K. */
+export function formatCompactNumber(n: number): string {
+  return COMPACT_NUMBER.format(n);
+}
+
+/** Watch time for headline numbers: minutes below an hour, then hours to one decimal. */
+export function formatHours(minutes: number): string {
+  return minutes < 60 ? `${Math.round(minutes)}m` : `${(minutes / 60).toFixed(1)}h`;
+}
+
 export function formatPercent(ratio: number | null): string {
   if (ratio == null) return '\u2014';
   return `${Math.round(ratio * 100)}%`;
@@ -42,10 +57,25 @@ export function epochDayToDate(epochDay: number): Date {
   return new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate());
 }
 
+/** `YYYY-MM-DD` for a date input. */
+export function epochDayToIsoDate(epochDay: number): string {
+  return new Date(epochDay * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** Epoch day for a date input value, or null when the input is empty, invalid, or before 1970. */
+export function isoDateToEpochDay(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  if (year < 1970) return null;
+  const ms = Date.UTC(year, Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(ms) ? null : ms / 86_400_000;
+}
+
+/** The local calendar day as an epoch day, the same numbering the stats server uses. */
 export function localDayFromMs(ms: number): number {
   const d = new Date(ms);
-  const localMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  return Math.floor(localMidnight / 86_400_000);
+  return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000;
 }
 
 export function todayLocalDay(): number {
@@ -73,4 +103,18 @@ export function formatSessionDayLabel(sessionStartedAtMs: number): string {
     day: 'numeric',
     ...(includeYear ? { year: 'numeric' } : {}),
   });
+}
+
+/** Second-precise duration for short spans ("42s", "6m 12s", "1h 3m"). */
+export function formatClockDuration(ms: number): string {
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  if (totalSec < 60) return `${totalSec}s`;
+  const totalMin = Math.floor(totalSec / 60);
+  if (totalMin < 60) {
+    const sec = totalSec % 60;
+    return sec > 0 ? `${totalMin}m ${sec}s` : `${totalMin}m`;
+  }
+  const hours = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }

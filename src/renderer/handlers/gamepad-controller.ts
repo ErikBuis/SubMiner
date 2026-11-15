@@ -6,6 +6,7 @@ import type {
   ResolvedControllerDiscreteBinding,
 } from '../../types';
 import { resolveControllerConfigForGamepad } from '../controller-profile-config.js';
+import { createControllerComboTracker } from './controller-combo-tracker.js';
 
 type ControllerButtonState = {
   value: number;
@@ -13,13 +14,31 @@ type ControllerButtonState = {
   touched?: boolean;
 };
 
-type GamepadLike = {
+export type GamepadLike = {
   id: string;
   index: number;
   connected: boolean;
   mapping: string;
+  /** When the pad last reported new input (Gamepad API). */
+  timestamp?: number;
   axes: readonly number[];
   buttons: readonly ControllerButtonState[];
+};
+
+/**
+ * A screen that takes over every controller input while it is open (for example the
+ * media timing review). `activate` runs on the first poll of a new session; with
+ * `latchHeld` it ignores buttons already held (so the press that opened the screen does
+ * not fire), otherwise it treats them as fresh presses. `poll` runs on every later frame.
+ */
+export type ControllerScreenLayout = {
+  activate: (
+    gamepad: GamepadLike,
+    config: ResolvedControllerConfig,
+    now: number,
+    options: { latchHeld: boolean },
+  ) => void;
+  poll: (gamepad: GamepadLike, config: ResolvedControllerConfig, now: number) => void;
 };
 
 type GamepadControllerOptions = {
@@ -37,32 +56,47 @@ type GamepadControllerOptions = {
   previousAudio: () => void;
   nextAudio: () => void;
   playCurrentAudio: () => void;
+  previousEntry: () => void;
+  nextEntry: () => void;
+  /** Switches keyboard-only mode between moving by word and by character. */
+  toggleCharacterNavigation: () => void;
   toggleMpvPause: () => void;
+  previousSubtitle: () => void;
+  nextSubtitle: () => void;
+  replaySubtitle: () => void;
+  playNextSubtitle: () => void;
+  setSecondarySubHeld: (held: boolean) => void;
   scrollPopup: (deltaPixels: number) => void;
   jumpPopup: (deltaPixels: number) => void;
   onState: (state: ControllerRuntimeSnapshot) => void;
+  /** Screen layout that currently owns the controller in this window, if any. */
+  getScreenLayout?: () => ControllerScreenLayout | null;
+  /** True while a modal in another window owns the controller; this window stands down. */
+  getSuspended?: () => boolean;
 };
 
-type HoldState = {
+export type HoldState = {
   repeatStarted: boolean;
   direction: -1 | 1 | null;
   lastFireAt: number;
   initialFired: boolean;
 };
 
-const DPAD_BUTTON_INDEX = {
+/** Buttons read as the D-pad on every pad, whatever its reported mapping. */
+export const DPAD_BUTTON_INDEX = {
   up: 12,
   down: 13,
   left: 14,
   right: 15,
 } as const;
 
-const DPAD_AXIS_INDEX = {
+/** Axes some raw (non-standard) pads use for the D-pad. */
+export const DPAD_AXIS_INDEX = {
   horizontal: 6,
   vertical: 7,
 } as const;
 
-function normalizeRawButtonState(
+export function normalizeRawButtonState(
   button: ControllerButtonState | undefined,
   triggerDeadzone: number,
 ): boolean {
@@ -111,7 +145,7 @@ function resolveDpadAxisValue(gamepad: GamepadLike, axisIndex: number): number {
   return Math.sign(value);
 }
 
-function resolveDpadHorizontalValue(gamepad: GamepadLike, triggerDeadzone: number): number {
+export function resolveDpadHorizontalValue(gamepad: GamepadLike, triggerDeadzone: number): number {
   const axisValue = resolveDpadAxisValue(gamepad, DPAD_AXIS_INDEX.horizontal);
   if (axisValue !== 0) {
     return axisValue;
@@ -124,7 +158,7 @@ function resolveDpadHorizontalValue(gamepad: GamepadLike, triggerDeadzone: numbe
   );
 }
 
-function resolveDpadVerticalValue(gamepad: GamepadLike, triggerDeadzone: number): number {
+export function resolveDpadVerticalValue(gamepad: GamepadLike, triggerDeadzone: number): number {
   const axisValue = resolveDpadAxisValue(gamepad, DPAD_AXIS_INDEX.vertical);
   if (axisValue !== 0) {
     return axisValue;
@@ -138,7 +172,7 @@ function resolveConnectedGamepads(gamepads: Array<GamepadLike | null>): GamepadL
     .sort((left, right) => left.index - right.index);
 }
 
-function createHoldState(): HoldState {
+export function createHoldState(): HoldState {
   return {
     repeatStarted: false,
     direction: null,
@@ -147,7 +181,7 @@ function createHoldState(): HoldState {
   };
 }
 
-function shouldFireHeldAction(
+export function shouldFireHeldAction(
   state: HoldState,
   now: number,
   repeatDelayMs: number,
@@ -170,7 +204,7 @@ function shouldFireHeldAction(
   return true;
 }
 
-function resetHeldAction(state: HoldState): void {
+export function resetHeldAction(state: HoldState): void {
   state.repeatStarted = false;
   state.direction = null;
   state.lastFireAt = 0;
@@ -195,7 +229,8 @@ function syncHeldActionBlocked(
   state.initialFired = true;
 }
 
-function resolveDiscreteBindingPressed(
+/** Whether the binding's press input is down. A combo's `hold` is checked by the combo tracker. */
+export function resolveDiscreteBindingPressed(
   gamepad: GamepadLike,
   binding: ResolvedControllerDiscreteBinding,
   config: ResolvedControllerConfig,
@@ -244,12 +279,49 @@ function resolveAxisBindingValue(
   return axisValue;
 }
 
+/** Discrete actions that only act while the lookup popup is open. */
+const POPUP_ONLY_ACTIONS = [
+  'previousAudio',
+  'nextAudio',
+  'playCurrentAudio',
+  'previousEntry',
+  'nextEntry',
+] as const;
+
+/** Playback and subtitle actions; like the secondary hold, they do not need keyboard-only mode. */
+const WATCHING_ACTIONS = [
+  'toggleMpvPause',
+  'previousSubtitle',
+  'nextSubtitle',
+  'replaySubtitle',
+  'playNextSubtitle',
+] as const;
+
+/** Every action fired by a fresh press; `holdSecondarySub` follows the button instead. */
+const PRESS_ACTIONS = [
+  'toggleKeyboardOnlyMode',
+  'toggleLookup',
+  'closeLookup',
+  'mineCard',
+  'quitMpv',
+  'toggleCharacterNavigation',
+  ...POPUP_ONLY_ACTIONS,
+  ...WATCHING_ACTIONS,
+] as const;
+
 export function createGamepadController(options: GamepadControllerOptions) {
   let previousActions = new Map<string, boolean>();
+  const comboTracker = createControllerComboTracker();
+  /** Plain actions on a hold button, pressed and waiting to see whether they were a tap. */
+  const pendingTaps = new Set<string>();
+  const handledThisPoll = new Set<string>();
   let selectionHold = createHoldState();
   let jumpHold = createHoldState();
   let activeGamepadId: string | null = null;
   let lastPollAt: number | null = null;
+  let secondarySubHeld = false;
+  let activeScreenLayout: ControllerScreenLayout | null = null;
+  let screenLayoutWaitingForPad = false;
 
   function getConnectedGamepads(): GamepadLike[] {
     return resolveConnectedGamepads(options.getGamepads());
@@ -277,6 +349,7 @@ export function createGamepadController(options: GamepadControllerOptions) {
         index: gamepad.index,
         mapping: gamepad.mapping,
         connected: gamepad.connected,
+        timestamp: gamepad.timestamp,
       })) satisfies ControllerDeviceInfo[],
       activeGamepadId,
       rawAxes: activeGamepad?.axes ? [...activeGamepad.axes] : [],
@@ -290,6 +363,15 @@ export function createGamepadController(options: GamepadControllerOptions) {
     });
   }
 
+  // Level-triggered: reports every change in held state, so releasing the button,
+  // disconnecting the pad, disabling the controller, or opening a blocking modal
+  // all hide the secondary subtitle again instead of leaving it stuck visible.
+  function syncSecondarySubHold(held: boolean): void {
+    if (held === secondarySubHeld) return;
+    secondarySubHeld = held;
+    options.setSecondarySubHeld(held);
+  }
+
   function handleActionEdge(
     actionKey: string,
     binding: ResolvedControllerDiscreteBinding,
@@ -297,12 +379,36 @@ export function createGamepadController(options: GamepadControllerOptions) {
     config: ResolvedControllerConfig,
     action: () => void,
   ): void {
+    handledThisPoll.add(actionKey);
     const isPressed = resolveDiscreteBindingPressed(activeGamepad, binding, config);
     const wasPressed = previousActions.get(actionKey) ?? false;
     previousActions.set(actionKey, isPressed);
-    if (!wasPressed && isPressed) {
+    if (isPressed === wasPressed) return;
+
+    if (!isPressed) {
+      if (pendingTaps.delete(actionKey) && !comboTracker.isTapCancelled(binding)) action();
+      return;
+    }
+    if (!comboTracker.matches(binding)) return;
+    if (comboTracker.firesOnRelease(binding)) {
+      pendingTaps.add(actionKey);
+    } else {
       action();
     }
+  }
+
+  // The action does not apply this poll. Its edge state keeps following the pad, so a release
+  // is not missed and a held button waits for a fresh press, and a pending tap is dropped.
+  function trackActionWithoutFiring(
+    actionKey: (typeof PRESS_ACTIONS)[number],
+    activeGamepad: GamepadLike,
+    config: ResolvedControllerConfig,
+  ): void {
+    previousActions.set(
+      actionKey,
+      resolveDiscreteBindingPressed(activeGamepad, config.bindings[actionKey], config),
+    );
+    if (!handledThisPoll.has(actionKey)) pendingTaps.delete(actionKey);
   }
 
   function handleSelectionAxis(value: number, now: number, config: ResolvedControllerConfig): void {
@@ -346,25 +452,14 @@ export function createGamepadController(options: GamepadControllerOptions) {
     config: ResolvedControllerConfig,
     now: number,
   ): void {
-    const discreteActions = [
-      ['toggleKeyboardOnlyMode', config.bindings.toggleKeyboardOnlyMode],
-      ['toggleLookup', config.bindings.toggleLookup],
-      ['closeLookup', config.bindings.closeLookup],
-      ['mineCard', config.bindings.mineCard],
-      ['quitMpv', config.bindings.quitMpv],
-      ['previousAudio', config.bindings.previousAudio],
-      ['nextAudio', config.bindings.nextAudio],
-      ['playCurrentAudio', config.bindings.playCurrentAudio],
-      ['toggleMpvPause', config.bindings.toggleMpvPause],
-    ] as const;
-
-    for (const [actionKey, binding] of discreteActions) {
-      previousActions.set(actionKey, resolveDiscreteBindingPressed(activeGamepad, binding, config));
+    for (const actionKey of PRESS_ACTIONS) {
+      trackActionWithoutFiring(actionKey, activeGamepad, config);
     }
 
+    const axisGamepad = comboTracker.withoutClaimedInputs(activeGamepad);
     const activationThreshold = Math.max(config.stickDeadzone, 0.55);
     const selectionValue = resolveAxisBindingValue(
-      activeGamepad,
+      axisGamepad,
       config.bindings.leftStickHorizontal,
       config.triggerDeadzone,
       activationThreshold,
@@ -375,7 +470,7 @@ export function createGamepadController(options: GamepadControllerOptions) {
       syncHeldActionBlocked(
         jumpHold,
         resolveAxisBindingValue(
-          activeGamepad,
+          axisGamepad,
           config.bindings.rightStickVertical,
           config.triggerDeadzone,
           activationThreshold,
@@ -396,9 +491,18 @@ export function createGamepadController(options: GamepadControllerOptions) {
     const activeGamepad = resolveActiveGamepad(connectedGamepads, config);
     const previousActiveGamepadId = activeGamepadId;
     publishState(connectedGamepads, activeGamepad);
+    handledThisPoll.clear();
 
     if (!activeGamepad) {
+      syncSecondarySubHold(false);
+      activeScreenLayout = null;
+      // Browsers hide a pad from a page until a button is pressed while it is open, and
+      // each review opens in a fresh window. When a screen is already waiting for the pad,
+      // the press that reveals it started after the screen opened, so it should count.
+      screenLayoutWaitingForPad = config.enabled && (options.getScreenLayout?.() ?? null) !== null;
       previousActions = new Map();
+      comboTracker.reset();
+      pendingTaps.clear();
       resetHeldAction(selectionHold);
       resetHeldAction(jumpHold);
       lastPollAt = null;
@@ -406,12 +510,70 @@ export function createGamepadController(options: GamepadControllerOptions) {
     }
 
     if (activeGamepad.id !== previousActiveGamepadId) {
+      activeScreenLayout = null;
       previousActions = new Map();
+      comboTracker.reset();
+      pendingTaps.clear();
       resetHeldAction(selectionHold);
       resetHeldAction(jumpHold);
     }
 
     const activeConfig = resolveControllerConfigForGamepad(config, activeGamepad.id);
+    comboTracker.update(
+      [...PRESS_ACTIONS, 'holdSecondarySub' as const].map((key) => activeConfig.bindings[key]),
+      (input) => resolveDiscreteBindingPressed(activeGamepad, input, activeConfig),
+    );
+
+    // A screen layout or another window owning the controller pauses every normal action,
+    // including the keyboard-mode toggle and the secondary subtitle hold. Their edge state
+    // keeps tracking the pad, so a button still held when control returns does not fire.
+    const screenLayout = activeConfig.enabled ? (options.getScreenLayout?.() ?? null) : null;
+    const suspended = screenLayout === null && (options.getSuspended?.() ?? false);
+    if (screenLayout !== null || suspended) {
+      syncSecondarySubHold(false);
+      syncBlockedInteractionState(activeGamepad, activeConfig, now);
+      if (screenLayout === null) {
+        activeScreenLayout = null;
+        screenLayoutWaitingForPad = false;
+      } else if (screenLayout !== activeScreenLayout) {
+        activeScreenLayout = screenLayout;
+        screenLayout.activate(activeGamepad, activeConfig, now, {
+          latchHeld: !screenLayoutWaitingForPad,
+        });
+        screenLayoutWaitingForPad = false;
+      } else {
+        screenLayout.poll(activeGamepad, activeConfig, now);
+      }
+      return;
+    }
+    activeScreenLayout = null;
+    screenLayoutWaitingForPad = false;
+
+    // Unlike most actions, this one does not require keyboard-only mode, so it can be
+    // used while simply watching.
+    syncSecondarySubHold(
+      activeConfig.enabled &&
+        !options.getInteractionBlocked() &&
+        resolveDiscreteBindingPressed(
+          activeGamepad,
+          activeConfig.bindings.holdSecondarySub,
+          activeConfig,
+        ) &&
+        comboTracker.matches(activeConfig.bindings.holdSecondarySub),
+    );
+
+    // Pause and subtitle navigation also work while simply watching; a blocking modal pauses them.
+    if (activeConfig.enabled && !options.getInteractionBlocked()) {
+      for (const actionKey of WATCHING_ACTIONS) {
+        handleActionEdge(
+          actionKey,
+          activeConfig.bindings[actionKey],
+          activeGamepad,
+          activeConfig,
+          options[actionKey],
+        );
+      }
+    }
 
     if (activeConfig.enabled) {
       handleActionEdge(
@@ -459,8 +621,16 @@ export function createGamepadController(options: GamepadControllerOptions) {
       activeConfig,
       options.quitMpv,
     );
+    handleActionEdge(
+      'toggleCharacterNavigation',
+      activeConfig.bindings.toggleCharacterNavigation,
+      activeGamepad,
+      activeConfig,
+      options.toggleCharacterNavigation,
+    );
 
     const activationThreshold = Math.max(activeConfig.stickDeadzone, 0.55);
+    const axisGamepad = comboTracker.withoutClaimedInputs(activeGamepad);
 
     if (options.getLookupWindowOpen()) {
       handleActionEdge(
@@ -484,9 +654,23 @@ export function createGamepadController(options: GamepadControllerOptions) {
         activeConfig,
         options.playCurrentAudio,
       );
+      handleActionEdge(
+        'previousEntry',
+        activeConfig.bindings.previousEntry,
+        activeGamepad,
+        activeConfig,
+        options.previousEntry,
+      );
+      handleActionEdge(
+        'nextEntry',
+        activeConfig.bindings.nextEntry,
+        activeGamepad,
+        activeConfig,
+        options.nextEntry,
+      );
 
       const primaryScroll = resolveAxisBindingValue(
-        activeGamepad,
+        axisGamepad,
         activeConfig.bindings.leftStickVertical,
         activeConfig.triggerDeadzone,
         activeConfig.stickDeadzone,
@@ -499,7 +683,7 @@ export function createGamepadController(options: GamepadControllerOptions) {
 
       handleJumpAxis(
         resolveAxisBindingValue(
-          activeGamepad,
+          axisGamepad,
           activeConfig.bindings.rightStickVertical,
           activeConfig.triggerDeadzone,
           activationThreshold,
@@ -509,19 +693,14 @@ export function createGamepadController(options: GamepadControllerOptions) {
       );
     } else {
       resetHeldAction(jumpHold);
+      for (const actionKey of POPUP_ONLY_ACTIONS) {
+        trackActionWithoutFiring(actionKey, activeGamepad, activeConfig);
+      }
     }
-
-    handleActionEdge(
-      'toggleMpvPause',
-      activeConfig.bindings.toggleMpvPause,
-      activeGamepad,
-      activeConfig,
-      options.toggleMpvPause,
-    );
 
     handleSelectionAxis(
       resolveAxisBindingValue(
-        activeGamepad,
+        axisGamepad,
         activeConfig.bindings.leftStickHorizontal,
         activeConfig.triggerDeadzone,
         activationThreshold,

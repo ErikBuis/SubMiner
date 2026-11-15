@@ -17,6 +17,8 @@ import type { RuntimeOptionId, RuntimeOptionValue } from '../../types/runtime-op
 import type { SessionActionId, SessionActionPayload } from '../../types/session-bindings';
 import type { SubtitlePosition } from '../../types/subtitle';
 import { OVERLAY_HOSTED_MODALS, type OverlayHostedModal } from './contracts';
+import { isControllerFaceButtonLabels, parseControllerDiscreteBinding } from '../controller-review';
+import { CONTROLLER_SCREENS, parseControllerScreenBindingsPatch } from '../controller-screens';
 
 const RESERVED_CONTROLLER_PROFILE_IDS = new Set(['__proto__', 'constructor', 'prototype']);
 
@@ -50,6 +52,7 @@ const SESSION_ACTION_IDS: SessionActionId[] = [
   'replayCurrentSubtitle',
   'playNextSubtitle',
   'cycleRuntimeOption',
+  'runPluginAction',
 ];
 
 const RUNTIME_OPTION_IDS: RuntimeOptionId[] = [
@@ -111,6 +114,15 @@ function parseSessionActionPayload(
     };
   }
 
+  if (actionId === 'runPluginAction') {
+    if (!isObject(value)) return null;
+    if (Object.keys(value).some((key) => key !== 'pluginActionId')) return null;
+    if (typeof value.pluginActionId !== 'string' || !value.pluginActionId.includes('/')) {
+      return null;
+    }
+    return { pluginActionId: value.pluginActionId };
+  }
+
   return value === undefined ? undefined : null;
 }
 
@@ -128,23 +140,6 @@ export function parseSubtitlePosition(value: unknown): SubtitlePosition | null {
   return {
     yPercent: value.yPercent,
   };
-}
-
-function parseDiscreteBinding(value: unknown) {
-  if (!isObject(value) || typeof value.kind !== 'string') return null;
-  if (value.kind === 'none') {
-    return { kind: 'none' };
-  }
-  if (value.kind === 'button') {
-    if (!isInteger(value.buttonIndex) || value.buttonIndex < 0) return null;
-    return { kind: 'button', buttonIndex: value.buttonIndex };
-  }
-  if (value.kind === 'axis') {
-    if (!isInteger(value.axisIndex) || value.axisIndex < 0) return null;
-    if (value.direction !== 'negative' && value.direction !== 'positive') return null;
-    return { kind: 'axis', axisIndex: value.axisIndex, direction: value.direction };
-  }
-  return null;
 }
 
 function parseAxisBinding(value: unknown) {
@@ -207,19 +202,22 @@ function parseControllerBindings(value: unknown): ControllerConfigUpdate['bindin
     'nextAudio',
     'playCurrentAudio',
     'toggleMpvPause',
+    'holdSecondarySub',
+    'previousEntry',
+    'nextEntry',
+    'toggleCharacterNavigation',
+    'previousSubtitle',
+    'nextSubtitle',
+    'replaySubtitle',
+    'playNextSubtitle',
   ] as const;
   for (const key of discreteKeys) {
     if (value[key] === undefined) continue;
-    const parsed = parseDiscreteBinding(value[key]);
+    const parsed = parseControllerDiscreteBinding(value[key]);
     if (!parsed) return null;
     bindings[key] = parsed as NonNullable<ControllerConfigUpdate['bindings']>[typeof key];
   }
-  const axisKeys = [
-    'leftStickHorizontal',
-    'leftStickVertical',
-    'rightStickHorizontal',
-    'rightStickVertical',
-  ] as const;
+  const axisKeys = ['leftStickHorizontal', 'leftStickVertical', 'rightStickVertical'] as const;
   for (const key of axisKeys) {
     if (value[key] === undefined) continue;
     const parsed = parseAxisBinding(value[key]);
@@ -227,6 +225,20 @@ function parseControllerBindings(value: unknown): ControllerConfigUpdate['bindin
     bindings[key] = parsed as NonNullable<ControllerConfigUpdate['bindings']>[typeof key];
   }
   return bindings;
+}
+
+/** Copies each screen's per-action patch (`reviewBindings`, `fieldGroupingBindings`). */
+function parseControllerScreenBindingPatches(
+  source: Record<string, unknown>,
+  target: Pick<ControllerConfigUpdate, 'reviewBindings' | 'fieldGroupingBindings'>,
+): boolean {
+  for (const screen of CONTROLLER_SCREENS) {
+    if (source[screen.configKey] === undefined) continue;
+    const parsed = parseControllerScreenBindingsPatch(screen, source[screen.configKey]);
+    if (!parsed) return false;
+    (target as Record<string, unknown>)[screen.configKey] = parsed;
+  }
+  return true;
 }
 
 export function parseControllerConfigUpdate(value: unknown): ControllerConfigUpdate | null {
@@ -245,6 +257,10 @@ export function parseControllerConfigUpdate(value: unknown): ControllerConfigUpd
     if (typeof value.preferredGamepadLabel !== 'string') return null;
     update.preferredGamepadLabel = value.preferredGamepadLabel;
   }
+  if (value.faceButtonLabels !== undefined) {
+    if (!isControllerFaceButtonLabels(value.faceButtonLabels)) return null;
+    update.faceButtonLabels = value.faceButtonLabels;
+  }
   if (value.buttonIndices !== undefined) {
     const parsed = parseControllerButtonIndices(value.buttonIndices);
     if (!parsed) return null;
@@ -256,6 +272,7 @@ export function parseControllerConfigUpdate(value: unknown): ControllerConfigUpd
     if (!parsed) return null;
     update.bindings = parsed;
   }
+  if (!parseControllerScreenBindingPatches(value, update)) return null;
 
   if (value.profiles !== undefined) {
     if (!isObject(value.profiles)) return null;
@@ -268,6 +285,10 @@ export function parseControllerConfigUpdate(value: unknown): ControllerConfigUpd
         if (typeof rawProfile.label !== 'string') return null;
         profile.label = rawProfile.label;
       }
+      if (rawProfile.faceButtonLabels !== undefined) {
+        if (!isControllerFaceButtonLabels(rawProfile.faceButtonLabels)) return null;
+        profile.faceButtonLabels = rawProfile.faceButtonLabels;
+      }
       if (rawProfile.buttonIndices !== undefined) {
         const parsed = parseControllerButtonIndices(rawProfile.buttonIndices);
         if (!parsed) return null;
@@ -278,6 +299,7 @@ export function parseControllerConfigUpdate(value: unknown): ControllerConfigUpd
         if (!parsed) return null;
         profile.bindings = parsed;
       }
+      if (!parseControllerScreenBindingPatches(rawProfile, profile)) return null;
       profiles[profileId] = profile;
     }
     update.profiles = profiles;

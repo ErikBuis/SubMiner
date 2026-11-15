@@ -1,5 +1,6 @@
 import type { SubtitleTimingBlock } from '../../subtitle-timing-tracker';
 import type { SubtitleMiningContext } from '../../types/subtitle';
+import { shiftSubtitleRangeToVideoClock } from './subtitle-clock';
 
 interface SubtitleTimingTrackerLike {
   getRecentBlocks: (count: number) => string[];
@@ -27,6 +28,7 @@ interface MpvClientLike {
   currentSubText: string;
   currentSubStart: number;
   currentSubEnd: number;
+  currentSubDelay: number;
   currentSecondarySubText?: string;
   requestProperty?: (name: string) => Promise<unknown>;
 }
@@ -64,7 +66,10 @@ export function handleMultiCopyDigit(
  * line is on screen by then; callers capture here at mining time instead.
  */
 export function captureLiveSubtitleMiningContext(
-  client: Pick<MpvClientLike, 'currentSubText' | 'currentSubStart' | 'currentSubEnd'> | null,
+  client: Pick<
+    MpvClientLike,
+    'currentSubText' | 'currentSubStart' | 'currentSubEnd' | 'currentSubDelay'
+  > | null,
   now: () => number = Date.now,
 ): SubtitleMiningContext | null {
   if (!client) {
@@ -75,7 +80,10 @@ export function captureLiveSubtitleMiningContext(
   if (!text || !Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime <= startTime) {
     return null;
   }
-  return { source: 'overlay', text, startTime, endTime, capturedAtMs: now() };
+  return shiftSubtitleRangeToVideoClock<SubtitleMiningContext>(
+    { source: 'overlay', text, startTime, endTime, capturedAtMs: now() },
+    client.currentSubDelay,
+  );
 }
 
 export function copyCurrentSubtitle(deps: {
@@ -169,6 +177,7 @@ export async function markLastCardAsAudioCard(deps: {
 export async function mineSentenceCard(deps: {
   ankiIntegration: AnkiIntegrationLike | null;
   mpvClient: MpvClientLike | null;
+  /** Already on the video clock, like every `SubtitleMiningContext`. */
   primarySubtitle?: Pick<SubtitleMiningContext, 'text' | 'startTime' | 'endTime'>;
   showMpvOsd: (text: string) => void;
 }): Promise<boolean> {
@@ -187,10 +196,16 @@ export async function mineSentenceCard(deps: {
   }
 
   const secondarySubText = getCurrentSecondarySubTextForSentenceCard(mpvClient, primaryText);
+  const range =
+    deps.primarySubtitle ??
+    shiftSubtitleRangeToVideoClock(
+      { startTime: mpvClient.currentSubStart, endTime: mpvClient.currentSubEnd },
+      mpvClient.currentSubDelay,
+    );
   return await anki.createSentenceCard(
     primaryText,
-    deps.primarySubtitle?.startTime ?? mpvClient.currentSubStart,
-    deps.primarySubtitle?.endTime ?? mpvClient.currentSubEnd,
+    range.startTime,
+    range.endTime,
     secondarySubText,
   );
 }
