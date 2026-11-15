@@ -50,6 +50,7 @@ export interface IpcServiceDeps {
   onOverlayModalClosed: (
     modal: OverlayHostedModal,
     senderWindow: ElectronBrowserWindow | null,
+    instanceId?: number,
   ) => void;
   onOverlayModalOpened?: (
     modal: OverlayHostedModal,
@@ -88,6 +89,10 @@ export interface IpcServiceDeps {
   getOverlayNotificationPosition: () => string;
   getControllerConfig: () => ResolvedControllerConfig;
   saveControllerConfig: (update: ControllerConfigUpdate) => void | Promise<void>;
+  /** The overlay reports the controller it is reading (null when none). */
+  reportActiveController: (gamepadId: string | null) => void;
+  getActiveControllerId: () => string | null;
+  notifyControllerStatus: (message: string) => void;
   getSecondarySubMode: () => unknown;
   getCurrentSecondarySub: () => string;
   focusMainWindow: () => void;
@@ -317,6 +322,7 @@ export interface IpcDepsRuntimeOptions {
   onOverlayModalClosed: (
     modal: OverlayHostedModal,
     senderWindow: ElectronBrowserWindow | null,
+    instanceId?: number,
   ) => void;
   onOverlayModalOpened?: (
     modal: OverlayHostedModal,
@@ -354,6 +360,10 @@ export interface IpcDepsRuntimeOptions {
   getOverlayNotificationPosition: () => string;
   getControllerConfig: () => ResolvedControllerConfig;
   saveControllerConfig: (update: ControllerConfigUpdate) => void | Promise<void>;
+  /** The overlay reports the controller it is reading (null when none). */
+  reportActiveController: (gamepadId: string | null) => void;
+  getActiveControllerId: () => string | null;
+  notifyControllerStatus: (message: string) => void;
   getSecondarySubMode: () => unknown;
   getMpvClient: () => MpvClientLike | null;
   focusMainWindow: () => void;
@@ -430,6 +440,9 @@ export function createIpcDepsRuntime(options: IpcDepsRuntimeOptions): IpcService
     getOverlayNotificationPosition: options.getOverlayNotificationPosition,
     getControllerConfig: options.getControllerConfig,
     saveControllerConfig: options.saveControllerConfig,
+    reportActiveController: options.reportActiveController,
+    getActiveControllerId: options.getActiveControllerId,
+    notifyControllerStatus: options.notifyControllerStatus,
     getSecondarySubMode: options.getSecondarySubMode,
     getCurrentSecondarySub: () => options.getMpvClient()?.currentSecondarySubText || '',
     focusMainWindow: () => {
@@ -527,13 +540,20 @@ export function registerIpcHandlers(deps: IpcServiceDeps, ipc: IpcMainRegistrar 
     },
   );
 
-  ipc.on(IPC_CHANNELS.command.overlayModalClosed, (event: unknown, modal: unknown) => {
-    const parsedModal = parseOverlayHostedModal(modal);
-    if (!parsedModal) return;
-    const senderWindow =
-      electron.BrowserWindow?.fromWebContents((event as IpcMainEvent).sender) ?? null;
-    deps.onOverlayModalClosed(parsedModal, senderWindow);
-  });
+  ipc.on(
+    IPC_CHANNELS.command.overlayModalClosed,
+    (event: unknown, modal: unknown, instanceId: unknown) => {
+      const parsedModal = parseOverlayHostedModal(modal);
+      if (!parsedModal) return;
+      const senderWindow =
+        electron.BrowserWindow?.fromWebContents((event as IpcMainEvent).sender) ?? null;
+      deps.onOverlayModalClosed(
+        parsedModal,
+        senderWindow,
+        Number.isInteger(instanceId) ? (instanceId as number) : undefined,
+      );
+    },
+  );
   ipc.on(IPC_CHANNELS.command.overlayModalOpened, (event: unknown, modal: unknown) => {
     const parsedModal = parseOverlayHostedModal(modal);
     if (!parsedModal) return;
@@ -749,6 +769,20 @@ export function registerIpcHandlers(deps: IpcServiceDeps, ipc: IpcMainRegistrar 
 
   ipc.handle(IPC_CHANNELS.request.getControllerConfig, () => {
     return deps.getControllerConfig();
+  });
+
+  ipc.on(IPC_CHANNELS.command.reportActiveController, (_event: unknown, gamepadId: unknown) => {
+    if (gamepadId !== null && typeof gamepadId !== 'string') return;
+    deps.reportActiveController(gamepadId);
+  });
+
+  ipc.handle(IPC_CHANNELS.request.getActiveControllerId, () => {
+    return deps.getActiveControllerId();
+  });
+
+  ipc.on(IPC_CHANNELS.command.notifyControllerStatus, (_event: unknown, message: unknown) => {
+    if (typeof message !== 'string' || message.trim().length === 0) return;
+    deps.notifyControllerStatus(message);
   });
 
   ipc.handle(IPC_CHANNELS.request.getSecondarySubMode, () => {

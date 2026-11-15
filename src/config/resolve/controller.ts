@@ -1,6 +1,5 @@
 import type {
   ControllerAxisBinding,
-  ControllerAxisDirection,
   ControllerButtonBinding,
   ControllerButtonIndicesConfig,
   ControllerDpadFallback,
@@ -8,8 +7,19 @@ import type {
   ResolvedControllerBindingsConfig,
   ResolvedControllerDiscreteBinding,
 } from '../../types/runtime';
+import {
+  isControllerFaceButtonLabels,
+  isControllerScreenAction,
+  parseControllerDiscreteBinding,
+  parseControllerReviewBinding,
+  type ControllerScreenBindings,
+  type ControllerScreenDefinition,
+} from '../../shared/controller-review';
+import { CONTROLLER_SCREENS } from '../../shared/controller-screens';
 import { ResolveContext } from './context';
 import { asBoolean, asNumber, asString, isObject } from './shared';
+
+const FACE_BUTTON_LABELS_EXPECTED = "Expected 'xbox', 'nintendo', or 'playstation'.";
 
 const CONTROLLER_BUTTON_BINDINGS = [
   'none',
@@ -60,7 +70,6 @@ const CONTROLLER_BUTTON_INDEX_KEY_BY_BINDING: Record<
 const CONTROLLER_AXIS_FALLBACK_BY_SLOT = {
   leftStickHorizontal: 'horizontal',
   leftStickVertical: 'vertical',
-  rightStickHorizontal: 'none',
   rightStickVertical: 'none',
 } as const satisfies Record<string, ControllerDpadFallback>;
 
@@ -88,12 +97,19 @@ const CONTROLLER_DISCRETE_BINDING_KEYS = [
   'nextAudio',
   'playCurrentAudio',
   'toggleMpvPause',
+  'holdSecondarySub',
+  'previousEntry',
+  'nextEntry',
+  'toggleCharacterNavigation',
+  'previousSubtitle',
+  'nextSubtitle',
+  'replaySubtitle',
+  'playNextSubtitle',
 ] as const;
 
 const CONTROLLER_AXIS_BINDING_KEYS = [
   'leftStickHorizontal',
   'leftStickVertical',
-  'rightStickHorizontal',
   'rightStickVertical',
 ] as const;
 
@@ -101,10 +117,6 @@ const RESERVED_CONTROLLER_PROFILE_IDS = new Set(['__proto__', 'constructor', 'pr
 
 type ControllerBindingsTarget = Required<ResolvedControllerBindingsConfig>;
 type ControllerButtonIndicesTarget = Required<ControllerButtonIndicesConfig>;
-
-function isControllerAxisDirection(value: unknown): value is ControllerAxisDirection {
-  return value === 'negative' || value === 'positive';
-}
 
 function isControllerDpadFallback(value: unknown): value is ControllerDpadFallback {
   return value === 'none' || value === 'horizontal' || value === 'vertical';
@@ -132,29 +144,6 @@ function resolveLegacyAxisBinding(
     axisIndex: CONTROLLER_AXIS_INDEX_BY_BINDING[value],
     dpadFallback: CONTROLLER_AXIS_FALLBACK_BY_SLOT[slot],
   };
-}
-
-function parseDiscreteBindingObject(value: unknown): ResolvedControllerDiscreteBinding | null {
-  if (!isObject(value) || typeof value.kind !== 'string') return null;
-  if (value.kind === 'none') {
-    return { kind: 'none' };
-  }
-  if (value.kind === 'button') {
-    return typeof value.buttonIndex === 'number' &&
-      Number.isInteger(value.buttonIndex) &&
-      value.buttonIndex >= 0
-      ? { kind: 'button', buttonIndex: value.buttonIndex }
-      : null;
-  }
-  if (value.kind === 'axis') {
-    return typeof value.axisIndex === 'number' &&
-      Number.isInteger(value.axisIndex) &&
-      value.axisIndex >= 0 &&
-      isControllerAxisDirection(value.direction)
-      ? { kind: 'axis', axisIndex: value.axisIndex, direction: value.direction }
-      : null;
-  }
-  return null;
 }
 
 function parseAxisBindingObject(
@@ -224,7 +213,7 @@ function applyControllerBindings(
       );
       continue;
     }
-    const parsedObject = parseDiscreteBindingObject(bindingValue);
+    const parsedObject = parseControllerDiscreteBinding(bindingValue);
     if (parsedObject) {
       target[key] = parsedObject;
     } else if (bindingValue !== undefined) {
@@ -232,7 +221,7 @@ function applyControllerBindings(
         `${pathPrefix}.${key}`,
         bindingValue,
         target[key],
-        "Expected legacy controller button name or binding object with kind 'none', 'button', or 'axis'.",
+        "Expected legacy controller button name or binding object with kind 'none', 'button', or 'axis', and an optional button or axis 'hold'.",
       );
     }
   }
@@ -260,6 +249,37 @@ function applyControllerBindings(
         bindingValue,
         target[key],
         "Expected legacy controller axis name ('none' allowed) or binding object with kind 'axis'.",
+      );
+    }
+  }
+}
+
+function applyControllerScreenBindings(
+  screen: ControllerScreenDefinition,
+  source: unknown,
+  target: ControllerScreenBindings,
+  pathPrefix: string,
+  warn: ResolveContext['warn'],
+): void {
+  if (source === undefined) return;
+  if (!isObject(source)) {
+    warn(pathPrefix, source, target, `Expected an object keyed by ${screen.describe} action.`);
+    return;
+  }
+  for (const [action, value] of Object.entries(source)) {
+    if (!isControllerScreenAction(screen, action)) {
+      warn(`${pathPrefix}.${action}`, value, undefined, `Unknown ${screen.describe} action.`);
+      continue;
+    }
+    const parsed = parseControllerReviewBinding(value);
+    if (parsed) {
+      target[action] = parsed;
+    } else {
+      warn(
+        `${pathPrefix}.${action}`,
+        value,
+        target[action],
+        'Expected {"kind": "none"} or {"press": input, "hold"?: input} with button, axis, face or dpad inputs.',
       );
     }
   }
@@ -319,6 +339,18 @@ export function applyControllerConfig(context: ResolveContext): void {
     );
   }
 
+  const faceButtonLabels = src.controller.faceButtonLabels;
+  if (isControllerFaceButtonLabels(faceButtonLabels)) {
+    resolved.controller.faceButtonLabels = faceButtonLabels;
+  } else if (faceButtonLabels !== undefined) {
+    warn(
+      'controller.faceButtonLabels',
+      faceButtonLabels,
+      resolved.controller.faceButtonLabels,
+      FACE_BUTTON_LABELS_EXPECTED,
+    );
+  }
+
   const boundedNumberKeys = [
     'scrollPixelsPerSecond',
     'horizontalJumpPixels',
@@ -367,6 +399,15 @@ export function applyControllerConfig(context: ResolveContext): void {
     'controller.bindings',
     warn,
   );
+  for (const screen of CONTROLLER_SCREENS) {
+    applyControllerScreenBindings(
+      screen,
+      src.controller[screen.configKey],
+      resolved.controller[screen.configKey],
+      `controller.${screen.configKey}`,
+      warn,
+    );
+  }
 
   if (isObject(src.controller.profiles)) {
     for (const [profileId, rawProfile] of Object.entries(src.controller.profiles)) {
@@ -403,7 +444,21 @@ export function applyControllerConfig(context: ResolveContext): void {
         label: label ?? profileId,
         buttonIndices: structuredClone(resolved.controller.buttonIndices),
         bindings: structuredClone(resolved.controller.bindings),
+        faceButtonLabels: resolved.controller.faceButtonLabels,
+        reviewBindings: structuredClone(resolved.controller.reviewBindings),
+        fieldGroupingBindings: structuredClone(resolved.controller.fieldGroupingBindings),
       };
+      // Set per controller from Alt+C; falls back to controller.faceButtonLabels.
+      if (isControllerFaceButtonLabels(rawProfile.faceButtonLabels)) {
+        profile.faceButtonLabels = rawProfile.faceButtonLabels;
+      } else if (rawProfile.faceButtonLabels !== undefined) {
+        warn(
+          `controller.profiles.${profileId}.faceButtonLabels`,
+          rawProfile.faceButtonLabels,
+          profile.faceButtonLabels,
+          FACE_BUTTON_LABELS_EXPECTED,
+        );
+      }
       applyControllerButtonIndices(
         rawProfile.buttonIndices,
         profile.buttonIndices,
@@ -417,6 +472,15 @@ export function applyControllerConfig(context: ResolveContext): void {
         `controller.profiles.${profileId}.bindings`,
         warn,
       );
+      for (const screen of CONTROLLER_SCREENS) {
+        applyControllerScreenBindings(
+          screen,
+          rawProfile[screen.configKey],
+          profile[screen.configKey],
+          `controller.profiles.${profileId}.${screen.configKey}`,
+          warn,
+        );
+      }
       resolved.controller.profiles[profileId] = profile;
     }
   }

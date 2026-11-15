@@ -37,6 +37,7 @@ const {
   startupWarmups,
   updates,
   notifications,
+  plugins,
   auto_start_overlay,
 } = CORE_DEFAULT_CONFIG;
 const {
@@ -51,7 +52,7 @@ const {
   discordPresence,
   ai,
 } = INTEGRATIONS_DEFAULT_CONFIG;
-const { subtitleStyle, subtitleSidebar } = SUBTITLE_DEFAULT_CONFIG;
+const { subtitleStyle, subtitleSidebar, subtitleFilter } = SUBTITLE_DEFAULT_CONFIG;
 const { immersionTracking } = IMMERSION_DEFAULT_CONFIG;
 const { stats } = STATS_DEFAULT_CONFIG;
 
@@ -74,8 +75,10 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
   startupWarmups,
   updates,
   notifications,
+  plugins,
   subtitleStyle,
   subtitleSidebar,
+  subtitleFilter,
   auto_start_overlay,
   jimaku,
   tsukihime,

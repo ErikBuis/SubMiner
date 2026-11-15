@@ -1,6 +1,10 @@
 import { MpvSubtitleRenderMetrics } from '../../types';
 import { sanitizeMediaTitle } from '../../shared/media-identity';
 import { widenHalfwidthKana } from '../utils/halfwidth-kana';
+import { filterSubtitleText } from '../../shared/subtitle-text-filter';
+import type { SubtitleFilterConfig } from '../../types/subtitle';
+import type { PluginMpvEventMap } from '../../plugin-api';
+import { toVideoClock } from './subtitle-clock';
 
 export type MpvMessage = {
   event?: string;
@@ -9,7 +13,25 @@ export type MpvMessage = {
   args?: unknown;
   request_id?: number;
   error?: string;
+  reason?: unknown;
+  playlist_entry_id?: unknown;
+  file_error?: unknown;
 };
+
+const MPV_END_FILE_REASONS = ['eof', 'stop', 'quit', 'error', 'redirect'] as const;
+export type MpvEndFileReason = PluginMpvEventMap['end-file']['reason'];
+
+/** mpv's `end-file` event: why the current file stopped, and mpv's error text when it failed. */
+export type MpvEndFileEvent = PluginMpvEventMap['end-file'];
+
+function parseEndFileEvent(msg: MpvMessage): MpvEndFileEvent {
+  const reason = MPV_END_FILE_REASONS.find((known) => known === msg.reason) ?? 'unknown';
+  return {
+    reason,
+    playlistEntryId: typeof msg.playlist_entry_id === 'number' ? msg.playlist_entry_id : null,
+    error: typeof msg.file_error === 'string' && msg.file_error ? msg.file_error : null,
+  };
+}
 
 export const MPV_REQUEST_ID_SUBTEXT = 101;
 export const MPV_REQUEST_ID_PATH = 102;
@@ -33,6 +55,7 @@ export const MPV_REQUEST_ID_SUB_SHADOW_OFFSET = 120;
 export const MPV_REQUEST_ID_SUB_ASS_OVERRIDE = 121;
 export const MPV_REQUEST_ID_SUB_USE_MARGINS = 122;
 export const MPV_REQUEST_ID_PAUSE = 123;
+export const MPV_REQUEST_ID_RELOADED_PATH = 124;
 export const MPV_REQUEST_ID_TRACK_LIST_SECONDARY = 200;
 export const MPV_REQUEST_ID_TRACK_LIST_AUDIO = 201;
 export const MPV_REQUEST_ID_MEDIA_TITLE = 202;
@@ -48,6 +71,7 @@ export interface MpvProtocolParseResult {
 export interface MpvProtocolHandleMessageDeps {
   getResolvedConfig: () => {
     secondarySub?: { secondarySubLanguages?: Array<string> };
+    subtitleFilter?: SubtitleFilterConfig;
   };
   getSubtitleMetrics: () => MpvSubtitleRenderMetrics;
   isVisibleOverlayVisible: () => boolean;
@@ -64,6 +88,8 @@ export interface MpvProtocolHandleMessageDeps {
   getCurrentSubStart: () => number;
   setCurrentSubEnd: (value: number) => void;
   getCurrentSubEnd: () => number;
+  setCurrentSubDelay: (value: number) => void;
+  getCurrentSubDelay: () => number;
   emitMediaPathChange: (payload: { path: string }) => void;
   emitMediaTitleChange: (payload: { title: string | null }) => void;
   emitTimePosChange: (payload: { time: number }) => void;
@@ -84,7 +110,11 @@ export interface MpvProtocolHandleMessageDeps {
   getPauseAtTime: () => number | null;
   setPauseAtTime: (value: number | null) => void;
   autoLoadSecondarySubTrack: (path: string) => void;
+  getCurrentVideoPath: () => string;
   setCurrentVideoPath: (value: string) => void;
+  /** True from `end-file` until mpv reports a different path or the next `file-loaded`. */
+  getAwaitingPathChangeAfterEndFile: () => boolean;
+  setAwaitingPathChangeAfterEndFile: (value: boolean) => void;
   emitSecondarySubtitleVisibility: (payload: { visible: boolean }) => void;
   setPreviousSecondarySubVisibility: (visible: boolean) => void;
   setCurrentAudioStreamIndex: (
@@ -100,6 +130,8 @@ export interface MpvProtocolHandleMessageDeps {
   shouldQuitOnMpvShutdown: () => boolean;
   requestAppQuit: () => void;
   emitClientMessage?: (payload: { args: string[] }) => void;
+  emitEndFile?: (payload: MpvEndFileEvent) => void;
+  emitFileLoaded?: () => void;
 }
 
 type SubtitleTrackCandidate = {
@@ -239,13 +271,19 @@ export function splitMpvMessagesFromBuffer(
   };
 }
 
+// Primary text enters the app here, so every consumer sees it widened and filtered.
+function toPrimarySubText(data: unknown, deps: MpvProtocolHandleMessageDeps): string {
+  const text = widenHalfwidthKana(typeof data === 'string' ? data : '');
+  return filterSubtitleText(text, deps.getResolvedConfig().subtitleFilter);
+}
+
 export async function dispatchMpvProtocolMessage(
   msg: MpvMessage,
   deps: MpvProtocolHandleMessageDeps,
 ): Promise<void> {
   if (msg.event === 'property-change') {
     if (msg.name === 'sub-text') {
-      const nextSubText = widenHalfwidthKana((msg.data as string) || '');
+      const nextSubText = toPrimarySubText(msg.data, deps);
       const overlayVisible = deps.isVisibleOverlayVisible();
       deps.emitSubtitleChange({
         text: nextSubText,
@@ -263,7 +301,8 @@ export async function dispatchMpvProtocolMessage(
       const subEnd = (msg.data as number) || 0;
       deps.setCurrentSubEnd(subEnd);
       if (deps.getPendingPauseAtSubEnd() && subEnd > 0) {
-        deps.setPauseAtTime(subEnd);
+        // `sub-end` is on the subtitle clock; the pause check compares it with `time-pos`.
+        deps.setPauseAtTime(toVideoClock(subEnd, deps.getCurrentSubDelay()));
         deps.setPendingPauseAtSubEnd(false);
         deps.sendCommand({ command: ['set_property', 'pause', false] });
       }
@@ -272,6 +311,16 @@ export async function dispatchMpvProtocolMessage(
         start: deps.getCurrentSubStart(),
         end: deps.getCurrentSubEnd(),
       });
+    } else if (msg.name === 'sub-delay') {
+      const parsed = typeof msg.data === 'number' ? msg.data : Number(msg.data);
+      const delay = Number.isFinite(parsed) ? parsed : 0;
+      // A scheduled replay pause sits at the line's end on the video clock; retiming
+      // mid-replay moves that end, so the pause moves with it.
+      const pauseAtTime = deps.getPauseAtTime();
+      if (pauseAtTime !== null) {
+        deps.setPauseAtTime(pauseAtTime + delay - deps.getCurrentSubDelay());
+      }
+      deps.setCurrentSubDelay(delay);
     } else if (msg.name === 'secondary-sub-text') {
       const nextSubText = (msg.data as string) || '';
       deps.setCurrentSecondarySubText(nextSubText);
@@ -336,18 +385,10 @@ export async function dispatchMpvProtocolMessage(
       applyMediaTitle(deps, msg.data);
     } else if (msg.name === 'path') {
       const path = (msg.data as string) || '';
-      deps.setCurrentVideoPath(path);
-      // A forced title set before loadfile arrives ahead of the path change that clears the
-      // cached title and never fires again, so read it back once the new path is known.
-      if (path) {
-        deps.sendCommand({
-          command: ['get_property', 'media-title'],
-          request_id: MPV_REQUEST_ID_MEDIA_TITLE,
-        });
+      if (path !== deps.getCurrentVideoPath()) {
+        deps.setAwaitingPathChangeAfterEndFile(false);
       }
-      deps.emitMediaPathChange({ path });
-      deps.autoLoadSecondarySubTrack(path);
-      deps.syncCurrentAudioStreamIndex();
+      applyMediaPath(deps, path);
     } else if (msg.name === 'sub-pos') {
       deps.emitSubtitleMetricsChange({ subPos: msg.data as number });
     } else if (msg.name === 'sub-font-size') {
@@ -419,6 +460,27 @@ export async function dispatchMpvProtocolMessage(
     if (args.length > 0) {
       deps.emitClientMessage?.({ args });
     }
+  } else if (msg.event === 'file-loaded') {
+    if (deps.getAwaitingPathChangeAfterEndFile()) {
+      // mpv only sends the latest value of an observed property, once its IPC thread gets to it, so
+      // a same-file reload can skip the path clear. The reload then looks like nothing happened and
+      // per-file state (autoplay gate, subtitles) never resets. Replay the clear so consumers see
+      // the same sequence as any other load. Read the path back because the unchanged value may
+      // never be reported, and hold file-loaded until the reply so listeners can read the path.
+      deps.setAwaitingPathChangeAfterEndFile(false);
+      applyMediaPath(deps, '');
+      deps.sendCommand({
+        command: ['get_property', 'path'],
+        request_id: MPV_REQUEST_ID_RELOADED_PATH,
+      });
+      return;
+    }
+    deps.emitFileLoaded?.();
+  } else if (msg.event === 'end-file') {
+    deps.emitEndFile?.(parseEndFileEvent(msg));
+    if (deps.getCurrentVideoPath()) {
+      deps.setAwaitingPathChangeAfterEndFile(true);
+    }
   } else if (msg.event === 'shutdown') {
     deps.restorePreviousSecondarySubVisibility();
     if (deps.shouldQuitOnMpvShutdown()) {
@@ -426,6 +488,17 @@ export async function dispatchMpvProtocolMessage(
     }
   } else if (msg.request_id) {
     if (deps.resolvePendingRequest(msg.request_id, msg)) {
+      return;
+    }
+
+    // Before the no-data check: an error reply still owes the file-loaded held for this read.
+    if (msg.request_id === MPV_REQUEST_ID_RELOADED_PATH) {
+      // The path property event may have restored the path before this reply arrived.
+      const path = (msg.data as string) || '';
+      if (path && !deps.getCurrentVideoPath()) {
+        applyMediaPath(deps, path);
+      }
+      deps.emitFileLoaded?.();
       return;
     }
 
@@ -459,7 +532,7 @@ export async function dispatchMpvProtocolMessage(
         }>,
       );
     } else if (msg.request_id === MPV_REQUEST_ID_SUBTEXT) {
-      const nextSubText = widenHalfwidthKana((msg.data as string) || '');
+      const nextSubText = toPrimarySubText(msg.data, deps);
       deps.setCurrentSubText(nextSubText);
       deps.emitSubtitleChange({
         text: nextSubText,
@@ -568,6 +641,21 @@ function applyMediaTitle(
   const title = typeof data === 'string' ? sanitizeMediaTitle(data) : null;
   if (typeof data === 'string' && data.trim() && !title) return;
   deps.emitMediaTitleChange({ title });
+}
+
+function applyMediaPath(deps: MpvProtocolHandleMessageDeps, path: string): void {
+  deps.setCurrentVideoPath(path);
+  // A forced title set before loadfile arrives ahead of the path change that clears the
+  // cached title and never fires again, so read it back once the new path is known.
+  if (path) {
+    deps.sendCommand({
+      command: ['get_property', 'media-title'],
+      request_id: MPV_REQUEST_ID_MEDIA_TITLE,
+    });
+  }
+  deps.emitMediaPathChange({ path });
+  deps.autoLoadSecondarySubTrack(path);
+  deps.syncCurrentAudioStreamIndex();
 }
 
 export function parseVisibilityProperty(value: unknown): boolean | null {

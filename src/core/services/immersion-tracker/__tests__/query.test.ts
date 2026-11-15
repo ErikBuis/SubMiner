@@ -704,7 +704,7 @@ test('getTrendsDashboard returns chart-ready aggregated series', () => {
           total_tokens_seen, total_cards
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-    ).run(Math.floor(dayOneStart / 86_400_000), videoId, 1, 30, 10, 120, 2);
+    ).run(getLocalEpochDay(db, dayOneStart), videoId, 1, 30, 10, 120, 2);
 
     db.prepare(
       `
@@ -713,7 +713,7 @@ test('getTrendsDashboard returns chart-ready aggregated series', () => {
           total_tokens_seen, total_cards
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-    ).run(Math.floor(dayTwoStart / 86_400_000), videoId, 1, 45, 10, 140, 3);
+    ).run(getLocalEpochDay(db, dayTwoStart), videoId, 1, 45, 10, 140, 3);
 
     db.prepare(
       `
@@ -739,15 +739,17 @@ test('getTrendsDashboard returns chart-ready aggregated series', () => {
     assert.equal(dashboard.activity.watchTime[0]?.value, 30);
     assert.equal(dashboard.progress.watchTime[1]?.value, 75);
     assert.equal(dashboard.progress.lookups[1]?.value, 18);
-    assert.equal(dashboard.ratios.lookupsPerHundred[0]?.value, +((8 / 120) * 100).toFixed(1));
     assert.equal(dashboard.ratios.cardsPerHour[0]?.value, +(2 / (30 / 60)).toFixed(1));
-    assert.equal(dashboard.ratios.cardsPerHour[1]?.value, +(3 / (45 / 60)).toFixed(1));
+    assert.equal(dashboard.ratios.cardsPerHour[1]?.value, +(5 / (75 / 60)).toFixed(1));
     assert.equal(dashboard.ratios.readingSpeed[0]?.value, +(120 / 30).toFixed(1));
-    assert.equal(dashboard.ratios.readingSpeed[1]?.value, +(140 / 45).toFixed(1));
+    assert.equal(dashboard.ratios.readingSpeed[1]?.value, +(260 / 75).toFixed(1));
     assert.equal(dashboard.librarySummary[0]?.title, 'Trend Dashboard Anime');
-    assert.equal(dashboard.animeCumulative.watchTime[1]?.value, 75);
+    assert.deepEqual(
+      dashboard.titleTimeline.map((point) => point.value).sort((a, b) => a - b),
+      [30, 45],
+    );
     assert.equal(
-      dashboard.patterns.watchTimeByDayOfWeek.reduce((sum, point) => sum + point.value, 0),
+      dashboard.watchTimeByDayHour.flat().reduce((sum, minutes) => sum + minutes, 0),
       75,
     );
   } finally {
@@ -819,7 +821,7 @@ test('getTrendsDashboard redacts legacy Jellyfin stream titles', () => {
 
     const dashboard = getTrendsDashboard(db, 'all', 'day');
     const titles = [
-      ...dashboard.animeCumulative.watchTime.map((point) => point.animeTitle),
+      ...dashboard.titleTimeline.map((point) => point.animeTitle),
       ...dashboard.librarySummary.map((row) => row.title),
     ];
 
@@ -1521,6 +1523,8 @@ test('word-count read models use filtered persisted occurrences with raw fallbac
     const startedAtMs = 1_700_000_000_000;
     const withOccurrences = startSessionRecord(db, videoId, startedAtMs);
     const fallbackOnly = startSessionRecord(db, videoId, startedAtMs + 60_000);
+    // Still running, so its words stay out of the all-time total.
+    const stillActive = startSessionRecord(db, videoId, startedAtMs + 120_000);
 
     db.prepare(
       `
@@ -1542,6 +1546,14 @@ test('word-count read models use filtered persisted occurrences with raw fallbac
       videoId,
       occurrenceCount: 2,
       startedAtMs,
+    });
+    insertFilteredWordOccurrence(db, {
+      sessionId: stillActive.sessionId,
+      videoId,
+      lineIndex: 3,
+      occurrenceCount: 4,
+      startedAtMs: startedAtMs + 120_000,
+      headword: '犬',
     });
     insertFilteredWordOccurrence(db, {
       sessionId: withOccurrences.sessionId,
@@ -4738,7 +4750,7 @@ test('deleteSession removes zero-session media from library and trends', () => {
 
     const trends = getTrendsDashboard(db, 'all', 'day');
     assert.deepEqual(trends.activity.watchTime, []);
-    assert.deepEqual(trends.activity.sessions, []);
+    assert.deepEqual(trends.activity.cards, []);
 
     const dailyRollups = getDailyRollups(db, 30);
     const monthlyRollups = getMonthlyRollups(db, 30);
@@ -5060,7 +5072,7 @@ test('getTrendsDashboard rollup word metrics keep persisted totals over partial 
           total_tokens_seen, total_cards
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
-      ).run(Math.floor(row.start / 86_400_000), videoId, 1, 10, 1, row.rawWords, 0);
+      ).run(getLocalEpochDay(db, row.start), videoId, 1, 10, 1, row.rawWords, 0);
     }
 
     const dashboard = getTrendsDashboard(db, 'all', 'day');
@@ -5072,10 +5084,8 @@ test('getTrendsDashboard rollup word metrics keep persisted totals over partial 
       dashboard.progress.words.map((point) => point.value),
       [10, 30],
     );
-    assert.equal(dashboard.ratios.lookupsPerHundred[0]?.value, 200);
     assert.equal(dashboard.librarySummary[0]?.words, 30);
     assert.equal(dashboard.librarySummary[0]?.lookupsPerHundred, 33.3);
-    assert.equal(dashboard.animeCumulative.words.at(-1)?.value, 30);
   } finally {
     db.close();
     cleanupDbPath(dbPath);

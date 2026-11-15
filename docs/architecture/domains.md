@@ -3,7 +3,7 @@
 # Domain Ownership
 
 Status: active
-Last verified: 2026-07-15
+Last verified: 2026-11-01
 Owner: Kyle Yasuda
 Read when: you need to find the owner module for a behavior or test surface
 
@@ -19,21 +19,61 @@ Read when: you need to find the owner module for a behavior or test surface
 - Config system: `src/config/`; Anki resolution is composed by
   `src/config/resolve/anki-connect.ts` from focused resolvers in
   `src/config/resolve/anki-connect/`
+  Config hot-reload and the settings window: `src/main/assemblies/settings.ts`
+- App startup: app-ready sequence, headless known-word refresh, overlay startup prerequisites and
+  overlay runtime bootstrap: `src/main/assemblies/startup.ts`
 - Overlay/window state: `src/core/services/overlay-*`, `src/main/overlay-*.ts`
+  Overlay windows, visibility, geometry and pointer interaction, Linux fullscreen handling, mpv
+  subtitle suppression while the overlay shows, and the overlay-window IPC handlers (modal
+  open/close, pointer interaction, content measurement): `src/main/assemblies/overlay.ts`
+  Overlay-hosted modal openers: `src/main/assemblies/overlay-modals.ts`
+  Windows window tracking: `src/window-trackers/windows-tracker.ts` queries the target mpv IPC
+  socket for its PID through `mpv-process-id.ts`, then `win32.ts` matches native windows by PID.
+  Visible matches are revalidated every 10 seconds; a PID expires after 30 seconds without a
+  successful IPC response. Missing windows retry at one-second intervals. Custom executable
+  names remain supported because matching uses the IPC PID.
+  `src/core/services/overlay-visibility-diagnostics.ts` watches requested Windows overlays:
+  after five seconds hidden or transparent it logs a warn-level snapshot, repeating at most
+  every 30 seconds. Intentional hiding, minimization and having no mpv answer on the socket
+  yet suppress these warnings; an identified mpv whose window never matches does not. PID lookup
+  failures and native ownership/transparency failures also log at warn, including recovery.
 - MPV runtime and protocol: `src/core/services/mpv*.ts`
+  mpv client creation, mpv event wiring, AniSkip, the autoplay-ready gate that releases mpv's
+  startup pause, managed local subtitle selection, subtitle prefetch, and subtitle sidebar state:
+  `src/main/assemblies/playback.ts`
+- Keyboard input outside the renderer (overlay, global and numeric shortcuts, session bindings):
+  `src/main/assemblies/shortcuts.ts`
+- Session actions (the dispatcher behind shortcuts, controller buttons, CLI commands and plugin
+  actions), the secondary-subtitle mode cycle, and the overlay renderer's mpv commands:
+  `src/main/assemblies/session-actions.ts`
+- System tray: `src/main/assemblies/tray.ts`
+- Yomitan/Hachidori extension loading, parser runtime deps, and dictionary settings windows:
+  `src/main/assemblies/yomitan.ts`
   Windows executable lookup and detached process creation are shared in `src/main/runtime/mpv-process.ts`. The Windows launcher and Jellyfin handlers retain their own playback and connection workflows.
 - Subtitle/token pipeline: `src/core/services/subtitle-*.ts`, `src/core/services/tokenizer*`, `src/core/services/tokenizer/`, `src/subsync/`
+  JLPT and frequency annotation lookups: `src/main/jlpt-runtime.ts`, `src/main/frequency-dictionary-runtime.ts`, assembled by `src/main/assemblies/dictionaries.ts`
+  Annotation toggles (a cycled runtime option over its config value): `src/main/runtime/annotation-options.ts`
+  Whisper subtitle generation runtime, modal and IPC: `src/main/assemblies/subtitle-generation.ts`
+  Subtitle text filters (`subtitleFilter`): `src/shared/subtitle-text-filter.ts`. Primary text is filtered at its two entry points, live `sub-text` in `mpv-protocol.ts` and parsed cues in `playback.ts`, so every consumer sees the same text and live/cue matching still works. A config change re-reads `sub-text` and re-parses the active track (the prefetch controller's parse key).
+- First-run setup: `src/main/runtime/first-run-setup-*.ts`, assembled by `src/main/assemblies/first-run-setup.ts`
 - Anki workflow: `src/anki-integration/`, `src/core/services/anki-jimaku*.ts`
+  Card mining handlers, the pending lookup context, field grouping, and media timing review wiring:
+  `src/main/assemblies/mining.ts`
 - Media timing review: `src/main/runtime/media-timing-review.ts` owns the review and hidden `MediaTimingPreviewSession`. The session waits for mpv readiness and acknowledges playback commands; its `time-pos` observations reach the modal through `media-timing-review:preview-position`. The renderer places the cursor from those timestamps and uses an inactivity timeout instead of timing the clip itself.
-- Immersion tracking: `src/core/services/immersion-tracker/`
+- Immersion tracking: `src/core/services/immersion-tracker/`; tracker startup, the stats server,
+  the stats overlay window options, and the `--stats` command are assembled by `src/main/assemblies/stats.ts`
   Includes stats storage/query schema such as `imm_videos`, `imm_media_art`, and `imm_youtube_videos` for per-video and YouTube-specific library metadata.
   Library-entry identity aliases and merge recommendations are persisted alongside this schema; the stats HTTP and SPA layers only expose and present those domain decisions.
   `delete-maintenance-scheduler.ts` coalesces and serializes stats deletes; the expensive work runs in `delete-maintenance-worker-thread.ts` while the tracker queues playback writes. Each batch uses one transaction, lexical update, rollup refresh, and incremental lifetime subtraction (`planLifetimeRemovals`/`applyLifetimeRemovals` in `lifetime.ts`). Merges, moves, AniList reassignments, and `stats cleanup -l` use `repairLifetimeSummariesFromMedia` (recompute from the per-video media ledger). The full lifetime rebuild survives only as the empty-table bootstrap; anywhere else it would collapse lifetime totals to the session retention window.
-- Immersion sync: `src/core/services/stats-sync/`, bound by `src/main/sync-cli.ts`.
+- Immersion sync: `src/core/services/stats-sync/`, bound by `src/main/sync-cli.ts`. The sync window and auto-sync scheduler live in `src/main/assemblies/sync.ts`.
   `snapshot-transfer.ts` selects compressed rsync or scp. `transfer-cache.ts` atomically retains the last successfully received snapshot per hashed peer/database identity under the config directory's `sync-transfer-cache/`. Cache copies seed isolated transfer directories; rsync verifies reconstructed files before the existing merge engine runs. The `--make-temp` / `--remove-temp` helpers accept an internal `--transfer-cache` key, with a fallback for older peers that do not recognize it.
-- AniList tracking + character dictionary: `src/core/services/anilist/`, `src/main/runtime/composers/anilist-*`, `src/main/character-dictionary-runtime.ts`, `src/main/character-dictionary-runtime/`
+- AniList tracking + character dictionary: `src/core/services/anilist/`, `src/main/runtime/composers/anilist-*` (called by `src/main/assemblies/anilist.ts`), `src/main/character-dictionary-runtime.ts`, `src/main/character-dictionary-runtime/`, assembled by `src/main/assemblies/character-dictionary.ts`
 - TMDB live-action metadata: `src/core/services/tmdb/` (client + exact-title resolver), `src/core/services/immersion-tracker/live-action-link.ts` (links an entry to a TMDB title and merges other holders of the same title). The AniList cover-art fetcher calls the resolver as its fallback; `imm_anime.media_kind` marks the result and keeps the entry out of AniList season repair.
-- Jellyfin integration: `src/core/services/jellyfin*.ts`, `src/main/runtime/composers/jellyfin-*`
+- Jellyfin integration: `src/core/services/jellyfin*.ts`, `src/main/runtime/composers/jellyfin-*`,
+  assembled by `src/main/assemblies/jellyfin.ts`
+- YouTube playback, subtitles, media cache, and in-app browser: `src/core/services/youtube/`,
+  `src/main/runtime/youtube-*`, assembled by `src/main/assemblies/youtube.ts`
+- User plugins: `src/core/services/plugins/` (host, `ctx`, `exec`), `src/main/runtime/plugin-panel-runtime.ts` (panel modal), `src/main/runtime/plugin-window-runtime.ts` (plugin windows), assembled by `src/main/assemblies/plugins.ts`; `src/renderer/modals/plugin-panel*.ts`; examples in `assets/plugins/`
 - Window trackers: `src/window-trackers/`
 - Stats HTTP app: `src/core/services/stats-server.ts`, with route groups and shared route support
   in `src/core/services/stats-server/`
