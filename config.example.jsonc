@@ -774,6 +774,7 @@
     "autoPauseVideoOnYomitanPopup": true, // Automatically pause mpv playback while Yomitan popup is open, then resume when popup closes. Values: true | false
     "autoPauseVideoOnKeyboardMode": false, // Pause mpv when keyboard-only mode turns on (from the keyboard or a controller) and resume when it turns off. Leaving the mode resumes only a pause it made: a video that was already paused, or that you played or paused yourself meanwhile, is left as it is. Values: true | false
     "primaryVisibleOnYomitanPopup": true, // Keep the primary subtitle bar visible while a Yomitan popup is open when primary subtitles are in hover mode. Values: true | false
+    "morphologyGuidedSplitting": true, // Use a bundled Japanese morphological analyzer to correct where subtitle words begin and end (の+メッセージ instead of のめす+ー+ジ). Values: true | false
     "nameMatchEnabled": false, // Enable character dictionary sync and subtitle token coloring for character-name matches. Values: true | false
     "nameMatchImagesEnabled": false, // Show small character portraits beside subtitle tokens matched from the SubMiner character dictionary. Values: true | false
     "nameMatchColor": "#f5bde6", // Hex color used when a subtitle token matches an entry from the SubMiner character dictionary.

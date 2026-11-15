@@ -26,6 +26,7 @@ import {
   requestYomitanTermFrequencies,
 } from './tokenizer/yomitan-parser-runtime';
 import type { YomitanTermFrequency } from './tokenizer/yomitan-parser-runtime';
+import type { MorphologyGuide } from './tokenizer/morphology-guide';
 import { isKanaChar } from './tokenizer/token-classification';
 import { normalizePlainSubtitleText } from './ass-text';
 
@@ -79,6 +80,8 @@ export interface TokenizerServiceDeps {
   getYomitanGroupDebugEnabled?: () => boolean;
   tokenizeWithMecab: (text: string) => Promise<MergedToken[] | null>;
   enrichTokensWithMecab?: MecabTokenEnrichmentFn;
+  /** Word boundaries that steer the Yomitan scan; null keeps the plain scan. */
+  getMorphologyGuide?: (text: string) => Promise<MorphologyGuide | null>;
   onTokenizationReady?: (text: string) => void;
 }
 
@@ -115,6 +118,7 @@ export interface TokenizerDepsRuntimeOptions {
   getMinSentenceWordsForNPlusOne?: () => number;
   getYomitanGroupDebugEnabled?: () => boolean;
   getMecabTokenizer: () => MecabTokenizerLike | null;
+  getMorphologyGuide?: (text: string) => Promise<MorphologyGuide | null>;
   onTokenizationReady?: (text: string) => void;
 }
 
@@ -308,6 +312,7 @@ export function createTokenizerDepsRuntime(
     },
     enrichTokensWithMecab: async (tokens, mecabTokens) =>
       enrichTokensWithMecabAsync(tokens, mecabTokens),
+    getMorphologyGuide: options.getMorphologyGuide,
     onTokenizationReady: options.onTokenizationReady,
   };
 }
@@ -729,7 +734,14 @@ async function parseWithYomitanInternalParser(
   stageTimings?: TokenizationStageTimings,
 ): Promise<MergedToken[] | null> {
   const scanStartedAtMs = Date.now();
+  const morphologyGuide = deps.getMorphologyGuide
+    ? await deps.getMorphologyGuide(text).catch((error: Error) => {
+        logger.warn('Word splitting guide failed; using the plain Yomitan scan:', error.message);
+        return null;
+      })
+    : null;
   const selectedTokens = await requestYomitanScanTokens(text, deps, logger, {
+    morphologyGuide,
     includeNameMatchMetadata: options.nameMatchEnabled,
     currentCharacterDictionaryMediaId: deps.getCurrentCharacterDictionaryMediaId?.() ?? null,
     nameCandidates: deps.getCharacterNameCandidates?.() ?? null,

@@ -76,3 +76,10 @@ test('kana candidate classification allows punctuation around kana only', () => 
   assert.equal(isKanaCandidateText('「！？」'), false);
   assert.equal(isKanaCandidateText('かな猫'), false);
 });
+
+test('isKanaCandidateText treats a kana word stretched with a wave dash like the plain word', () => {
+  assert.equal(isKanaCandidateText('か～くれんぼ'), isKanaCandidateText('かくれんぼ'));
+  assert.equal(isKanaCandidateText('バイバ〜イ'), true);
+  // Only a dash between two kana is a stretch mark.
+  assert.equal(isKanaCandidateText('～かな'), false);
+});

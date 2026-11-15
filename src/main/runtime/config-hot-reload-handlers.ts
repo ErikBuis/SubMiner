@@ -156,6 +156,7 @@ function hasAnnotationRuntimeHotReload(diff: ConfigHotReloadDiff): boolean {
     'ankiConnect.fields.word',
     'subtitleStyle.nameMatchEnabled',
     'subtitleStyle.nameMatchImagesEnabled',
+    'subtitleStyle.morphologyGuidedSplitting',
   ]);
 }
 
