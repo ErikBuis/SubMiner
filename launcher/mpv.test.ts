@@ -172,32 +172,30 @@ test('runAppCommandCaptureOutput strips ELECTRON_RUN_AS_NODE from app child env'
   });
 });
 
-test(
-  'runAppCommandCaptureOutput transports Linux AppImage args through environment',
-  { skip: process.platform !== 'linux' },
-  async () => {
-    await withTempCase(({ dir }) => {
-      const appPath = writeFakeApp(
-        dir,
-        [
-          'printf "args:%s\\n" "$*"',
-          'printf "argc:%s\\n" "$SUBMINER_APP_ARGC"',
-          'printf "arg0:%s\\n" "$SUBMINER_APP_ARG_0"',
-          'printf "arg1:%s\\n" "$SUBMINER_APP_ARG_1"',
-        ],
-        'SubMiner.AppImage',
-      );
+test('runAppCommandCaptureOutput transports Linux AppImage args through environment', async () => {
+  // Bun's node:test shim ignores the `skip` option, so gate the platform here.
+  if (process.platform !== 'linux') return;
+  await withTempCase(({ dir }) => {
+    const appPath = writeFakeApp(
+      dir,
+      [
+        'printf "args:%s\\n" "$*"',
+        'printf "argc:%s\\n" "$SUBMINER_APP_ARGC"',
+        'printf "arg0:%s\\n" "$SUBMINER_APP_ARG_0"',
+        'printf "arg1:%s\\n" "$SUBMINER_APP_ARG_1"',
+      ],
+      'SubMiner.AppImage',
+    );
 
-      const result = runAppCommandCaptureOutput(appPath, ['--app-ping', '--socket']);
+    const result = runAppCommandCaptureOutput(appPath, ['--app-ping', '--socket']);
 
-      assert.equal(result.status, 0);
-      assert.match(result.stdout, /^args:\n/m);
-      assert.match(result.stdout, /^argc:2\n/m);
-      assert.match(result.stdout, /^arg0:--app-ping\n/m);
-      assert.match(result.stdout, /^arg1:--socket\n/m);
-    });
-  },
-);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /^args:\n/m);
+    assert.match(result.stdout, /^argc:2\n/m);
+    assert.match(result.stdout, /^arg0:--app-ping\n/m);
+    assert.match(result.stdout, /^arg1:--socket\n/m);
+  });
+});
 
 test('runAppCommandCaptureOutput runs Linux AppImage sync in Node-only mode', async () => {
   await withTempCase(({ dir }) => {
@@ -545,8 +543,10 @@ test('launchAppBackgroundDetached starts background child directly', async () =>
 
     launchAppBackgroundDetached(appPath, 'info');
 
+    // The shell creates each file before writing to it, so wait for content, not existence.
+    const hasContent = (file: string) => fs.existsSync(file) && fs.statSync(file).size > 0;
     const deadline = Date.now() + 1000;
-    while ((!fs.existsSync(argsPath) || !fs.existsSync(envPath)) && Date.now() < deadline) {
+    while ((!hasContent(argsPath) || !hasContent(envPath)) && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
 

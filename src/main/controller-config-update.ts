@@ -1,7 +1,11 @@
+import type { ConfigService } from '../config/service';
 import type { ControllerConfigUpdate, RawConfig } from '../types';
 
 type RawControllerConfig = NonNullable<RawConfig['controller']>;
 type RawControllerBindings = NonNullable<RawControllerConfig['bindings']>;
+type RawControllerScreenBindings = Record<string, unknown>;
+/** Per-dialog controller layouts stored as per-action patches. */
+const SCREEN_BINDING_KEYS = ['reviewBindings', 'fieldGroupingBindings'] as const;
 type RawControllerButtonIndices = NonNullable<RawControllerConfig['buttonIndices']>;
 type RawControllerProfiles = NonNullable<RawControllerConfig['profiles']>;
 type RawControllerProfile = NonNullable<RawControllerProfiles[string]>;
@@ -25,6 +29,34 @@ function mergeBindingPatch(
   }
 
   return nextBindings;
+}
+
+function mergeScreenBindingPatch(
+  currentBindings: RawControllerScreenBindings | undefined,
+  updateBindings: RawControllerScreenBindings | undefined,
+): RawControllerScreenBindings | undefined {
+  if (!currentBindings && !updateBindings) return undefined;
+  const nextBindings: RawControllerScreenBindings = { ...(currentBindings ?? {}) };
+  for (const [action, binding] of Object.entries(updateBindings ?? {})) {
+    if (binding === undefined) continue;
+    nextBindings[action] = structuredClone(binding);
+  }
+  return nextBindings;
+}
+
+/** Merges every per-dialog layout patch from `update` onto `current` into `target`. */
+function mergeScreenBindingPatches(
+  current: Partial<Record<(typeof SCREEN_BINDING_KEYS)[number], unknown>> | undefined,
+  update: Partial<Record<(typeof SCREEN_BINDING_KEYS)[number], unknown>>,
+  target: Partial<Record<(typeof SCREEN_BINDING_KEYS)[number], unknown>>,
+): void {
+  for (const key of SCREEN_BINDING_KEYS) {
+    const merged = mergeScreenBindingPatch(
+      current?.[key] as RawControllerScreenBindings | undefined,
+      update[key] as RawControllerScreenBindings | undefined,
+    );
+    if (merged) target[key] = merged;
+  }
 }
 
 function mergeButtonIndexPatch(
@@ -60,7 +92,24 @@ function mergeControllerProfile(
     nextProfile.bindings = bindings;
   }
 
+  mergeScreenBindingPatches(currentProfile, updateProfile, nextProfile);
+
   return nextProfile;
+}
+
+/**
+ * Saves an Alt+C update to the config file. The controller section is replaced, not patched:
+ * `patchRawConfig` deep-merges, so a combo rebound to one button would keep its old `hold`.
+ */
+export function saveControllerConfigUpdate(
+  configService: Pick<ConfigService, 'getRawConfig' | 'saveRawConfig'>,
+  update: ControllerConfigUpdate,
+): void {
+  const rawConfig = configService.getRawConfig();
+  configService.saveRawConfig({
+    ...rawConfig,
+    controller: applyControllerConfigUpdate(rawConfig.controller, update),
+  });
 }
 
 export function applyControllerConfigUpdate(
@@ -84,6 +133,8 @@ export function applyControllerConfigUpdate(
   if (bindings) {
     nextController.bindings = bindings;
   }
+
+  mergeScreenBindingPatches(currentController, update, nextController);
 
   if (currentController?.profiles || update.profiles) {
     const nextProfiles: RawControllerProfiles = {};

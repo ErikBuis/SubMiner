@@ -1,3 +1,4 @@
+import type { StatsDayRange } from '../../../types/stats-http-contract';
 import type { DatabaseSync } from './sqlite';
 import type {
   ImmersionSessionRollupRow,
@@ -6,9 +7,8 @@ import type {
 } from './types';
 import {
   ACTIVE_SESSION_METRICS_CTE,
-  SESSION_WORD_COUNTS_CTE,
-  SESSION_WORD_COUNTS_SELECT,
   currentDbTimestamp,
+  ENDED_SESSIONS_DISPLAY_WORDS_SQL,
   fromDbTimestamp,
   getLocalEpochDay,
   getShiftedLocalDaySec,
@@ -16,7 +16,12 @@ import {
   visibleWordSql,
 } from './query-shared';
 
-export function getSessionSummaries(db: DatabaseSync, limit = 50): SessionSummaryQueryRow[] {
+export function getSessionSummaries(
+  db: DatabaseSync,
+  limit = 50,
+  dayRange?: StatsDayRange,
+): SessionSummaryQueryRow[] {
+  const dayFilter = dayRange ? `WHERE ${sessionRollupDaySql('s')} BETWEEN ? AND ?` : '';
   const prepared = db.prepare(`
     ${ACTIVE_SESSION_METRICS_CTE}
     SELECT
@@ -39,10 +44,12 @@ export function getSessionSummaries(db: DatabaseSync, limit = 50): SessionSummar
     LEFT JOIN active_session_metrics asm ON asm.sessionId = s.session_id
     LEFT JOIN imm_videos v ON v.video_id = s.video_id
     LEFT JOIN imm_anime a ON a.anime_id = v.anime_id
+    ${dayFilter}
     ORDER BY s.started_at_ms DESC
     LIMIT ?
   `);
-  const rows = prepared.all(limit) as Array<
+  const params = dayRange ? [dayRange.startDay, dayRange.endDay, limit] : [limit];
+  const rows = prepared.all(...params) as Array<
     SessionSummaryQueryRow & {
       startedAtMs: number | string;
       endedAtMs: number | string | null;
@@ -295,32 +302,17 @@ export function getQueryHints(db: DatabaseSync): {
   const totalCards = Number(lifetime?.totalCards ?? 0);
   const activeDays = Number(lifetime?.activeDays ?? 0);
 
-  const lookupWordsExpr = sessionDisplayWordsExpr(
-    's',
-    'swc',
-    'COALESCE(t.tokens_seen, s.tokens_seen)',
-  );
+  // Ended sessions are finalized from their last telemetry sample, so their
+  // own counters already hold the telemetry maxima.
   const lookupTotals = db
     .prepare(
       `
-    ${SESSION_WORD_COUNTS_CTE}
     SELECT
-      COALESCE(SUM(${lookupWordsExpr}), 0) AS totalTokensSeen,
-      COALESCE(SUM(COALESCE(t.lookup_count, s.lookup_count, 0)), 0) AS totalLookupCount,
-      COALESCE(SUM(COALESCE(t.lookup_hits, s.lookup_hits, 0)), 0) AS totalLookupHits,
-      COALESCE(SUM(COALESCE(t.yomitan_lookup_count, s.yomitan_lookup_count, 0)), 0) AS totalYomitanLookupCount
+      ${ENDED_SESSIONS_DISPLAY_WORDS_SQL} AS totalTokensSeen,
+      COALESCE(SUM(COALESCE(s.lookup_count, 0)), 0) AS totalLookupCount,
+      COALESCE(SUM(COALESCE(s.lookup_hits, 0)), 0) AS totalLookupHits,
+      COALESCE(SUM(COALESCE(s.yomitan_lookup_count, 0)), 0) AS totalYomitanLookupCount
     FROM imm_sessions s
-    LEFT JOIN (
-      SELECT
-        session_id,
-        MAX(tokens_seen) AS tokens_seen,
-        MAX(lookup_count) AS lookup_count,
-        MAX(lookup_hits) AS lookup_hits,
-        MAX(yomitan_lookup_count) AS yomitan_lookup_count
-      FROM imm_session_telemetry
-      GROUP BY session_id
-    ) t ON t.session_id = s.session_id
-    LEFT JOIN session_word_counts swc ON swc.sessionId = s.session_id
     WHERE s.ended_at_ms IS NOT NULL
   `,
     )
@@ -349,123 +341,214 @@ export function getQueryHints(db: DatabaseSync): {
   };
 }
 
-export function getDailyRollups(db: DatabaseSync, limit = 60): ImmersionSessionRollupRow[] {
-  const wordsExpr = sessionDisplayWordsExpr('s', 'swc');
-  const prepared = db.prepare(`
-    WITH session_word_counts AS (
-      ${SESSION_WORD_COUNTS_SELECT}
-    ),
-    daily_word_counts AS (
-      SELECT
-        CAST(
-          julianday(CAST(s.started_at_ms AS REAL) / 1000, 'unixepoch', 'localtime') - 2440587.5
-          AS INTEGER
-        ) AS rollupDay,
-        s.video_id AS videoId,
-        SUM(${wordsExpr}) AS totalTokensSeen
-      FROM imm_sessions s
-      LEFT JOIN session_word_counts swc ON swc.sessionId = s.session_id
-      WHERE s.ended_at_ms IS NOT NULL
-      GROUP BY rollupDay, s.video_id
-    ),
-    recent_days AS (
-      SELECT DISTINCT rollup_day
-      FROM imm_daily_rollups
-      ORDER BY rollup_day DESC
-      LIMIT ?
-    )
+/** Local calendar day (epoch days) a session row `alias` started on, matching `imm_daily_rollups.rollup_day`. */
+export function sessionRollupDaySql(alias: string): string {
+  return `CAST(julianday(CAST(${alias}.started_at_ms AS REAL) / 1000, 'unixepoch', 'localtime') - 2440587.5 AS INTEGER)`;
+}
+
+/** Local `YYYYMM` month a session row `alias` started in, matching `imm_monthly_rollups.rollup_month`. */
+export function sessionRollupMonthSql(alias: string): string {
+  return `CAST(strftime('%Y%m', CAST(${alias}.started_at_ms AS REAL) / 1000, 'unixepoch', 'localtime') AS INTEGER)`;
+}
+
+/**
+ * Display-word sums of ended sessions, keyed by `rollupWordCountKey`. Rollup
+ * rows take these over their persisted token totals when they are larger.
+ */
+export type RollupWordCounts = Map<string, number>;
+
+export function rollupWordCountKey(rollupDayOrMonth: number, videoId: number | null): string {
+  return `${rollupDayOrMonth}:${videoId ?? ''}`;
+}
+
+export function addRollupWordCount(
+  counts: RollupWordCounts,
+  rollupDayOrMonth: number,
+  videoId: number | null,
+  words: number,
+): void {
+  const key = rollupWordCountKey(rollupDayOrMonth, videoId);
+  counts.set(key, (counts.get(key) ?? 0) + words);
+}
+
+type RawRollupRow = Omit<ImmersionSessionRollupRow, 'tokensPerMin'>;
+
+/**
+ * Rollup rows for the `limit` most recent days, without the display-word
+ * merge. Pair with `applyRollupWordCounts`; `getDailyRollups` does both.
+ */
+export function selectDailyRollupRows(db: DatabaseSync, limit: number): RawRollupRow[] {
+  return db
+    .prepare(
+      `
     SELECT
       r.rollup_day AS rollupDayOrMonth,
       r.video_id AS videoId,
       r.total_sessions AS totalSessions,
       r.total_active_min AS totalActiveMin,
       r.total_lines_seen AS totalLinesSeen,
-      CASE
-        WHEN dwc.totalTokensSeen IS NOT NULL AND dwc.totalTokensSeen > r.total_tokens_seen THEN dwc.totalTokensSeen
-        ELSE r.total_tokens_seen
-      END AS totalTokensSeen,
+      r.total_tokens_seen AS totalTokensSeen,
       r.total_cards AS totalCards,
       r.cards_per_hour AS cardsPerHour,
-      CASE
-        WHEN r.total_active_min > 0 THEN (
-          CASE
-            WHEN dwc.totalTokensSeen IS NOT NULL AND dwc.totalTokensSeen > r.total_tokens_seen THEN dwc.totalTokensSeen
-            ELSE r.total_tokens_seen
-          END
-        ) * 1.0 / r.total_active_min
-        ELSE NULL
-      END AS tokensPerMin,
       r.lookup_hit_rate AS lookupHitRate
     FROM imm_daily_rollups r
-    LEFT JOIN daily_word_counts dwc
-      ON dwc.rollupDay = r.rollup_day
-      AND (
-        (dwc.videoId IS NULL AND r.video_id IS NULL)
-        OR dwc.videoId = r.video_id
-      )
-    WHERE r.rollup_day IN (SELECT rollup_day FROM recent_days)
+    WHERE r.rollup_day IN (
+      SELECT DISTINCT rollup_day FROM imm_daily_rollups ORDER BY rollup_day DESC LIMIT ?
+    )
     ORDER BY r.rollup_day DESC, r.video_id DESC
-    `);
-
-  return prepared.all(limit) as unknown as ImmersionSessionRollupRow[];
+  `,
+    )
+    .all(limit) as unknown as RawRollupRow[];
 }
 
-export function getMonthlyRollups(db: DatabaseSync, limit = 24): ImmersionSessionRollupRow[] {
-  const wordsExpr = sessionDisplayWordsExpr('s', 'swc');
-  const prepared = db.prepare(`
-    WITH session_word_counts AS (
-      ${SESSION_WORD_COUNTS_SELECT}
-    ),
-    monthly_word_counts AS (
-      SELECT
-        CAST(strftime('%Y%m', CAST(s.started_at_ms AS REAL) / 1000, 'unixepoch', 'localtime') AS INTEGER) AS rollupMonth,
-        s.video_id AS videoId,
-        SUM(${wordsExpr}) AS totalTokensSeen
-      FROM imm_sessions s
-      LEFT JOIN session_word_counts swc ON swc.sessionId = s.session_id
-      WHERE s.ended_at_ms IS NOT NULL
-      GROUP BY rollupMonth, s.video_id
-    ),
-    recent_months AS (
-      SELECT DISTINCT rollup_month
-      FROM imm_monthly_rollups
-      ORDER BY rollup_month DESC
-      LIMIT ?
+/** Raw daily rollup rows for an inclusive day span; a null start means no lower bound. */
+export function selectDailyRollupRowsBetween(
+  db: DatabaseSync,
+  startDay: number | null,
+  endDay: number,
+): RawRollupRow[] {
+  return db
+    .prepare(
+      `
+    SELECT
+      r.rollup_day AS rollupDayOrMonth,
+      r.video_id AS videoId,
+      r.total_sessions AS totalSessions,
+      r.total_active_min AS totalActiveMin,
+      r.total_lines_seen AS totalLinesSeen,
+      r.total_tokens_seen AS totalTokensSeen,
+      r.total_cards AS totalCards,
+      r.cards_per_hour AS cardsPerHour,
+      r.lookup_hit_rate AS lookupHitRate
+    FROM imm_daily_rollups r
+    WHERE r.rollup_day BETWEEN ? AND ?
+    ORDER BY r.rollup_day DESC, r.video_id DESC
+  `,
     )
+    .all(startDay ?? Number.MIN_SAFE_INTEGER, endDay) as unknown as RawRollupRow[];
+}
+
+/** Raw monthly rollup rows for an inclusive `YYYYMM` span; a null start means no lower bound. */
+export function selectMonthlyRollupRowsBetween(
+  db: DatabaseSync,
+  startMonth: number | null,
+  endMonth: number,
+): RawRollupRow[] {
+  return db
+    .prepare(
+      `
     SELECT
       r.rollup_month AS rollupDayOrMonth,
       r.video_id AS videoId,
       r.total_sessions AS totalSessions,
       r.total_active_min AS totalActiveMin,
       r.total_lines_seen AS totalLinesSeen,
-      CASE
-        WHEN mwc.totalTokensSeen IS NOT NULL AND mwc.totalTokensSeen > r.total_tokens_seen THEN mwc.totalTokensSeen
-        ELSE r.total_tokens_seen
-      END AS totalTokensSeen,
+      r.total_tokens_seen AS totalTokensSeen,
       r.total_cards AS totalCards,
       CASE
         WHEN r.total_active_min > 0 THEN (r.total_cards * 60.0) / r.total_active_min
         ELSE NULL
       END AS cardsPerHour,
-      CASE
-        WHEN r.total_active_min > 0 THEN (
-          CASE
-            WHEN mwc.totalTokensSeen IS NOT NULL AND mwc.totalTokensSeen > r.total_tokens_seen THEN mwc.totalTokensSeen
-            ELSE r.total_tokens_seen
-          END
-        ) * 1.0 / r.total_active_min
-        ELSE NULL
-      END AS tokensPerMin,
       NULL AS lookupHitRate
     FROM imm_monthly_rollups r
-    LEFT JOIN monthly_word_counts mwc
-      ON mwc.rollupMonth = r.rollup_month
-      AND (
-        (mwc.videoId IS NULL AND r.video_id IS NULL)
-        OR mwc.videoId = r.video_id
-      )
-    WHERE r.rollup_month IN (SELECT rollup_month FROM recent_months)
+    WHERE r.rollup_month BETWEEN ? AND ?
     ORDER BY r.rollup_month DESC, r.video_id DESC
-  `);
-  return prepared.all(limit) as unknown as ImmersionSessionRollupRow[];
+  `,
+    )
+    .all(startMonth ?? Number.MIN_SAFE_INTEGER, endMonth) as unknown as RawRollupRow[];
+}
+
+/** Monthly counterpart of `selectDailyRollupRows`. */
+export function selectMonthlyRollupRows(db: DatabaseSync, limit: number): RawRollupRow[] {
+  return db
+    .prepare(
+      `
+    SELECT
+      r.rollup_month AS rollupDayOrMonth,
+      r.video_id AS videoId,
+      r.total_sessions AS totalSessions,
+      r.total_active_min AS totalActiveMin,
+      r.total_lines_seen AS totalLinesSeen,
+      r.total_tokens_seen AS totalTokensSeen,
+      r.total_cards AS totalCards,
+      CASE
+        WHEN r.total_active_min > 0 THEN (r.total_cards * 60.0) / r.total_active_min
+        ELSE NULL
+      END AS cardsPerHour,
+      NULL AS lookupHitRate
+    FROM imm_monthly_rollups r
+    WHERE r.rollup_month IN (
+      SELECT DISTINCT rollup_month FROM imm_monthly_rollups ORDER BY rollup_month DESC LIMIT ?
+    )
+    ORDER BY r.rollup_month DESC, r.video_id DESC
+  `,
+    )
+    .all(limit) as unknown as RawRollupRow[];
+}
+
+/**
+ * Raises each rollup's token total to the display-word count of its sessions
+ * when that is larger (persisted totals can lag behind cleaned-up lines), and
+ * derives `tokensPerMin` from the result.
+ */
+export function applyRollupWordCounts(
+  rows: RawRollupRow[],
+  counts: RollupWordCounts,
+): ImmersionSessionRollupRow[] {
+  return rows.map((row) => {
+    const words = counts.get(rollupWordCountKey(row.rollupDayOrMonth, row.videoId));
+    const totalTokensSeen =
+      words !== undefined && words > row.totalTokensSeen ? words : row.totalTokensSeen;
+    return {
+      ...row,
+      totalTokensSeen,
+      tokensPerMin: row.totalActiveMin > 0 ? totalTokensSeen / row.totalActiveMin : null,
+    };
+  });
+}
+
+function getEndedSessionWordCounts(
+  db: DatabaseSync,
+  bucketSql: string,
+  sinceBucket: number,
+): RollupWordCounts {
+  const rows = db
+    .prepare(
+      `
+    SELECT
+      ${bucketSql} AS bucket,
+      s.video_id AS videoId,
+      SUM(${sessionDisplayWordsExpr('s')}) AS words
+    FROM imm_sessions s
+    WHERE s.ended_at_ms IS NOT NULL
+      AND ${bucketSql} >= ?
+    GROUP BY bucket, s.video_id
+  `,
+    )
+    .all(sinceBucket) as Array<{ bucket: number; videoId: number | null; words: number }>;
+  const counts: RollupWordCounts = new Map();
+  for (const row of rows) {
+    addRollupWordCount(counts, row.bucket, row.videoId, row.words);
+  }
+  return counts;
+}
+
+function withSessionWordCounts(
+  db: DatabaseSync,
+  rows: RawRollupRow[],
+  bucketSql: string,
+): ImmersionSessionRollupRow[] {
+  if (rows.length === 0) {
+    return [];
+  }
+  const sinceBucket = Math.min(...rows.map((row) => row.rollupDayOrMonth));
+  return applyRollupWordCounts(rows, getEndedSessionWordCounts(db, bucketSql, sinceBucket));
+}
+
+export function getDailyRollups(db: DatabaseSync, limit = 60): ImmersionSessionRollupRow[] {
+  return withSessionWordCounts(db, selectDailyRollupRows(db, limit), sessionRollupDaySql('s'));
+}
+
+export function getMonthlyRollups(db: DatabaseSync, limit = 24): ImmersionSessionRollupRow[] {
+  return withSessionWordCounts(db, selectMonthlyRollupRows(db, limit), sessionRollupMonthSql('s'));
 }

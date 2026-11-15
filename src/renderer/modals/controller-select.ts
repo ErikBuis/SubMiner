@@ -2,11 +2,53 @@ import type { ModalStateReader, RendererContext } from '../context';
 import { resolveControllerConfigForGamepad } from '../controller-profile-config.js';
 import { createControllerBindingCapture } from '../handlers/controller-binding-capture.js';
 import {
+  createControllerComboCapture,
+  type ControllerCapturedCombo,
+} from '../handlers/controller-combo-capture.js';
+import {
+  CONTROLLER_FACE_BUTTON_STYLES,
+  formatControllerReviewInput,
+  getControllerScreenAction,
+  getDefaultControllerScreenBindings,
+  type ControllerReviewInputContext,
+  type ControllerScreenBindings,
+  type ControllerScreenDefinition,
+} from '../../shared/controller-review';
+import {
+  CONTROLLER_SCREENS,
+  getControllerScreen,
+  type ControllerScreenBindingsKey,
+} from '../../shared/controller-screens';
+import {
   createControllerConfigForm,
+  formatFriendlyInputLabel,
   getControllerBindingDefinition,
   getDefaultControllerBinding,
   getDefaultDpadFallback,
 } from './controller-config-form.js';
+
+import type { ControllerDpadFallback, ControllerRawInput } from '../../types';
+
+const PRESS_TO_EDIT_STATUS = 'Press any button on your controller to edit its bindings.';
+
+/** `8BitDo Ultimate Wireless Controller (STANDARD GAMEPAD Vendor: …)` → the name part. */
+export function shortControllerName(gamepadId: string): string {
+  return gamepadId.replace(/\s*\(.*\)\s*$/, '').trim() || gamepadId;
+}
+
+/** Index of the pad with the newest input (Gamepad API timestamp), or -1 if none report one. */
+export function findMostRecentlyUsedIndex(devices: ReadonlyArray<{ timestamp?: number }>): number {
+  let best = -1;
+  let bestTimestamp = 0;
+  devices.forEach((device, index) => {
+    const timestamp = device.timestamp ?? 0;
+    if (Number.isFinite(timestamp) && timestamp > bestTimestamp) {
+      best = index;
+      bestTimestamp = timestamp;
+    }
+  });
+  return best;
+}
 
 function clampSelectedIndex(ctx: RendererContext): void {
   if (ctx.state.connectedGamepads.length === 0) {
@@ -39,13 +81,62 @@ export function createControllerSelectModal(
   let learningActionId: ControllerBindingKey | null = null;
   let dpadLearningActionId: ControllerBindingKey | null = null;
   let bindingCapture: ReturnType<typeof createControllerBindingCapture> | null = null;
+  type ComboLearning = {
+    capture: ReturnType<typeof createControllerComboCapture>;
+    holdLabel: string | null;
+  };
+  /** Set with `learningActionId` while learning a discrete row. */
+  let discreteLearning: ComboLearning | null = null;
+  let screenLearning:
+    | (ComboLearning & { screen: ControllerScreenDefinition; actionId: string })
+    | null = null;
+
+  /** The controller the overlay reports in use, fetched when the window opens. */
+  let overlayActiveControllerId: string | null = null;
+
+  async function loadOverlayActiveController(): Promise<void> {
+    let gamepadId: string | null = null;
+    try {
+      gamepadId = (await window.electronAPI.getActiveControllerId?.()) ?? null;
+    } catch {
+      return;
+    }
+    if (!ctx.state.controllerSelectModalOpen || gamepadId === overlayActiveControllerId) return;
+    overlayActiveControllerId = gamepadId;
+    renderPicker();
+    controllerConfigForm.render();
+  }
 
   function getSelectedController() {
     return ctx.state.connectedGamepads[ctx.state.controllerDeviceSelectedIndex] ?? null;
   }
 
+  /**
+   * The controller whose profile Alt+C shows and edits. A freshly opened window cannot see
+   * any pad until a button is pressed in it; until then it previews the controller the
+   * overlay reports in use, else the saved (preferred) one, and editing stays locked.
+   */
   function getSelectedControllerId(): string | null {
-    return getSelectedController()?.id ?? null;
+    return (
+      getSelectedController()?.id ??
+      overlayActiveControllerId ??
+      (ctx.state.controllerConfig?.preferredGamepadId || null)
+    );
+  }
+
+  /**
+   * Nothing can be changed until this window sees a controller: before that it could only
+   * guess which controller you mean, and a change could land on the wrong one.
+   */
+  function isEditingLocked(): boolean {
+    return ctx.state.connectedGamepads.length === 0;
+  }
+
+  /** True when editing may go ahead; otherwise says why not. */
+  function canEdit(): boolean {
+    if (!isEditingLocked()) return true;
+    setStatus(PRESS_TO_EDIT_STATUS);
+    return false;
   }
 
   function getSelectedControllerConfig() {
@@ -54,8 +145,70 @@ export function createControllerSelectModal(
     return resolveControllerConfigForGamepad(config, getSelectedControllerId());
   }
 
+  function getScreenInputContext(): ControllerReviewInputContext {
+    const config = getSelectedControllerConfig();
+    return {
+      mapping: getSelectedController()?.mapping ?? 'standard',
+      faceButtonLabels: config?.faceButtonLabels ?? 'xbox',
+      buttonIndices: config?.buttonIndices ?? {
+        select: 6,
+        buttonSouth: 0,
+        buttonEast: 1,
+        buttonWest: 2,
+        buttonNorth: 3,
+        leftShoulder: 4,
+        rightShoulder: 5,
+        leftStickPress: 9,
+        rightStickPress: 10,
+        leftTrigger: 6,
+        rightTrigger: 7,
+      },
+    };
+  }
+
+  function cancelScreenLearning(): void {
+    screenLearning = null;
+  }
+
+  function startComboLearning(): ComboLearning {
+    const config = ctx.state.controllerConfig;
+    const capture = createControllerComboCapture({
+      triggerDeadzone: config?.triggerDeadzone ?? 0.5,
+      stickDeadzone: config?.stickDeadzone ?? 0.2,
+    });
+    capture.arm({ axes: ctx.state.controllerRawAxes, buttons: ctx.state.controllerRawButtons });
+    return { capture, holdLabel: null };
+  }
+
+  /** Advances a combo capture, showing the hold button so far; returns the finished combo. */
+  function pollComboLearning(
+    learning: ComboLearning,
+    formatHold: (input: ControllerRawInput) => string,
+  ): ControllerCapturedCombo | null {
+    const state = learning.capture.poll({
+      axes: ctx.state.controllerRawAxes,
+      buttons: ctx.state.controllerRawButtons,
+    });
+    if (state.status === 'done') return state.binding;
+    if (state.status === 'holding') {
+      const holdLabel = formatHold(state.hold);
+      if (holdLabel !== learning.holdLabel) {
+        learning.holdLabel = holdLabel;
+        controllerConfigForm.render();
+      }
+    }
+    return null;
+  }
+
+  function actionLabel(screen: ControllerScreenDefinition, actionId: string): string {
+    return getControllerScreenAction(screen, actionId).label;
+  }
+
   const controllerConfigForm = createControllerConfigForm({
     container: ctx.dom.controllerConfigList,
+    isEditingLocked,
+    getControllerMapping: () => getSelectedController()?.mapping ?? null,
+    getFaceButtonLabels: () => getSelectedControllerConfig()?.faceButtonLabels,
     getBindings: () =>
       getSelectedControllerConfig()?.bindings ?? {
         toggleLookup: { kind: 'button', buttonIndex: 0 },
@@ -67,17 +220,95 @@ export function createControllerSelectModal(
         nextAudio: { kind: 'button', buttonIndex: 5 },
         playCurrentAudio: { kind: 'button', buttonIndex: 4 },
         toggleMpvPause: { kind: 'button', buttonIndex: 9 },
+        holdSecondarySub: { kind: 'none' },
+        previousEntry: { kind: 'none' },
+        nextEntry: { kind: 'none' },
+        toggleCharacterNavigation: { kind: 'none' },
+        previousSubtitle: { kind: 'none' },
+        nextSubtitle: { kind: 'none' },
+        replaySubtitle: { kind: 'none' },
+        playNextSubtitle: { kind: 'none' },
         leftStickHorizontal: { kind: 'axis', axisIndex: 0, dpadFallback: 'horizontal' },
         leftStickVertical: { kind: 'axis', axisIndex: 1, dpadFallback: 'vertical' },
-        rightStickHorizontal: { kind: 'axis', axisIndex: 3, dpadFallback: 'none' },
         rightStickVertical: { kind: 'axis', axisIndex: 4, dpadFallback: 'none' },
       },
+    getScreenGroups: () => {
+      const config = getSelectedControllerConfig();
+      if (!config) return [];
+      return CONTROLLER_SCREENS.map((screen) => ({
+        screen,
+        bindings: config[screen.configKey] as ControllerScreenBindings,
+      }));
+    },
+    getScreenInputContext,
+    getLearningHoldLabel: () => discreteLearning?.holdLabel ?? null,
+    getScreenLearning: () =>
+      screenLearning
+        ? {
+            screenId: screenLearning.screen.id,
+            actionId: screenLearning.actionId,
+            holdLabel: screenLearning.holdLabel,
+          }
+        : null,
+    onScreenLearn: (screenId, actionId) => {
+      if (!canEdit()) return;
+      learningActionId = null;
+      dpadLearningActionId = null;
+      bindingCapture = null;
+      discreteLearning = null;
+      const screen = getControllerScreen(screenId);
+      screenLearning = { ...startComboLearning(), screen, actionId };
+      controllerConfigForm.render();
+      setStatus(
+        `Press a button for ${actionLabel(screen, actionId)}, or hold one and press another for a combo.`,
+      );
+    },
+    onScreenClear: (screenId, actionId) => {
+      if (!canEdit()) return;
+      const screen = getControllerScreen(screenId);
+      void saveScreenBindings(
+        screen,
+        { [actionId]: { kind: 'none' } },
+        `${actionLabel(screen, actionId)} cleared.`,
+      );
+    },
+    onScreenReset: (screenId, actionId) => {
+      if (!canEdit()) return;
+      const screen = getControllerScreen(screenId);
+      void saveScreenBindings(
+        screen,
+        { [actionId]: structuredClone(screen.defaults[actionId]!) },
+        `${actionLabel(screen, actionId)} reset.`,
+      );
+    },
+    onScreenResetAll: (screenId) => {
+      if (!canEdit()) return;
+      const screen = getControllerScreen(screenId);
+      void saveScreenBindings(
+        screen,
+        getDefaultControllerScreenBindings(screen),
+        `${screen.title} layout reset.`,
+      );
+    },
     getLearningActionId: () => learningActionId,
     getDpadLearningActionId: () => dpadLearningActionId,
     onLearn: (actionId, bindingType) => {
+      if (!canEdit()) return;
       const definition = getControllerBindingDefinition(actionId);
       if (!definition) return;
       dpadLearningActionId = null;
+      cancelScreenLearning();
+      learningActionId = actionId;
+      if (bindingType === 'discrete') {
+        bindingCapture = null;
+        discreteLearning = startComboLearning();
+        controllerConfigForm.render();
+        setStatus(
+          `Press a button for ${definition.label}, or hold one and press another for a combo.`,
+        );
+        return;
+      }
+      discreteLearning = null;
       const config = ctx.state.controllerConfig;
       bindingCapture = createControllerBindingCapture({
         triggerDeadzone: config?.triggerDeadzone ?? 0.5,
@@ -89,35 +320,30 @@ export function createControllerSelectModal(
           ? currentBinding.dpadFallback
           : 'none';
       bindingCapture.arm(
-        bindingType === 'axis'
-          ? {
-              actionId,
-              bindingType: 'axis',
-              dpadFallback: currentDpadFallback,
-            }
-          : {
-              actionId,
-              bindingType: 'discrete',
-            },
+        { actionId, bindingType: 'axis', dpadFallback: currentDpadFallback },
         {
           axes: ctx.state.controllerRawAxes,
           buttons: ctx.state.controllerRawButtons,
         },
       );
-      learningActionId = actionId;
       controllerConfigForm.render();
       setStatus(`Waiting for input for ${definition.label}.`);
     },
     onClear: (actionId) => {
+      if (!canEdit()) return;
       void saveBinding(actionId, { kind: 'none' });
     },
     onReset: (actionId) => {
+      if (!canEdit()) return;
       void saveBinding(actionId, getDefaultControllerBinding(actionId));
     },
     onDpadLearn: (actionId) => {
+      if (!canEdit()) return;
       const definition = getControllerBindingDefinition(actionId);
       if (!definition) return;
       learningActionId = null;
+      discreteLearning = null;
+      cancelScreenLearning();
       const config = ctx.state.controllerConfig;
       bindingCapture = createControllerBindingCapture({
         triggerDeadzone: config?.triggerDeadzone ?? 0.5,
@@ -135,9 +361,11 @@ export function createControllerSelectModal(
       setStatus(`Press a D-pad direction for ${definition.label}.`);
     },
     onDpadClear: (actionId) => {
+      if (!canEdit()) return;
       void saveDpadFallback(actionId, 'none');
     },
     onDpadReset: (actionId) => {
+      if (!canEdit()) return;
       void saveDpadFallback(actionId, getDefaultDpadFallback(actionId));
     },
   });
@@ -155,9 +383,18 @@ export function createControllerSelectModal(
   function syncSelectedControllerId(): void {
     const selected = ctx.state.connectedGamepads[ctx.state.controllerDeviceSelectedIndex];
     selectedControllerKey = selected ? getDeviceSelectionKey(selected) : null;
+    // This window then reads that controller, so Learn hears the pad being configured.
+    ctx.state.controllerSelectGamepadId = selected?.id ?? null;
   }
 
   function syncSelectedIndexToCurrentController(): void {
+    // The pad you just pressed (newest input) is the one in your hands.
+    const recentIndex = findMostRecentlyUsedIndex(ctx.state.connectedGamepads);
+    if (recentIndex >= 0) {
+      ctx.state.controllerDeviceSelectedIndex = recentIndex;
+      syncSelectedControllerId();
+      return;
+    }
     const preferredId = ctx.state.controllerConfig?.preferredGamepadId ?? '';
     const activeIndex = ctx.state.connectedGamepads.findIndex(
       (device) => device.id === ctx.state.activeGamepadId,
@@ -207,12 +444,58 @@ export function createControllerSelectModal(
     ctx.dom.controllerSelectPicker.disabled = ctx.state.connectedGamepads.length === 0;
     ctx.dom.controllerSelectSummary.textContent =
       ctx.state.connectedGamepads.length === 0
-        ? 'No controller detected.'
+        ? describePreview()
         : `Active: ${ctx.state.activeGamepadId ?? 'none'} · Preferred: ${preferredId || 'none'}`;
 
     lastRenderedDevicesKey = getDevicesKey();
     lastRenderedActiveGamepadId = ctx.state.activeGamepadId;
     lastRenderedPreferredId = preferredId;
+    renderFaceButtonStylePicker();
+  }
+
+  /** Which controller the locked preview shows, before this window sees one. */
+  function describePreview(): string {
+    const previewId = getSelectedControllerId();
+    if (!previewId) return 'No controller detected.';
+    const source = previewId === overlayActiveControllerId ? 'in use' : 'saved';
+    return `Showing ${shortControllerName(previewId)} (${source}).`;
+  }
+
+  /** Shows the button style of the controller being configured (its own, else the default). */
+  function renderFaceButtonStylePicker(): void {
+    const picker = ctx.dom.controllerSelectFaceButtonStyle;
+    picker.disabled = isEditingLocked();
+    const current = getSelectedControllerConfig()?.faceButtonLabels ?? 'xbox';
+    picker.innerHTML = '';
+    for (const style of CONTROLLER_FACE_BUTTON_STYLES) {
+      const option = document.createElement('option');
+      option.value = style.id;
+      option.textContent = `${style.name} (${style.hint})`;
+      option.selected = style.id === current;
+      picker.appendChild(option);
+    }
+    picker.value = current;
+  }
+
+  /** Saved for the controller being configured, like its remaps. */
+  async function saveFaceButtonStyle(
+    style: (typeof CONTROLLER_FACE_BUTTON_STYLES)[number],
+  ): Promise<void> {
+    const profileId = getSelectedControllerId();
+    try {
+      await saveControllerConfig(
+        profileId
+          ? { profiles: { [profileId]: { faceButtonLabels: style.id } } }
+          : { faceButtonLabels: style.id },
+      );
+      renderFaceButtonStylePicker();
+      controllerConfigForm.render();
+      setStatus(`Button style: ${style.name}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Failed to save button style: ${message}`, true);
+      renderFaceButtonStylePicker();
+    }
   }
 
   async function saveControllerConfig(
@@ -226,11 +509,23 @@ export function createControllerSelectModal(
     if (update.preferredGamepadLabel !== undefined) {
       ctx.state.controllerConfig.preferredGamepadLabel = update.preferredGamepadLabel;
     }
+    if (update.faceButtonLabels) {
+      ctx.state.controllerConfig.faceButtonLabels = update.faceButtonLabels;
+    }
     if (update.bindings) {
       ctx.state.controllerConfig.bindings = {
         ...ctx.state.controllerConfig.bindings,
         ...update.bindings,
       } as typeof ctx.state.controllerConfig.bindings;
+    }
+    const config = ctx.state.controllerConfig;
+    for (const { configKey } of CONTROLLER_SCREENS) {
+      if (update[configKey]) {
+        (config as Record<ControllerScreenBindingsKey, unknown>)[configKey] = {
+          ...config[configKey],
+          ...update[configKey],
+        };
+      }
     }
     if (update.profiles) {
       ctx.state.controllerConfig.profiles = ctx.state.controllerConfig.profiles ?? {};
@@ -238,11 +533,18 @@ export function createControllerSelectModal(
         const currentProfile = ctx.state.controllerConfig.profiles[profileId];
         const baseProfile = currentProfile ?? {
           label: profileUpdate.label ?? profileId,
+          faceButtonLabels: ctx.state.controllerConfig.faceButtonLabels,
           buttonIndices: ctx.state.controllerConfig.buttonIndices,
           bindings: ctx.state.controllerConfig.bindings,
+          reviewBindings: ctx.state.controllerConfig.reviewBindings,
+          fieldGroupingBindings: ctx.state.controllerConfig.fieldGroupingBindings,
         };
         ctx.state.controllerConfig.profiles[profileId] = {
           label: profileUpdate.label ?? baseProfile.label,
+          faceButtonLabels:
+            profileUpdate.faceButtonLabels ??
+            baseProfile.faceButtonLabels ??
+            ctx.state.controllerConfig.faceButtonLabels,
           buttonIndices: {
             ...baseProfile.buttonIndices,
             ...(profileUpdate.buttonIndices ?? {}),
@@ -250,6 +552,15 @@ export function createControllerSelectModal(
           bindings: {
             ...baseProfile.bindings,
             ...(profileUpdate.bindings ?? {}),
+          },
+          reviewBindings: {
+            ...(baseProfile.reviewBindings ?? ctx.state.controllerConfig.reviewBindings),
+            ...(profileUpdate.reviewBindings ?? {}),
+          },
+          fieldGroupingBindings: {
+            ...(baseProfile.fieldGroupingBindings ??
+              ctx.state.controllerConfig.fieldGroupingBindings),
+            ...(profileUpdate.fieldGroupingBindings ?? {}),
           },
         } as (typeof ctx.state.controllerConfig.profiles)[string];
       }
@@ -260,8 +571,8 @@ export function createControllerSelectModal(
     actionId: ControllerBindingKey,
     binding: ControllerBindingValue,
   ): Parameters<typeof window.electronAPI.saveControllerConfig>[0] {
-    const selected = getSelectedController();
-    if (!selected) {
+    const profileId = getSelectedControllerId();
+    if (!profileId) {
       return {
         bindings: {
           [actionId]: binding,
@@ -270,7 +581,7 @@ export function createControllerSelectModal(
     }
     return {
       profiles: {
-        [selected.id]: {
+        [profileId]: {
           bindings: {
             [actionId]: binding,
           },
@@ -289,6 +600,7 @@ export function createControllerSelectModal(
       learningActionId = null;
       dpadLearningActionId = null;
       bindingCapture = null;
+      discreteLearning = null;
       controllerConfigForm.render();
       setStatus(`${definition?.label ?? actionId} updated.`);
     } catch (error) {
@@ -297,9 +609,27 @@ export function createControllerSelectModal(
     }
   }
 
+  async function saveScreenBindings(
+    screen: ControllerScreenDefinition,
+    bindings: Partial<ControllerScreenBindings>,
+    message: string,
+  ): Promise<void> {
+    const profileId = getSelectedControllerId();
+    const patch = { [screen.configKey]: bindings };
+    try {
+      await saveControllerConfig(profileId ? { profiles: { [profileId]: patch } } : patch);
+      cancelScreenLearning();
+      controllerConfigForm.render();
+      setStatus(message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Failed to save ${screen.title} binding: ${message}`, true);
+    }
+  }
+
   async function saveDpadFallback(
     actionId: ControllerBindingKey,
-    dpadFallback: import('../../types').ControllerDpadFallback,
+    dpadFallback: ControllerDpadFallback,
   ): Promise<void> {
     const definition = getControllerBindingDefinition(actionId);
     const currentBinding = getSelectedControllerConfig()?.bindings[actionId];
@@ -372,6 +702,36 @@ export function createControllerSelectModal(
       }
     }
 
+    if (discreteLearning && learningActionId) {
+      const actionId = learningActionId;
+      const combo = pollComboLearning(discreteLearning, (input) =>
+        formatFriendlyInputLabel(
+          input,
+          getSelectedController()?.mapping,
+          getSelectedControllerConfig()?.faceButtonLabels,
+        ),
+      );
+      if (combo) {
+        discreteLearning = null;
+        void saveBinding(actionId, combo.hold ? { ...combo.press, hold: combo.hold } : combo.press);
+      }
+    }
+
+    if (screenLearning) {
+      const learning = screenLearning;
+      const combo = pollComboLearning(learning, (input) =>
+        formatControllerReviewInput(input, getScreenInputContext(), { dpadPrefix: true }),
+      );
+      if (combo) {
+        screenLearning = null;
+        void saveScreenBindings(
+          learning.screen,
+          { [learning.actionId]: combo },
+          `${actionLabel(learning.screen, learning.actionId)} updated.`,
+        );
+      }
+    }
+
     const preferredId = ctx.state.controllerConfig?.preferredGamepadId ?? '';
     const shouldRender =
       getDevicesKey() !== lastRenderedDevicesKey ||
@@ -382,8 +742,15 @@ export function createControllerSelectModal(
       controllerConfigForm.render();
     }
 
-    if (ctx.state.connectedGamepads.length === 0 && !learningActionId && !dpadLearningActionId) {
-      setStatus('No controllers detected.');
+    // Polling publishes a snapshot every frame, pad or not. Until the window sees a pad,
+    // editing is locked, so the only status is the prompt; it is set once, not every frame.
+    const idle = !learningActionId && !dpadLearningActionId && !screenLearning;
+    if (ctx.state.connectedGamepads.length === 0 && idle) {
+      if (ctx.dom.controllerSelectStatus.textContent !== PRESS_TO_EDIT_STATUS) {
+        setStatus(PRESS_TO_EDIT_STATUS);
+      }
+    } else if (idle && ctx.dom.controllerSelectStatus.textContent === PRESS_TO_EDIT_STATUS) {
+      setStatus('Choose a controller or click Learn to remap an action.');
     }
   }
 
@@ -393,7 +760,9 @@ export function createControllerSelectModal(
       return false;
     }
     ctx.state.controllerSelectModalOpen = true;
+    overlayActiveControllerId = null;
     syncSelectedIndexToCurrentController();
+    void loadOverlayActiveController();
     options.syncSettingsModalSubtitleSuppression();
     ctx.dom.overlay.classList.add('interactive');
     ctx.dom.controllerSelectModal.classList.remove('hidden');
@@ -403,7 +772,7 @@ export function createControllerSelectModal(
     renderPicker();
     controllerConfigForm.render();
     if (ctx.state.connectedGamepads.length === 0) {
-      setStatus('No controllers detected.');
+      setStatus(PRESS_TO_EDIT_STATUS);
     } else {
       setStatus('Choose a controller or click Learn to remap an action.');
     }
@@ -415,7 +784,10 @@ export function createControllerSelectModal(
     learningActionId = null;
     dpadLearningActionId = null;
     bindingCapture = null;
+    discreteLearning = null;
+    cancelScreenLearning();
     ctx.state.controllerSelectModalOpen = false;
+    ctx.state.controllerSelectGamepadId = null;
     options.syncSettingsModalSubtitleSuppression();
     ctx.dom.controllerSelectModal.classList.add('hidden');
     ctx.dom.controllerSelectModal.setAttribute('aria-hidden', 'true');
@@ -428,10 +800,12 @@ export function createControllerSelectModal(
   function handleControllerSelectKeydown(event: KeyboardEvent): boolean {
     if (event.key === 'Escape') {
       event.preventDefault();
-      if (learningActionId || dpadLearningActionId) {
+      if (learningActionId || dpadLearningActionId || screenLearning) {
         learningActionId = null;
         dpadLearningActionId = null;
         bindingCapture = null;
+        discreteLearning = null;
+        cancelScreenLearning();
         controllerConfigForm.render();
         setStatus('Controller learn mode cancelled.');
         return true;
@@ -468,7 +842,7 @@ export function createControllerSelectModal(
       return true;
     }
 
-    if (event.key === 'Enter' && !learningActionId && !dpadLearningActionId) {
+    if (event.key === 'Enter' && !learningActionId && !dpadLearningActionId && !screenLearning) {
       event.preventDefault();
       void saveSelectedController();
       return true;
@@ -483,6 +857,15 @@ export function createControllerSelectModal(
     });
     ctx.dom.controllerSelectSave.addEventListener('click', () => {
       void saveSelectedController();
+    });
+    ctx.dom.controllerSelectFaceButtonStyle.addEventListener('change', () => {
+      if (!canEdit()) {
+        renderFaceButtonStylePicker();
+        return;
+      }
+      const value = ctx.dom.controllerSelectFaceButtonStyle.value;
+      const style = CONTROLLER_FACE_BUTTON_STYLES.find((candidate) => candidate.id === value);
+      if (style) void saveFaceButtonStyle(style);
     });
     ctx.dom.controllerSelectPicker.addEventListener('change', () => {
       const selectedKey = ctx.dom.controllerSelectPicker.value;

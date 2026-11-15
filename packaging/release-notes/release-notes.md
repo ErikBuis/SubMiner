@@ -1,47 +1,73 @@
 ## Highlights
 ### Added
-- **Hachidori Dictionary Backend**: Bundled Hachidori backend as an alternative to Yomitan. Select it with `dictionaryBackend` and restart SubMiner.
-  - Works with subtitle scanning, popups, frequency highlighting, character dictionaries, Anki mining, and stats dashboard mining.
-  - First-run setup builds Hachidori's Anki template from your existing SubMiner deck, tags, and field mappings.
-  - Can link an external Hachidori app, browser, or Docker host while Anki mining stays in SubMiner.
-  - The tray and dictionary-settings shortcut open the selected backend's settings. `--hachidori` and `--yomitan` open a specific one.
-- **Jellyfin Subtitle Generation**: Japanese subtitle generation now works while playing Jellyfin episodes, with both direct-play and transcoded playback.
+- **Plugins**:
+  - JavaScript plugins load from `<config dir>/plugins/<id>/` and are enabled under `plugins` in the config.
+  - Plugins can react to mpv events and mined cards, call AnkiConnect, run programs, and show results in an overlay panel or window.
+  - Three examples are included: `ai-explain` for line explanations, `anki-sync` for AnkiWeb syncing, and `episode-tags` for tagging cards by show and episode.
+- **Subtitle Filters**: Remove parenthesized text, sound descriptions, speaker names, music notes, or custom regex matches from primary subtitles. Configure them in Settings under Behavior → Subtitle Filters.
+- **Controller Dialog Layouts**: The media timing review and duplicate card dialogs can now be fully operated by controller and show button hints. Remap both layouts per controller in `Alt+C`.
+- **Controller Customization**:
+  - `Alt+C` actions can be combos: click **Learn**, hold one button, and press another.
+  - New unbound actions cover subtitle navigation, holding to show the secondary subtitle, Yomitan entry selection, and character navigation.
+  - **Button Style** offers Xbox, Nintendo, or PlayStation names and symbols, saved per controller.
+  - `Alt+C` now warns when two actions share an input.
+- **Keyboard-Only Mode**: Press `C` to move and look up by character, reaching words split by subtitle tokenization. **Pause Video In Keyboard-Only Mode** can also pause when the mode turns on and resume when it turns off.
+- **Jimaku Auto-Open**: Set `jimaku.autoOpenWhenPrimarySubtitleMissing` to pause and open Jimaku when a local video has no Japanese subtitle track. Playback resumes when the modal closes.
+
+### Changed
+- **Stats Trends**: Rebuilt with period comparisons, Learning charts, a heatmap, a title timeline, and a single running-total chart. Week grouping, custom ranges, a page-wide title filter, and click-through to sessions and library pages are also new.
+- **Stats Vocabulary**:
+  - Rebuilt around one searchable, sortable word table with Worth mining, All words, Across titles, and Newest views.
+  - Added known words by frequency band, a vocabulary growth chart, and a full kanji view.
+  - New word counts now count dictionary words, so a word's conjugations count once and totals are lower than before.
+  - Words and lines from streams now say they can't be mined, instead of showing Unavailable buttons.
+- **Controller Behavior**: **Toggle MPV Pause** now works outside keyboard-only mode. Controller connected and disabled messages now follow your regular notification setting instead of using a separate overlay pill.
+- **Keyboard-Only Mode Exit**: Turning the mode off now also closes the dictionary popup.
+- **Hachidori**: The bundled dictionary reader is updated to 0.4.0, adding every pitch accent in each popup entry, pitch drawn on the headword reading, per-kanji furigana, and Yomitan-style definition tags.
 
 ### Fixed
-- **Media Timing Review**: Opens on the first try and keeps playback paused while open, even when a dictionary popup closes.
-- **Jellyfin Terminal Playback**:
-  - `subminer jellyfin -p` lists libraries when SubMiner is already running, and picker image previews work again.
-  - Real errors, like an expired session or an unreachable server, now appear instead of an empty list.
-  - Watch progress and played status reach Jellyfin even when cast discovery is off.
-  - When it starts SubMiner itself, SubMiner now shows a tray icon and quits when mpv closes.
-  - The rofi search step is now a compact input box.
-- **macOS Casting**: Jellyfin casting finds mpv when SubMiner is opened from Finder, the Dock, or Spotlight. `mpv.executablePath` and `SUBMINER_MPV_PATH` are now honored on macOS and Linux.
-- **macOS Launcher PATH**: The command-line launcher no longer shows "Not on PATH" when SubMiner is opened from Finder or the Dock.
-- **Keyboard-Only Mode**: `h`, `l`, and the arrow keys type normally in modals and text fields instead of seeking mpv. Toggling the mode inside a modal no longer turns on a hidden keyboard-only mode.
-- **Halfwidth Katakana**: Halfwidth katakana in subtitles now displays as fullwidth, including in mined cards and the stats dashboard. Stats sentence search matches katakana in either width.
-- **Subtitle Annotations**: Lines shown while two cues overlap now get annotations right away. Prefetching no longer restarts during startup.
-- **Subtitle Sidebar**: The open sidebar does far less work during playback.
-- **Hyprland and Sway**: A slow or hung `hyprctl` or `swaymsg` no longer freezes the app.
-- **Stats Mining**: Cards mined from the stats dashboard keep the selected history line and media.
-- **Security Updates**: Updated Electron, undici, and follow-redirects to fix new security advisories.
+- **Controller Settings (`Alt+C`)**:
+  - Remaps now apply right away, without restarting SubMiner.
+  - Editing stays locked until you press a button, so the window can't edit a controller it can't see.
+  - With several controllers connected, it selects and listens to the one you just pressed.
+  - **Learn**, **Clear**, and **Reset** are reachable again, D-pad **Learn** no longer errors, and button names are correct on standard-layout pads.
+- **Controller Input**: One press no longer runs its action twice on macOS and Windows. On macOS, buttons now work while mpv is in front.
+- **Dictionary Popup**: Controller and keyboard lookups pause and resume playback reliably, and moving between words right after closing the popup no longer reopens it.
+- **Anki Sentence Audio**: `ankiConnect.fields.audio` now defaults to `SentenceAudio`, so generated audio no longer overwrites Yomitan's word audio. If you relied on the old default, set it to `ExpressionAudio`.
+- **AniList**: Progress sync now adds an exactly matched or pinned show to your Watching or Completed list when it isn't on your list yet. Completed, Paused, Dropped, and Rewatching entries are never changed.
+- **Stats Dashboard**:
+  - Overview, media, library, trends, vocabulary, and sentence search load several times faster on large databases.
+  - Trends totals, episode counts, rate charts, axis labels, and date handling in time zones ahead of UTC are corrected.
+  - Word lists now total every form of a word and show the dictionary form's reading.
+  - Names no longer slip past Hide Names, and totals stay correct after vocabulary cleanup.
+- **Playback**: Reloading the current file in mpv no longer leaves playback paused, and the "Overlay loading" message no longer gets stuck when moving to the next playlist file.
+- **AppImage**: "Service Crash" notifications on quit no longer appear on Ubuntu 26.04 and newer.
 
 ### Docs
-- **Hachidori Setup**: Covers backend selection, Hachidori dictionary and Anki setup, settings flags and shortcuts, and linking an external host.
-- **Jellyfin**: The docs now say SubMiner joins the cast menu at startup only when both `startupWarmups.jellyfinRemoteSession` and `jellyfin.remoteControlAutoConnect` are on. Otherwise, enable **Jellyfin Discovery** in the tray.
-- **Casting and mpv**: Added how casting finds mpv on each platform, a troubleshooting entry for casts that never start mpv, and a note on the macOS 27 Accessibility list rename.
-- **Jimaku Environment Variables**: Removed the unused `SUBMINER_JIMAKU_*` variables from the docs. Set the key with `jimaku.apiKey` or `jimaku.apiKeyCommand` instead.
+- **Keyboard and Controller Reference**: Keyboard shortcuts now list the keyboard-only `C` key, and the configuration reference points to Controller support for default button actions.
 
 ## What's Changed
 
-- feat(dictionary): add Hachidori backend support by @ksyasuda in #266
-- fix(jellyfin): make terminal play work with a running app and report progress by @ksyasuda in #288
-- fix(overlay): stop Hyprland/Sway tracker polls from blocking the main thread by @ksyasuda in #289
-- fix(overlay): poll cheap playback state in the open subtitle sidebar by @ksyasuda in #290
-- fix(overlay): keep keyboard mode from swallowing modal and text-field keys by @ksyasuda in #291
-- refactor: remove dead code and enable noUnusedLocals by @ksyasuda in #292
-- feat(subtitles): generate Japanese subtitles during Jellyfin playback by @ksyasuda in #294
-- fix(subtitles): widen halfwidth katakana where subtitle text enters the app by @ksyasuda in #295
-- fix(jellyfin): find mpv when SubMiner is launched from Finder by @ksyasuda in #298
+- feat(plugins): add JavaScript plugin system with overlay panel by @ksyasuda in #303
+- fix(anilist): add missing list entry on confident match by @dandascan in #305
+- Controller: hold to show the secondary subtitle, dictionary entry navigation, standard button names by @YashaNoos in #312
+- Controller: layouts for the media timing review and duplicate card dialogs by @YashaNoos in #313
+- Controller: subtitle line actions, Button Style, keyboard-only mode pause, Alt+C fixes by @YashaNoos in #316
+- fix(plugin): keep loading OSD off on warm playlist advance by @ksyasuda in #317
+- feat(subtitles): add regex subtitle filters with built-in presets by @ksyasuda in #318
+- feat(jimaku): auto-open modal when a video has no Japanese subtitle by @dandascan in #319
+- fix(controller): pick up macOS presses while mpv is in front by @ksyasuda in #321
+- perf(stats): speed up dashboard queries on large databases by @ksyasuda in #322
+- fix(mpv): resume playback after a same-file reload that skips the path clear by @ksyasuda in #323
+- fix(controller): keep popup pause and press handling reliable by @ksyasuda in #324
+- feat(stats): overhaul the Trends tab by @ksyasuda in #325
+- Controller: character navigation in keyboard-only mode, plain Xbox face names by @YashaNoos in #326
+- feat(controller): add hold + press combos to main bindings by @ksyasuda in #328
+
+## New Contributors
+
+- @dandascan made their first contribution in #305
+- @YashaNoos made their first contribution in #312
 
 ## Installation
 
