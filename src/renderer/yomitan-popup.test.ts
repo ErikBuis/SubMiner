@@ -8,6 +8,7 @@ import {
   isYomitanPopupIframe,
   isYomitanPopupVisible,
   registerDictionaryPopupVisibilityListener,
+  shieldYomitanScan,
 } from './yomitan-popup.js';
 
 type FakeStyle = Pick<CSSStyleDeclaration, 'visibility' | 'display' | 'opacity'>;
@@ -157,4 +158,59 @@ test('isYomitanPopupVisible falls back to querySelector when querySelectorAll is
   } as ParentNode;
 
   assert.equal(isYomitanPopupVisible(root), true);
+});
+
+test('scan shield keeps hover and primary presses inside the container from the scanner', () => {
+  const root = new EventTarget();
+  const captured = { nodeType: 1, hasPointerCapture: () => true };
+  const inside = { nodeType: 1, hasPointerCapture: () => false };
+  const outside = { nodeType: 1 };
+  const container = {
+    contains: (node: unknown) => node === inside || node === captured,
+  } as unknown as Node;
+  let active = true;
+  const scanned: string[] = [];
+  const pressed: unknown[] = [];
+  const dispose = shieldYomitanScan(
+    container,
+    () => active,
+    (event) => pressed.push(event.target),
+    root,
+  );
+  // Registered after the shield, like Yomitan's scanner hooking up once its options load.
+  for (const type of ['pointerover', 'pointermove', 'pointerdown', 'mousedown']) {
+    root.addEventListener(type, () => scanned.push(type), true);
+  }
+
+  const fire = (type: string, origin: unknown, button = 0) => {
+    const event = new Event(type);
+    Object.defineProperty(event, 'button', { value: button });
+    Object.defineProperty(event, 'pointerId', { value: 1 });
+    Object.defineProperty(event, 'target', { value: origin });
+    root.dispatchEvent(event);
+  };
+
+  for (const type of ['pointerover', 'pointermove', 'pointerdown', 'mousedown']) {
+    fire(type, inside);
+  }
+  assert.deepEqual(scanned, [], 'hover and presses inside the container are not scanned');
+  assert.deepEqual(pressed, [inside], 'the pointerdown is handed to onPress once');
+
+  fire('pointermove', captured);
+  assert.deepEqual(scanned, ['pointermove'], 'a captured drag keeps reaching other listeners');
+
+  fire('pointerdown', inside, 2);
+  assert.equal(scanned.length, 2, 'secondary buttons are not scan presses');
+
+  fire('pointermove', outside);
+  assert.equal(scanned.length, 3, 'events outside the container are untouched');
+
+  active = false;
+  fire('pointermove', inside);
+  assert.equal(scanned.length, 4, 'an inactive shield lets everything through');
+
+  active = true;
+  dispose();
+  fire('pointermove', inside);
+  assert.equal(scanned.length, 5, 'disposing removes the shield');
 });
