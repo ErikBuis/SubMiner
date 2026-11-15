@@ -620,6 +620,7 @@ export class AnkiIntegration {
         retrieveMediaFile: (filename) => this.client.retrieveMediaFile(filename),
         deleteNotes: (noteIds) => this.client.deleteNotes(noteIds),
         modelNames: (options) => this.client.modelNames(options),
+        modelFieldNames: (modelName, options) => this.client.modelFieldNames(modelName, options),
       },
       mediaGenerator: {
         generateAudio: (
