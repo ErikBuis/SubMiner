@@ -626,14 +626,6 @@ export class CardCreationService {
       return false;
     }
 
-    if (await this.isSentenceCardModelMissing(sentenceCardModel)) {
-      this.deps.showUpdateResult(
-        `Sentence card failed: note type "${sentenceCardModel}" isn't in Anki. Set ankiConnect.isLapis.sentenceCardModel to one of your note types.`,
-        false,
-      );
-      return false;
-    }
-
     const maxMediaDuration = this.deps.getConfig().media?.maxMediaDuration ?? 30;
     const captured = this.deps.captureMiningProvenance?.() ?? null;
     const provenance = captured && {
@@ -655,6 +647,13 @@ export class CardCreationService {
     let createdNoteId: number | null = null;
     try {
       return await this.deps.withUpdateProgress('Creating sentence card', async () => {
+        if (await this.isSentenceCardModelMissing(sentenceCardModel)) {
+          this.deps.showUpdateResult(
+            `Sentence card failed: note type "${sentenceCardModel}" isn't in Anki. Set ankiConnect.isLapis.sentenceCardModel to one of your note types.`,
+            false,
+          );
+          return false;
+        }
         const timingDecision = this.deps.reviewMediaTiming
           ? await this.deps.reviewMediaTiming({
               kind: 'sentence',
