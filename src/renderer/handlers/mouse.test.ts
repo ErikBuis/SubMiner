@@ -347,6 +347,18 @@ test('popup open pauses and popup close resumes when yomitan popup auto-pause is
   assert.deepEqual(h.mpvCommands, [PAUSE, RESUME]);
 });
 
+test('a released popup pause stays paused when the popup closes', async (t) => {
+  const h = createMouseHarness(t, { popupPause: true });
+  h.handlers.setupYomitanObserver();
+
+  h.fire('window', YOMITAN_POPUP_SHOWN_EVENT);
+  await waitForNextTick();
+  h.handlers.releasePopupPause();
+  h.fire('window', YOMITAN_POPUP_HIDDEN_EVENT);
+
+  assert.deepEqual(h.mpvCommands, [PAUSE]);
+});
+
 // The lookup's fallback scan dispatches untrusted mouse events on the selected word, and
 // those bubble to the pointer tracker while the real cursor is elsewhere.
 test('popup close resumes after a fallback scan event lands on the subtitle', async (t) => {
