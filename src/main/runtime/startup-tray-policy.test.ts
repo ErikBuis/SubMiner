@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  resolveManagedPlaybackAttachment,
   shouldEnsureTrayOnStartupForInitialArgs,
   shouldQuitOnMpvShutdownForTrayState,
   shouldQuitOnWindowAllClosedForTrayState,
@@ -73,6 +74,46 @@ test('mpv shutdown keeps unmanaged background tray app alive', () => {
       backgroundMode: true,
       hasTray: true,
     }),
+    false,
+  );
+});
+
+test('a launcher handoff to a running app makes mpv shutdown quit it', () => {
+  const attached = resolveManagedPlaybackAttachment(
+    false,
+    { start: true, quitWithMpv: true },
+    'second-instance',
+  );
+  assert.equal(attached, true);
+  assert.equal(
+    shouldQuitOnMpvShutdownForTrayState({
+      managedPlayback: attached,
+      backgroundMode: true,
+      hasTray: true,
+    }),
+    true,
+  );
+});
+
+test('the mpv plugin handing its session to a running tray app does not make it quit', () => {
+  assert.equal(
+    resolveManagedPlaybackAttachment(false, { start: true, quitWithMpv: false }, 'second-instance'),
+    false,
+  );
+});
+
+test('later commands keep a launcher handoff', () => {
+  for (const args of [
+    { start: true, quitWithMpv: false },
+    { start: false, quitWithMpv: false },
+  ]) {
+    assert.equal(resolveManagedPlaybackAttachment(true, args, 'second-instance'), true);
+  }
+});
+
+test('initial args never count as a launcher handoff', () => {
+  assert.equal(
+    resolveManagedPlaybackAttachment(false, { start: true, quitWithMpv: true }, 'initial'),
     false,
   );
 });

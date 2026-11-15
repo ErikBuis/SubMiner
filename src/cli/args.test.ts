@@ -479,6 +479,8 @@ test('hasExplicitCommand and shouldStartApp preserve command intent', () => {
   assert.equal(managedPlayback.managedPlayback, true);
   assert.equal(hasExplicitCommand(managedPlayback), true);
   assert.equal(shouldStartApp(managedPlayback), true);
+  assert.equal(managedPlayback.quitWithMpv, false);
+  assert.equal(parseArgs(['--start', '--quit-with-mpv']).quitWithMpv, true);
 
   const setup = parseArgs(['--setup']);
   assert.equal((setup as typeof setup & { setup?: boolean }).setup, true);

@@ -3,6 +3,8 @@ import type { SessionActionDispatchRequest } from '../types/runtime';
 export interface CliArgs {
   background: boolean;
   managedPlayback: boolean;
+  /** Sent by the Windows mpv launcher when it hands its mpv to an already-running app. */
+  quitWithMpv?: boolean;
   start: boolean;
   launchMpv: boolean;
   launchMpvTargets: string[];
@@ -127,6 +129,7 @@ export function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     background: false,
     managedPlayback: false,
+    quitWithMpv: false,
     start: false,
     launchMpv: false,
     launchMpvTargets: [],
@@ -267,6 +270,7 @@ export function parseArgs(argv: string[]): CliArgs {
 
     if (arg === '--background') args.background = true;
     else if (arg === '--managed-playback') args.managedPlayback = true;
+    else if (arg === '--quit-with-mpv') args.quitWithMpv = true;
     else if (arg === '--start') args.start = true;
     else if (arg.startsWith('--youtube-play=')) {
       const value = arg.split('=', 2)[1];

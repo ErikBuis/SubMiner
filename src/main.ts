@@ -185,6 +185,7 @@ import {
   toggleJellyfinDiscoveryFromTray as toggleJellyfinDiscoveryFromTrayRuntime,
 } from './main/runtime/jellyfin-tray-discovery';
 import {
+  resolveManagedPlaybackAttachment,
   shouldEnsureTrayOnStartupForInitialArgs,
   shouldQuitOnWindowAllClosedForTrayState,
 } from './main/runtime/startup-tray-policy';
@@ -1754,6 +1755,13 @@ const { handleCliCommand, handleInitialArgs } = composeCliStartupHandlers({
       if (args.background || args.managedPlayback) {
         tray.ensureTray();
       }
+    },
+    trackManagedPlaybackForCommand: (args, source) => {
+      appState.managedPlaybackAttached = resolveManagedPlaybackAttachment(
+        appState.managedPlaybackAttached,
+        args,
+        source,
+      );
     },
     handleCliCommandRuntimeServiceWithContext: (args, source, cliContext) =>
       handleCliCommandRuntimeServiceWithContext(args, source, cliContext),

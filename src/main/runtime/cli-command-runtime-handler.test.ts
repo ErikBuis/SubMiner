@@ -119,3 +119,28 @@ test('cli command runtime handler ensures tray for managed playback commands', (
 
   assert.deepEqual(calls, ['ensure-tray', 'context', 'cli:second-instance:ctx']);
 });
+
+test('cli command runtime handler records managed playback before handling the command', () => {
+  const calls: string[] = [];
+  const handler = createCliCommandRuntimeHandler({
+    handleTexthookerOnlyModeTransitionMainDeps: {
+      isTexthookerOnlyMode: () => false,
+      setTexthookerOnlyMode: () => calls.push('set-mode'),
+      commandNeedsOverlayStartupPrereqs: () => false,
+      ensureOverlayStartupPrereqs: () => calls.push('prereqs'),
+      startBackgroundWarmups: () => calls.push('warmups'),
+      logInfo: (message) => calls.push(`log:${message}`),
+    },
+    trackManagedPlaybackForCommand: (args, source) => {
+      calls.push(`track:${source}:${String(args.quitWithMpv)}`);
+    },
+    createCliCommandContext: () => ({ id: 'ctx' }),
+    handleCliCommandRuntimeServiceWithContext: (_args, source, context) => {
+      calls.push(`cli:${source}:${context.id}`);
+    },
+  });
+
+  handler({ start: true, quitWithMpv: true } as never, 'second-instance');
+
+  assert.deepEqual(calls, ['track:second-instance:true', 'cli:second-instance:ctx']);
+});

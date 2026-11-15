@@ -422,9 +422,13 @@ function applyVisibleOverlayVisibility(args: {
       typeof args.windowTracker.isTargetWindowMinimized === 'function' &&
       !args.windowTracker.isTargetWindowMinimized());
 
+  // The Windows tracker keeps its last geometry through short misses and drops it only once mpv's
+  // window is really gone (closed, or mpv quit). A visible overlay without geometry would then
+  // linger as an empty window, and with its owner gone Windows lists it on the taskbar.
+  const canPreserveWithoutTrackedGeometry = !args.isWindowsPlatform;
   if (
     shouldPreserveTransientTrackedOverlay &&
-    (mainWindow.isVisible() || hasRetainedTrackedGeometry)
+    (hasRetainedTrackedGeometry || (canPreserveWithoutTrackedGeometry && mainWindow.isVisible()))
   ) {
     args.setTrackerNotReadyWarningShown(false);
     maybeDismissOverlayLoadingOsd();
