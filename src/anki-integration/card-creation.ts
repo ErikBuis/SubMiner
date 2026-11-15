@@ -80,6 +80,7 @@ interface CardCreationClient {
   findNotes(query: string, options?: { maxRetries?: number }): Promise<number[]>;
   retrieveMediaFile(filename: string): Promise<string>;
   deleteNotes(noteIds: number[]): Promise<void>;
+  modelNames?(options?: { maxRetries?: number }): Promise<string[]>;
 }
 
 interface CardCreationMediaGenerator {
@@ -889,6 +890,24 @@ export class CardCreationService {
     }
   }
 
+  /**
+   * True only when Anki answers and lists no note type with this name, so the card review never
+   * opens for a card that can't be added. When Anki can't be asked, the card goes ahead as before
+   * and adding the note reports whatever went wrong.
+   */
+  private async isSentenceCardModelMissing(model: string): Promise<boolean> {
+    if (!this.deps.client.modelNames) return false;
+    let modelNames: string[];
+    try {
+      modelNames = await this.deps.client.modelNames({ maxRetries: 0 });
+    } catch (error) {
+      log.warn('Could not list Anki note types:', (error as Error).message);
+      return false;
+    }
+    const wanted = model.toLowerCase();
+    return !modelNames.some((name) => name.toLowerCase() === wanted);
+  }
+
   async createSentenceCard(
     sentence: string,
     startTime: number,
@@ -910,6 +929,14 @@ export class CardCreationService {
     const mpvClient = this.deps.getMpvClient();
     if (!mpvClient || !mpvClient.currentVideoPath) {
       this.deps.showOsdNotification('No video loaded');
+      return false;
+    }
+
+    if (await this.isSentenceCardModelMissing(sentenceCardModel)) {
+      this.deps.showUpdateResult(
+        `Sentence card failed: note type "${sentenceCardModel}" isn't in Anki. Set ankiConnect.isLapis.sentenceCardModel to one of your note types.`,
+        false,
+      );
       return false;
     }
 
