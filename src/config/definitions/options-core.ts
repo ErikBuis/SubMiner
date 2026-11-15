@@ -83,6 +83,12 @@ export function buildCoreConfigOptionRegistry(
         'Controller binding descriptor that selects the next word entry in the open Yomitan popup. Mine Card mines the selected entry.',
     },
     {
+      id: 'toggleCharacterNavigation',
+      defaultValue: defaultConfig.controller.bindings.toggleCharacterNavigation,
+      description:
+        'Controller binding descriptor that switches keyboard-only mode between moving by word and moving by character, like C. A lookup on a character searches from that character, which reaches words the subtitle split cuts in two.',
+    },
+    {
       id: 'previousSubtitle',
       defaultValue: defaultConfig.controller.bindings.previousSubtitle,
       description:
@@ -118,11 +124,6 @@ export function buildCoreConfigOptionRegistry(
       id: 'leftStickVertical',
       defaultValue: defaultConfig.controller.bindings.leftStickVertical,
       description: 'Axis binding descriptor used for primary popup scrolling.',
-    },
-    {
-      id: 'rightStickHorizontal',
-      defaultValue: defaultConfig.controller.bindings.rightStickHorizontal,
-      description: 'Axis binding descriptor reserved for alternate right-stick mappings.',
     },
     {
       id: 'rightStickVertical',
@@ -466,7 +467,7 @@ export function buildCoreConfigOptionRegistry(
         path: `controller.bindings.${binding.id}`,
         kind: 'object' as const,
         defaultValue: binding.defaultValue,
-        description: `${binding.description} Use Alt+C learn mode or set a raw button/axis descriptor manually. If kind is "axis", direction is required.`,
+        description: `${binding.description} Use Alt+C learn mode or set a raw button/axis descriptor manually. If kind is "axis", direction is required. Alt+C can also learn a combo, saved as an optional "hold" input.`,
       },
       {
         path: `controller.bindings.${binding.id}.kind`,
@@ -498,6 +499,13 @@ export function buildCoreConfigOptionRegistry(
           binding.defaultValue.kind === 'axis' ? binding.defaultValue.direction : undefined,
         description:
           'Axis direction captured for this discrete controller action. Required when kind is "axis".',
+      },
+      {
+        path: `controller.bindings.${binding.id}.hold`,
+        kind: 'object' as const,
+        defaultValue: undefined,
+        description:
+          'Optional button or axis input, in the same form, that must be held down while pressing this one.',
       },
     ]),
     ...axisBindings.flatMap((binding) => [
