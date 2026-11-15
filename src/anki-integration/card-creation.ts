@@ -27,6 +27,7 @@ import { clampMediaEndTime } from './media-duration';
 import { resolveWordCardKind } from './note-field-utils';
 import type { PendingYoutubeMediaUpdate } from './pending-youtube-media';
 import { resolveMpvVolumeScale } from './mpv-volume';
+import { cleanSentenceText } from '../shared/subtitle-speaker-labels';
 
 const log = createLogger('anki').child('integration.card-creation');
 
@@ -498,6 +499,7 @@ export class CardCreationService {
           endTime = timingDecision.endTime;
           sentenceText = timingDecision.text?.trim() || sentenceText;
         }
+        sentenceText = cleanSentenceText(sentenceText, this.deps.getConfig().behavior);
 
         const updatedFields: Record<string, string> = {};
         const errors: string[] = [];
@@ -649,6 +651,7 @@ export class CardCreationService {
         }
 
         const config = this.deps.getConfig();
+        sentence = cleanSentenceText(sentence, config.behavior);
         const generateAudio = !skipMedia && shouldGenerateAudio(config);
         const generateImage = !skipMedia && shouldGenerateImage(config);
         const mediaResolverOptions = this.getMediaResolverOptions();

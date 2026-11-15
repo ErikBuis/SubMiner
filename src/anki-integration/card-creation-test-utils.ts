@@ -8,13 +8,14 @@ export function createAnkiConfig(
   overrides: {
     fields?: Record<string, string>;
     media?: Record<string, unknown>;
+    behavior?: Record<string, unknown>;
   } = {},
 ): AnkiConnectConfig {
   return {
     deck: 'Mining',
     fields: { sentence: 'Sentence', audio: 'SentenceAudio', ...overrides.fields },
     media: { generateAudio: false, generateImage: false, ...overrides.media },
-    behavior: {},
+    behavior: { ...overrides.behavior },
     ai: false,
   } as AnkiConnectConfig;
 }

@@ -454,3 +454,42 @@ test('captureLiveSubtitleMiningContext rejects missing client, empty text and ba
     null,
   );
 });
+
+test('handleMineSentenceDigit cleans every block before joining them', async () => {
+  const created: string[] = [];
+  const mine = (cleanSubtitleBlock?: (text: string) => string) =>
+    handleMineSentenceDigit(2, {
+      subtitleTimingTracker: {
+        getRecentBlocks: () => ['（A）こんにちは', '（B）こんばんは'],
+        getCurrentSubtitle: () => null,
+        findTiming: () => ({ startTime: 1, endTime: 3 }),
+      },
+      ankiIntegration: {
+        updateLastAddedFromClipboard: async () => {},
+        triggerFieldGroupingForLastAddedCard: async () => {},
+        markLastCardAsAudioCard: async () => {},
+        createSentenceCard: async (sentence) => {
+          created.push(sentence);
+          return true;
+        },
+        cleanSubtitleBlock,
+      },
+      getCurrentSecondarySubText: () => undefined,
+      showMpvOsd: () => {},
+      logError: () => {},
+    });
+  const stripLeadingLabel = (text: string) => text.replace(/^（[^）]*）/, '');
+
+  mine(stripLeadingLabel);
+  mine((text) => (text.startsWith('（B）') ? '' : text.replace(/^（A）/, '')));
+  mine();
+  mine(() => '');
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(created, [
+    'こんにちは こんばんは',
+    'こんにちは',
+    '（A）こんにちは （B）こんばんは',
+    '（A）こんにちは （B）こんばんは',
+  ]);
+});
