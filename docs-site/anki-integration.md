@@ -203,7 +203,7 @@ Manual clipboard updates (`Ctrl/Cmd+V`) always replace the sentence audio, whate
 
 ## Sentence cards (Lapis) {#sentence-cards-lapis}
 
-`Ctrl/Cmd+S` creates a standalone sentence card from the current line, and `Ctrl/Cmd+Shift+S` then a digit combines several lines. The card uses the note type named in `ankiConnect.isLapis.sentenceCardModel`, which must exist in Anki. If it is empty, no card is created.
+`Ctrl/Cmd+S` creates a standalone sentence card from the current line, and `Ctrl/Cmd+Shift+S` then a digit combines several lines. The card uses the note type named in `ankiConnect.isLapis.sentenceCardModel`, which must exist in Anki. If it is empty, no card is created. If Anki has no note type with that name, SubMiner says so before the card review opens.
 
 ```jsonc
 "ankiConnect": {

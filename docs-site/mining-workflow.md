@@ -37,7 +37,7 @@ A manual update always replaces the sentence audio, even when `ankiConnect.behav
 
 Press `Ctrl/Cmd+S` to create a sentence card from the current line without a Yomitan lookup. Press `Ctrl/Cmd+Shift+S`, then a digit `1` to `9`, to combine several recent lines into one card. The digit prompt closes after `shortcuts.multiCopyTimeoutMs`.
 
-Sentence cards use the note type named in `ankiConnect.isLapis.sentenceCardModel` and write to its `Sentence` and `SentenceAudio` fields. That note type must exist in Anki. See [sentence cards](/anki-integration#sentence-cards-lapis).
+Sentence cards use the note type named in `ankiConnect.isLapis.sentenceCardModel` and write to its `Sentence` and `SentenceAudio` fields. That note type must exist in Anki, or SubMiner stops with a message naming the setting. See [sentence cards](/anki-integration#sentence-cards-lapis).
 
 ## Mark an audio card
 
