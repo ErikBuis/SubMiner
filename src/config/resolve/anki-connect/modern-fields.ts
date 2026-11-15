@@ -13,6 +13,7 @@ export function applyModernFieldsResolution(
     'wordAudio',
     'image',
     'sentence',
+    'sentenceFurigana',
     'miscInfo',
     'translation',
   ] as const) {
