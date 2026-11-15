@@ -65,6 +65,7 @@ interface CardCreationClient {
   findNotes(query: string, options?: { maxRetries?: number }): Promise<number[]>;
   retrieveMediaFile(filename: string): Promise<string>;
   deleteNotes(noteIds: number[]): Promise<void>;
+  modelFieldNames?(modelName: string, options?: { maxRetries?: number }): Promise<string[]>;
 }
 
 interface CardCreationMediaGenerator {
@@ -607,6 +608,53 @@ export class CardCreationService {
     }
   }
 
+  /**
+   * Picks the fields a new sentence card writes its sentence and sentence audio to. Lapis and Kiku
+   * templates read Sentence and SentenceAudio; other note types use the configured mapping, like
+   * word cards and audio cards do. Each falls back to the other when the note type has no field by
+   * that name. When Anki can't list the note type's fields, the preferred name is used.
+   */
+  private async resolveSentenceCardFieldNames(
+    model: string,
+    sentenceCardConfig: {
+      sentenceField: string;
+      audioField: string;
+      lapisEnabled: boolean;
+      kikuEnabled: boolean;
+    },
+    config: AnkiConnectConfig,
+  ): Promise<{ sentenceField: string; audioField: string }> {
+    const preferLapisFields = sentenceCardConfig.lapisEnabled || sentenceCardConfig.kikuEnabled;
+    const lapisSentenceField = sentenceCardConfig.sentenceField || 'Sentence';
+    const lapisAudioField = sentenceCardConfig.audioField || 'SentenceAudio';
+    const configuredSentenceField =
+      config.fields?.sentence || DEFAULT_ANKI_CONNECT_CONFIG.fields.sentence;
+    const configuredAudioField = config.fields?.audio || DEFAULT_ANKI_CONNECT_CONFIG.fields.audio;
+
+    let modelFields: string[] | null = null;
+    if (this.deps.client.modelFieldNames) {
+      try {
+        modelFields = await this.deps.client.modelFieldNames(model, { maxRetries: 0 });
+      } catch (error) {
+        log.warn('Could not list sentence card note type fields:', (error as Error).message);
+      }
+    }
+    const pick = (configured: string, lapis: string): string => {
+      const candidates = preferLapisFields ? [lapis, configured] : [configured, lapis];
+      if (!modelFields) return candidates[0]!;
+      for (const candidate of candidates) {
+        const match = modelFields.find((name) => name.toLowerCase() === candidate.toLowerCase());
+        if (match) return match;
+      }
+      return candidates[0]!;
+    };
+
+    return {
+      sentenceField: pick(configuredSentenceField, lapisSentenceField),
+      audioField: pick(configuredAudioField, lapisAudioField),
+    };
+  }
+
   async createSentenceCard(
     sentence: string,
     startTime: number,
@@ -696,8 +744,8 @@ export class CardCreationService {
         const errors: string[] = [];
         let miscInfoFilename: string | null = null;
 
-        const sentenceField = sentenceCardConfig.sentenceField;
-        const audioFieldName = sentenceCardConfig.audioField || 'SentenceAudio';
+        const { sentenceField, audioField: audioFieldName } =
+          await this.resolveSentenceCardFieldNames(sentenceCardModel, sentenceCardConfig, config);
         const translationField = config.fields?.translation || 'SelectionText';
         let resolvedMiscInfoField: string | null = null;
         let resolvedSentenceAudioField: string = audioFieldName;

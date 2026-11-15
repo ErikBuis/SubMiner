@@ -603,6 +603,7 @@ export class AnkiIntegration {
           (await this.client.findNotes(query, options)) as number[],
         retrieveMediaFile: (filename) => this.client.retrieveMediaFile(filename),
         deleteNotes: (noteIds) => this.client.deleteNotes(noteIds),
+        modelFieldNames: (modelName, options) => this.client.modelFieldNames(modelName, options),
       },
       mediaGenerator: {
         generateAudio: (
