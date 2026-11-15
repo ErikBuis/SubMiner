@@ -485,8 +485,8 @@ test('a late close for a replaced plugin panel leaves the showing panel open', (
 
 test('a new main overlay window forgets the bounds applied to the previous one', (t) => {
   const { recorder, state, overlay } = setup(t);
-  // An opaque token: the assembly only hands the created window to the overlay manager.
-  state.window = {} as BrowserWindow;
+  // A near-opaque token: the assembly only listens for 'show' and hands it to the overlay manager.
+  state.window = { on: () => {} } as unknown as BrowserWindow;
 
   overlay.createMainWindow();
 
