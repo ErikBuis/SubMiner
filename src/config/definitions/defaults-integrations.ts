@@ -35,6 +35,7 @@ export const INTEGRATIONS_DEFAULT_CONFIG: Pick<
       miscInfo: 'MiscInfo',
       translation: 'SelectionText',
       wordCardTranslation: '',
+      definition: 'MainDefinition',
     },
     ai: {
       enabled: false,

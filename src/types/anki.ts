@@ -23,6 +23,37 @@ export interface MediaTimingReviewRequest {
   maxMediaDuration: number;
   /** Still screenshots only; animated images continue to follow the audio range. */
   screenshotEnabled?: boolean;
+  /** What else the card will get, so the review covers the whole export. */
+  card?: MediaTimingReviewCardPreview;
+}
+
+/** Card fields shown alongside the media timing. Only the translation is editable. */
+export interface MediaTimingReviewCardPreview {
+  word?: string;
+  /** Plain text; one line per sense. */
+  meaning?: string;
+  /** Set when the card gets a translation; the review then shows an editable field. */
+  translation?: {
+    text: string;
+    /** Secondary subtitle lines around the clip, used to follow added or removed lines. */
+    lines: MediaTimingReviewContextLine[];
+    /** The secondary lines behind `text`; empty when it came from the live subtitle. */
+    currentLines: MediaTimingReviewContextLine[];
+    /** The secondary lines the sentence grouping assigns each primary line near the clip. */
+    lineTranslations: MediaTimingReviewLineTranslation[];
+    /** Apply the card translation formatting when following added or removed lines. */
+    format: boolean;
+    /** `text` is what the field already holds and keeps unless the review changes it. */
+    fromField?: boolean;
+  };
+}
+
+export interface MediaTimingReviewLineTranslation {
+  /** The primary line's text, which tells apart lines sharing one interval. */
+  text?: string;
+  startTime: number;
+  endTime: number;
+  lines: MediaTimingReviewContextLine[];
 }
 
 /** A subtitle line adjacent to the mined one that the review can pull onto the card. */
@@ -43,9 +74,11 @@ export type MediaTimingReviewDecision =
       sentenceStartTime?: number;
       sentenceEndTime?: number;
       screenshotTime?: number;
+      /** The reviewed card translation, when the card gets one. */
+      translation?: string;
     }
-  | { action: 'use-original' }
-  | { action: 'skip-media' }
+  | { action: 'use-original'; translation?: string }
+  | { action: 'skip-media'; translation?: string }
   | { action: 'discard' };
 
 export interface MediaTimingReviewOpenPayload {
@@ -65,6 +98,7 @@ export interface MediaTimingReviewOpenPayload {
   mediaDuration?: number;
   maxMediaDuration: number;
   screenshotEnabled?: boolean;
+  card?: MediaTimingReviewCardPreview;
 }
 
 export interface MediaTimingReviewFrameRequest {
@@ -170,6 +204,7 @@ export interface AnkiConnectConfig {
     sentence?: string;
     miscInfo?: string;
     wordCardTranslation?: string;
+    definition?: string;
     translation?: string;
   };
   ai?: boolean | AiFeatureConfig;
